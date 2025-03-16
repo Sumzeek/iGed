@@ -1,10 +1,10 @@
-#include "iGed.h"
+#include "iGe.h"
 #include <iostream>
 
-class Sandbox : public iGed::Application {
+class Sandbox : public iGe::Application {
 public:
     Sandbox() {}
     ~Sandbox() override {}
 };
 
-iGed::Application* iGed::CreateApplication() { return new Sandbox; }
+iGe::Application* iGe::CreateApplication() { return new Sandbox; }

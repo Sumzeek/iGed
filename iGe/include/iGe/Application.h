@@ -2,10 +2,10 @@
 
 #include "Core.h"
 
-namespace iGed
+namespace iGe
 {
 
-class IGED_API Application {
+class IGE_API Application {
 public:
     Application();
     virtual ~Application();
@@ -16,4 +16,4 @@ public:
 // To be defined in CLIENT
 Application* CreateApplication();
 
-} // namespace iGed
+} // namespace iGe

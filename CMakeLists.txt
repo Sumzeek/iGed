@@ -8,5 +8,5 @@ set(BUILD_SHARED_LIBS OFF)
 
 set(IGED_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
-add_subdirectory(iGed)
+add_subdirectory(iGe)
 add_subdirectory(app)
