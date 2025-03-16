@@ -2,10 +2,6 @@
 
 #include "iGe/Core.h"
 
-#include <functional>
-#include <ostream>
-#include <string>
-
 namespace iGe
 {
 

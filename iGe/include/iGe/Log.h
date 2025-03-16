@@ -1,10 +1,8 @@
 #pragma once
 
-#include "Core.h"
-#include "spdlog/spdlog.h"
-
+#include "iGe/Core.h"
 #include "spdlog/fmt/ostr.h" // enable << support
-
+#include "spdlog/spdlog.h"
 
 namespace iGe
 {
@@ -13,8 +11,8 @@ class IGE_API Log {
 public:
     static void Init();
 
-    inline static std::shared_ptr<spdlog::logger>& GetCoreLogger();
-    inline static std::shared_ptr<spdlog::logger>& GetClientLogger();
+    static std::shared_ptr<spdlog::logger>& GetCoreLogger();
+    static std::shared_ptr<spdlog::logger>& GetClientLogger();
 
 private:
     Log();

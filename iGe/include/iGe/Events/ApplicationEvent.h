@@ -1,8 +1,6 @@
 #pragma once
 
-#include "Event.h"
-
-#include <sstream>
+#include "iGe/Events/Event.h"
 
 namespace iGe
 {

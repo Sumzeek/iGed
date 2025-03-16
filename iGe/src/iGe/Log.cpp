@@ -1,4 +1,6 @@
 #include "iGe/Log.h"
+#include "iGepch.h"
+
 #include "spdlog/sinks/stdout_color_sinks.h"
 
 namespace iGe

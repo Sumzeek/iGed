@@ -1,7 +1,5 @@
 #pragma once
 
-//#ifdef IGE_PLATFORM_WINDOWS
-
 extern iGe::Application* iGe::CreateApplication();
 
 int main(int argc, char** argv) {
@@ -13,5 +11,3 @@ int main(int argc, char** argv) {
     app->Run();
     delete app;
 }
-
-//#endif
