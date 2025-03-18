@@ -1,11 +1,13 @@
 #pragma once
 
-extern iGe::Application* iGe::CreateApplication();
+#include <iostream>
+
+import iGe;
 
 int main(int argc, char** argv) {
     iGe::Log::Init();
-    IGE_CORE_WARN("CORE!");
-    IGE_WARN("CLIENT!");
+    //iGe::CoreWarn("CORE!");
+    //iGe::ClientWarn("CLIENT!");
 
     auto app = iGe::CreateApplication();
     app->Run();

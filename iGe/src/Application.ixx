@@ -1,12 +1,38 @@
-#include "iGe/Application.h"
-#include "iGepch.h"
+#include "Common/Core.h"
+#include "Common/iGepch.h"
 
-#include "iGe/Events/ApplicationEvent.h"
+export module iGe.Application;
 
-#include <GLFW/glfw3.h>
+import iGe.Layer;
+import iGe.LayerStack;
+import iGe.Window;
+import iGe.Event;
 
 namespace iGe
 {
+
+export class IGE_API Application {
+public:
+    Application();
+    virtual ~Application();
+
+    void Run();
+
+    void OnEvent(Event& e);
+    bool OnWindowClose(Event& e);
+
+    void PushLayer(Layer* layer);
+    void PushOverlay(Layer* overlay);
+
+private:
+    std::unique_ptr<Window> m_Window;
+    bool m_Running;
+    LayerStack m_LayerStack;
+};
+
+// To be defined in CLIENT
+//export Application* CreateApplication();
+export IGE_API Application* CreateApplication();
 
 #define BIND_EVENT_FN(x) std::bind(&x, this, std::placeholders::_1)
 
@@ -20,8 +46,8 @@ Application::~Application() {}
 
 void Application::Run() {
     while (m_Running) {
-        glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        //glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+        //glClear(GL_COLOR_BUFFER_BIT);
 
         for (Layer* layer: m_LayerStack) { layer->OnUpdate(); }
 

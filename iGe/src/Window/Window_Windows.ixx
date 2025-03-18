@@ -1,24 +1,60 @@
-#include "Platform/Windows/WindowsWindow.h"
-#include "iGepch.h"
+#include "Common/Core.h"
+#include "Common/iGepch.h"
+#include <GLFW/glfw3.h>
 
-#include "iGe/Events/ApplicationEvent.h"
-#include "iGe/Events/KeyEvent.h"
-#include "iGe/Events/MouseEvent.h"
+export module iGe.Window:Windows;
+
+import :Base;
+import iGe.Event;
+import iGe.Log;
 
 namespace iGe
 {
 
+export class WindowsWindow : public Window {
+public:
+    WindowsWindow(const WindowProps& props);
+    virtual ~WindowsWindow();
+
+    void OnUpdate() override;
+
+    virtual unsigned int GetWidth() const override;
+    virtual unsigned int GetHeight() const override;
+
+    // Window attributes
+    void SetEventCallback(const EventCallbackFn& callback) override;
+    void SetVSync(bool enable) override;
+    bool IsVSync() const override;
+
+private:
+    virtual void Init(const WindowProps& props);
+    virtual void ShutDown();
+
+    struct WindowData {
+        std::string Title;
+        unsigned int Width;
+        unsigned int Height;
+        bool VSync;
+
+        EventCallbackFn EventCallback;
+    };
+
+    GLFWwindow* m_Window;
+    WindowData m_Data;
+};
+
 static bool s_GLFWInitialized = false;
 
 static void GLFWErrorCallback(int error_code, const char* description) {
-    IGE_CORE_ERROR("GLFW Error ({0}): {1}", error_code, description);
+    //IGE_CORE_ERROR("GLFW Error ({0}): {1}", error_code, description);
+    Log::GetCoreLogger()->error("GLFW Error ({0}): {1}", error_code, description);
 }
-
-Window* Window::Create(const iGe::WindowProps& props) { return new WindowsWindow(props); }
 
 WindowsWindow::WindowsWindow(const iGe::WindowProps& props) { Init(props); }
 
 WindowsWindow::~WindowsWindow() { ShutDown(); }
+
+Window* Window::Create(const iGe::WindowProps& props) { return new WindowsWindow{props}; }
 
 void WindowsWindow::OnUpdate() {
     glfwPollEvents();
@@ -46,8 +82,8 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
     m_Data.Title = props.Title;
     m_Data.Width = props.Width;
     m_Data.Height = props.Height;
-
-    IGE_CORE_INFO("Createing window {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
+    
+    Log::GetCoreLogger()->info("Createing window {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
 
     if (!s_GLFWInitialized) {
         // TODO: glfwTerminate on system shutdown
@@ -69,13 +105,13 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
         data->Width = width;
         data->Height = height;
 
-        WindowResizeEvent event(width, height);
+        WindowResizeEvent event{static_cast<unsigned int>(width), static_cast<unsigned int>(height)};
         data->EventCallback(event);
     });
 
     glfwSetWindowCloseCallback(m_Window, [](GLFWwindow* window) {
         auto data = reinterpret_cast<WindowData*>(glfwGetWindowUserPointer(window));
-        WindowCloseEvent event;
+        WindowCloseEvent event{};
         data->EventCallback(event);
     });
 
@@ -84,17 +120,17 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
 
         switch (action) {
             case GLFW_PRESS: {
-                KeyPressedEvent event(key, 0);
+                KeyPressedEvent event{key, 0};
                 data->EventCallback(event);
                 break;
             }
             case GLFW_RELEASE: {
-                KeyReleasedEvent event(key);
+                KeyReleasedEvent event{key};
                 data->EventCallback(event);
                 break;
             }
             case GLFW_REPEAT: {
-                KeyPressedEvent event(key, 1);
+                KeyPressedEvent event{key, 1};
                 data->EventCallback(event);
                 break;
             }
@@ -106,12 +142,12 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
 
         switch (action) {
             case GLFW_PRESS: {
-                MouseButtonPressedEvent event(button);
+                MouseButtonPressedEvent event{button};
                 data->EventCallback(event);
                 break;
             }
             case GLFW_RELEASE: {
-                MouseButtonReleasedEvent event(button);
+                MouseButtonReleasedEvent event{button};
                 data->EventCallback(event);
                 break;
             }
@@ -121,14 +157,14 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
     glfwSetScrollCallback(m_Window, [](GLFWwindow* window, double xOffset, double yOffset) {
         auto data = reinterpret_cast<WindowData*>(glfwGetWindowUserPointer(window));
 
-        MouseScrolledEvent event((float) xOffset, (float) yOffset);
+        MouseScrolledEvent event{static_cast<float>(xOffset), static_cast<float>(yOffset)};
         data->EventCallback(event);
     });
 
     glfwSetCursorPosCallback(m_Window, [](GLFWwindow* window, double xPos, double yPos) {
         auto data = reinterpret_cast<WindowData*>(glfwGetWindowUserPointer(window));
 
-        MouseMoveEvent event((float) xPos, (float) yPos);
+        MouseMoveEvent event{static_cast<float>(xPos), static_cast<float>(yPos)};
         data->EventCallback(event);
     });
 }

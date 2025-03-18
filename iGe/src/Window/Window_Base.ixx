@@ -1,14 +1,14 @@
-#pragma once
+#include "Common/Core.h"
+#include "Common/iGepch.h"
 
-#include "iGepch.h"
+export module iGe.Window:Base;
 
-#include "iGe/Core.h"
-#include "iGe/Events/Event.h"
+import iGe.Event;
 
 namespace iGe
 {
 
-struct WindowProps {
+export struct WindowProps {
     std::string Title;
     unsigned int Width;
     unsigned int Height;
@@ -17,12 +17,12 @@ struct WindowProps {
         : Title(title), Width(width), Height(height) {}
 };
 
-// Interface representing a desktop system based Window
-class IGE_API Window {
-public:
-    using EventCallbackFn = std::function<void(Event&)>;
+using EventCallbackFn = std::function<void(Event&)>;
 
-    virtual ~Window() {}
+// Interface representing a desktop system based Window
+export class IGE_API Window {
+public:
+    virtual ~Window();
 
     virtual void OnUpdate() = 0;
 
@@ -36,5 +36,7 @@ public:
 
     static Window* Create(const WindowProps& props = WindowProps());
 };
+
+Window::~Window() {}
 
 } // namespace iGe

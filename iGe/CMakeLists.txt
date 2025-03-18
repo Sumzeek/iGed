@@ -1,13 +1,22 @@
 set(TARGET_NAME iGe)
 
-# Set source files (all .cpp files in the src directory)
-file(GLOB SOURCES "src/iGe/*.cpp" "src/Platform/Windows/*.cpp")
-
 # Create a shared library (DLL)
-add_library(${TARGET_NAME} SHARED ${SOURCES})
+add_library(${TARGET_NAME} SHARED)
+
+# Set source files (all .cpp files in the src directory)
+file(GLOB SOURCES
+        "src/*.ixx"
+        "src/Events/*.ixx"
+        "src/Window/*.ixx"
+)
+target_sources(${TARGET_NAME}
+        PUBLIC
+        FILE_SET cxx_modules TYPE CXX_MODULES FILES
+        ${SOURCES}
+)
 
 # Enable precompiled headers (PCH)
-target_precompile_headers(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/iGepch.h)
+target_precompile_headers(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/Common/iGepch.h)
 
 # Add third party denpendency
 add_subdirectory(3rdparty)

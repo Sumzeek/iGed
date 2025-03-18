@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "iGe/Log.h"
+#include <format>
 
 #ifdef IGE_PLATFORM_WINDOWS
     #include <Windows.h>
