@@ -1,3 +1,4 @@
+module;
 #include "Common/Core.h"
 #include "Common/iGepch.h"
 
@@ -30,6 +31,7 @@ private:
     LayerStack m_LayerStack;
 };
 
+// ----------------- Application::Implementation -----------------
 // To be defined in CLIENT
 //export Application* CreateApplication();
 export IGE_API Application* CreateApplication();

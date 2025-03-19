@@ -1,3 +1,4 @@
+module;
 #include "Common/Core.h"
 #include "Common/iGepch.h"
 
@@ -33,6 +34,7 @@ private:
     std::vector<Layer*>::iterator m_LayerInsert;
 };
 
+// ----------------- LayerStack::Implementation -----------------
 LayerStack::LayerStack() { m_LayerInsert = m_Layers.begin(); }
 
 LayerStack::~LayerStack() {
@@ -65,6 +67,5 @@ std::vector<Layer*>::const_iterator LayerStack::begin() const { return m_Layers.
 std::vector<Layer*>::const_iterator LayerStack::end() const { return m_Layers.end(); }
 std::vector<Layer*>::const_reverse_iterator LayerStack::rbegin() const { return m_Layers.rbegin(); }
 std::vector<Layer*>::const_reverse_iterator LayerStack::rend() const { return m_Layers.rend(); }
-
 
 } // namespace iGe

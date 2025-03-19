@@ -5,9 +5,9 @@ add_library(${TARGET_NAME} SHARED)
 
 # Set source files (all .cpp files in the src directory)
 file(GLOB SOURCES
-        "src/*.ixx"
-        "src/Events/*.ixx"
-        "src/Window/*.ixx"
+        "modules/*.ixx"
+        "modules/Events/*.ixx"
+        "modules/Window/*.ixx"
 )
 target_sources(${TARGET_NAME}
         PUBLIC

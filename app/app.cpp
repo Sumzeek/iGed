@@ -6,7 +6,7 @@ public:
 
     void OnUpdate() override {}
 
-    void OnEvent(iGe::Event& event) override { iGe::ClientInfo(event); }
+    void OnEvent(iGe::Event& event) override { iGe::Log::ClientInfo(event.ToString()); }
 };
 
 class Sandbox : public iGe::Application {

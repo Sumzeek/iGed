@@ -1,3 +1,4 @@
+module;
 #include "Common/Core.h"
 #include "Common/iGepch.h"
 
@@ -37,6 +38,7 @@ public:
     static Window* Create(const WindowProps& props = WindowProps());
 };
 
+// ----------------- Window::Implementation -----------------
 Window::~Window() {}
 
 } // namespace iGe

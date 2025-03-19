@@ -1,3 +1,4 @@
+module;
 #include "Common/Core.h"
 #include "Common/iGepch.h"
 
@@ -27,6 +28,7 @@ protected:
 Layer::Layer(const std::string& name) : m_DebugName(name) {}
 Layer::~Layer() {}
 
+// ----------------- Layer::Implementation -----------------
 void Layer::OnAttach() {}
 void Layer::OnDetach() {}
 void Layer::OnUpdate() {}

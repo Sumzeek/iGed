@@ -1,3 +1,4 @@
+module;
 #include "Common/Core.h"
 #include "Common/iGepch.h"
 
@@ -55,8 +56,6 @@ public:
     inline bool IsInCategory(EventCategory category) { return GetCategoryFlags() & category; }
 };
 
-std::string Event::ToString() const { return GetName(); }
-
 export class IGE_API EventDispatcher {
 public:
     EventDispatcher(Event& event);
@@ -68,6 +67,10 @@ private:
     Event& m_Event;
 };
 
+// ----------------- Event::Implementation -----------------
+std::string Event::ToString() const { return GetName(); }
+
+// ----------------- EventDispatcher::Implementation -----------------
 EventDispatcher::EventDispatcher(Event& event) : m_Event(event) {}
 template<class T>
 bool EventDispatcher::Dispatch(std::function<bool(T&)> func) {
@@ -78,6 +81,7 @@ bool EventDispatcher::Dispatch(std::function<bool(T&)> func) {
     return false;
 }
 
+// ----------------- Other::Implementation -----------------
 export inline std::ostream& operator<<(std::ostream& os, const Event& e) { return os << e.ToString(); }
 export inline std::string format_as(const Event& e) { return e.ToString(); }
 

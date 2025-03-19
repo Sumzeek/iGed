@@ -1,9 +1,9 @@
+module;
 #include "Common/Core.h"
 #include "Common/iGepch.h"
 #include <GLFW/glfw3.h>
 
 export module iGe.Window:Windows;
-
 import :Base;
 import iGe.Event;
 import iGe.Log;
@@ -11,7 +11,7 @@ import iGe.Log;
 namespace iGe
 {
 
-export class WindowsWindow : public Window {
+export class IGE_API WindowsWindow : public Window {
 public:
     WindowsWindow(const WindowProps& props);
     virtual ~WindowsWindow();
@@ -43,11 +43,11 @@ private:
     WindowData m_Data;
 };
 
+// ----------------- WindowsWindow::Implementation -----------------
 static bool s_GLFWInitialized = false;
 
 static void GLFWErrorCallback(int error_code, const char* description) {
-    //IGE_CORE_ERROR("GLFW Error ({0}): {1}", error_code, description);
-    Log::GetCoreLogger()->error("GLFW Error ({0}): {1}", error_code, description);
+    Log::CoreError(std::format("GLFW Error ({0}): {1}", error_code, description));
 }
 
 WindowsWindow::WindowsWindow(const iGe::WindowProps& props) { Init(props); }
@@ -82,8 +82,8 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
     m_Data.Title = props.Title;
     m_Data.Width = props.Width;
     m_Data.Height = props.Height;
-    
-    Log::GetCoreLogger()->info("Createing window {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
+
+    Log::CoreInfo(std::format("Createing window {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height));
 
     if (!s_GLFWInitialized) {
         // TODO: glfwTerminate on system shutdown
