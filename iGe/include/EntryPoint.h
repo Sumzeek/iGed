@@ -1,13 +1,12 @@
 #pragma once
 
-#include <iostream>
+#include "Macro.h"
 
+import std;
 import iGe;
 
 int main(int argc, char** argv) {
     iGe::Log::Init();
-    //iGe::CoreWarn("CORE!");
-    //iGe::ClientWarn("CLIENT!");
 
     auto app = iGe::CreateApplication();
     app->Run();
