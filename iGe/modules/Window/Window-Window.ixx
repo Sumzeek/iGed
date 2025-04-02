@@ -1,7 +1,7 @@
 module;
-#include "Macro.h"
+#include "iGeMacro.h"
 
-export module iGe.Window:Base;
+export module iGe.Window:Window;
 import std;
 import iGe.Event;
 

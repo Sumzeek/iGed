@@ -1,9 +1,9 @@
 module;
-#include "Macro.h"
+#include "iGeMacro.h"
 
 export module iGe.Event:Application;
 import std;
-import :Base;
+import :Event;
 
 namespace iGe
 {

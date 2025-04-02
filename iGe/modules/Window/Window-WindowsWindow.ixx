@@ -1,5 +1,5 @@
 module;
-#include "Macro.h"
+#include "iGeMacro.h"
 
 #include <glad/gl.h>
 #define GLFW_INCLUDE_NONE
@@ -7,9 +7,10 @@ module;
 
 export module iGe.Window:Windows;
 import std;
-import :Base;
+import :Window;
 import iGe.Event;
 import iGe.Log;
+import iGe.GraphicsContext;
 
 namespace iGe
 {
@@ -45,6 +46,7 @@ private:
     };
 
     GLFWwindow* m_Window;
+    GraphicsContext* m_Context;
     WindowData m_Data;
 };
 

@@ -1,5 +1,5 @@
 module;
-#include "Macro.h"
+#include "iGeMacro.h"
 
 // TEMPORARY
 #include <glad/gl.h>
@@ -10,71 +10,10 @@ module;
 #include <backends/imgui_impl_opengl3.h>
 
 module iGe.Core;
+import std;
 
 namespace iGe
 {
-// ---------------------------------- Application::Implementation ----------------------------------
-Application* Application::s_Instance = nullptr;
-
-Application::Application() {
-    IGE_CORE_ASSERT(!s_Instance, "Application already exists!");
-    s_Instance = this;
-
-    m_Window = std::unique_ptr<Window>(Window::Create());
-    m_Window->SetEventCallback(IGE_BIND_EVENT_FN(Application::OnEvent));
-    m_Running = true;
-
-    m_ImGuiLayer = new ImGuiLayer{};
-    PushOverlay(m_ImGuiLayer);
-}
-
-Application::~Application() {}
-
-void Application::Run() {
-    while (m_Running) {
-        glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        for (Layer* layer: m_LayerStack) { layer->OnUpdate(); }
-
-        m_ImGuiLayer->Begin();
-        for (Layer* layer: m_LayerStack) { layer->OnImGuiRender(); }
-        m_ImGuiLayer->End();
-
-        m_Window->OnUpdate();
-    }
-}
-
-void Application::OnEvent(Event& e) {
-    //IGE_CORE_TRACE(e);
-    EventDispatcher dispatcher(e);
-    dispatcher.Dispatch<WindowCloseEvent>(IGE_BIND_EVENT_FN(Application::OnWindowClose));
-
-    for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it) {
-        if (e.m_Handled) { break; }
-        (*it)->OnEvent(e);
-    }
-}
-
-bool Application::OnWindowClose(Event& e) {
-    m_Running = false;
-    return true;
-}
-
-void Application::PushLayer(Layer* layer) {
-    m_LayerStack.PushLayer(layer);
-    layer->OnAttach();
-}
-
-void Application::PushOverlay(Layer* layer) {
-    m_LayerStack.PushOverlay(layer);
-    layer->OnAttach();
-}
-
-Window& Application::GetWindow() { return *m_Window; }
-
-Application& Application::Get() { return *s_Instance; }
-
 // ---------------------------------- ImGuiLayer::Implementation ----------------------------------
 ImGuiKey iGeKeyToImGuiKey(iGeKey keycode);
 
@@ -116,41 +55,10 @@ void ImGuiLayer::OnDetach() {
     ImGui::DestroyContext();
 }
 
-//void ImGuiLayer::OnUpdate() {
-//    ImGuiIO& io = ImGui::GetIO();
-//    Application& app = Application::Get();
-//    io.DisplaySize = ImVec2{(float) app.GetWindow().GetWidth(), (float) app.GetWindow().GetHeight()};
-//
-//    float time = (float) glfwGetTime();
-//    io.DeltaTime = m_Time > 0.0f ? (time - m_Time) : (1.0f / 60.0f);
-//    m_Time = time;
-//
-//    ImGui_ImplOpenGL3_NewFrame();
-//    ImGui::NewFrame();
-//
-//    static bool show = true;
-//    ImGui::ShowDemoWindow(&show);
-//
-//    ImGui::Render();
-//    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-//}
-
 void ImGuiLayer::OnImGuiRender() {
     static bool show = true;
     ImGui::ShowDemoWindow(&show);
 }
-
-//void ImGuiLayer::OnEvent(Event& e) {
-//    EventDispatcher dispatcher(e);
-//    dispatcher.Dispatch<MouseMoveEvent>(IGE_BIND_EVENT_FN(ImGuiLayer::OnMouseMovedEvent));
-//    dispatcher.Dispatch<MouseScrolledEvent>(IGE_BIND_EVENT_FN(ImGuiLayer::OnMouseScrolledEvent));
-//    dispatcher.Dispatch<MouseButtonPressedEvent>(IGE_BIND_EVENT_FN(ImGuiLayer::OnMouseButtonPressedEvent));
-//    dispatcher.Dispatch<MouseButtonReleasedEvent>(IGE_BIND_EVENT_FN(ImGuiLayer::OnMouseButtonReleasedEvent));
-//    dispatcher.Dispatch<KeyPressedEvent>(IGE_BIND_EVENT_FN(ImGuiLayer::OnKeyPressedEvent));
-//    dispatcher.Dispatch<KeyReleasedEvent>(IGE_BIND_EVENT_FN(ImGuiLayer::OnKeyReleasedEvent));
-//    dispatcher.Dispatch<KeyTypedEvent>(IGE_BIND_EVENT_FN(ImGuiLayer::OnKeyTypedEvent));
-//    dispatcher.Dispatch<WindowResizeEvent>(IGE_BIND_EVENT_FN(ImGuiLayer::OnWindowResizedEvent));
-//}
 
 void ImGuiLayer::Begin() {
     ImGui_ImplOpenGL3_NewFrame();
@@ -174,90 +82,6 @@ void ImGuiLayer::End() {
         glfwMakeContextCurrent(backup_current_context);
     }
 }
-
-//bool ImGuiLayer::OnMouseMovedEvent(MouseMoveEvent& e) {
-//    ImGuiIO& io = ImGui::GetIO();
-//    io.AddMousePosEvent(e.GetX(), e.GetY());
-//
-//    return false;
-//}
-//
-//bool ImGuiLayer::OnMouseScrolledEvent(MouseScrolledEvent& e) {
-//    ImGuiIO& io = ImGui::GetIO();
-//    io.AddMouseWheelEvent(e.GetXOffset(), e.GetYOffset());
-//
-//    return false;
-//}
-//
-//bool ImGuiLayer::OnMouseButtonPressedEvent(MouseButtonPressedEvent& e) {
-//    ImGuiIO& io = ImGui::GetIO();
-//
-//    auto button = static_cast<int>(e.GetMouseButton());
-//    io.AddMouseButtonEvent(button, true);
-//
-//    return false;
-//}
-//
-//bool ImGuiLayer::OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e) {
-//    ImGuiIO& io = ImGui::GetIO();
-//
-//    auto button = static_cast<int>(e.GetMouseButton());
-//    io.AddMouseButtonEvent(button, false);
-//
-//    return false;
-//}
-//
-//bool ImGuiLayer::OnKeyPressedEvent(KeyPressedEvent& e) {
-//    ImGuiIO& io = ImGui::GetIO();
-//
-//    auto iGeKeycode = e.GetKeyCode();
-//    auto imgui_key = iGeKeyToImGuiKey(e.GetKeyCode());
-//    //int scancode = -1;
-//
-//    if (imgui_key != ImGuiKey_None) {
-//        io.AddKeyEvent(imgui_key, true);
-//        //io.SetKeyEventNativeData(imgui_key, keycode, scancode);
-//    } else {
-//        IGE_CORE_WARN("Unsupported key pressed: {}", iGeKeycode);
-//    }
-//    return false;
-//}
-//
-//bool ImGuiLayer::OnKeyReleasedEvent(KeyReleasedEvent& e) {
-//    ImGuiIO& io = ImGui::GetIO();
-//
-//    auto iGeKeycode = e.GetKeyCode();
-//    auto imgui_key = iGeKeyToImGuiKey(iGeKeycode);
-//    //int scancode = -1;
-//
-//    if (imgui_key != ImGuiKey_None) {
-//        io.AddKeyEvent(imgui_key, false);
-//        //io.SetKeyEventNativeData(imgui_key, keycode, scancode);
-//    } else {
-//        IGE_CORE_WARN("Unsupported key released: {}", iGeKeycode);
-//    }
-//    return false;
-//
-//    return false;
-//}
-//
-//bool ImGuiLayer::OnKeyTypedEvent(KeyTypedEvent& e) {
-//    ImGuiIO& io = ImGui::GetIO();
-//
-//    int codepoint = e.GetCodePoint();
-//    if (codepoint > 0 && codepoint < 0x10000) { io.AddInputCharacter(codepoint); }
-//
-//    return false;
-//}
-//
-//bool ImGuiLayer::OnWindowResizedEvent(WindowResizeEvent& e) {
-//    ImGuiIO& io = ImGui::GetIO();
-//    io.DisplaySize = ImVec2{(float) e.GetWidth(), (float) e.GetHeight()};
-//    io.DisplayFramebufferScale = ImVec2{1.0f, 1.0f};
-//    //glViewport(0, 0, e.GetWidth(), e.GetHeight());
-//
-//    return false;
-//}
 
 ImGuiKey iGeKeyToImGuiKey(iGeKey keycode) {
     switch (keycode) {
@@ -491,40 +315,6 @@ ImGuiKey iGeKeyToImGuiKey(iGeKey keycode) {
             IGE_CORE_WARN("iGeKey {} is not mapped in ImGuiKey!", keycode);
             return ImGuiKey_None; // Return None for any unrecognized keys
     }
-}
-
-// ---------------------------------- WindowsInput::Implementation ----------------------------------
-Input* Input::s_Instance = new WindowsInput{};
-
-bool WindowsInput::IsKeyPressedImpl(int keycode) {
-    auto window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
-    auto state = glfwGetKey(window, keycode);
-    return state == GLFW_PRESS || state == GLFW_REPEAT;
-}
-
-bool WindowsInput::IsMouseButtonPressedImpl(int button) {
-    auto window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
-    auto state = glfwGetMouseButton(window, button);
-    return state == GLFW_PRESS;
-}
-
-std::pair<float, float> WindowsInput::GetMousePositionImpl() {
-    auto window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
-    double xpos, ypos;
-    glfwGetCursorPos(window, &xpos, &ypos);
-    return {(float) xpos, (float) ypos};
-}
-
-float WindowsInput::GetMouseXImpl() {
-    auto window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
-    auto [x, y] = GetMousePosition();
-    return x;
-}
-
-float WindowsInput::GetMouseYImpl() {
-    auto window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
-    auto [x, y] = GetMousePosition();
-    return y;
 }
 
 } // namespace iGe

@@ -1,7 +1,7 @@
 module;
-#include "Macro.h"
+#include "iGeMacro.h"
 
-export module iGe.Event:Base;
+export module iGe.Event:Event;
 import std;
 
 namespace iGe
@@ -54,7 +54,7 @@ public:
     virtual int GetCategoryFlags() const = 0;
     virtual std::string ToString() const;
 
-    inline bool IsInCategory(EventCategory category) { return GetCategoryFlags() & category; }
+    bool IsInCategory(EventCategory category);
 };
 
 export class IGE_API EventDispatcher {
@@ -75,8 +75,8 @@ private:
 };
 
 // ---------------------------------- Other::Implementation ----------------------------------
-export inline std::ostream& operator<<(std::ostream& os, const Event& e) { return os << e.ToString(); }
-export inline std::string format_as(const Event& e) { return e.ToString(); }
+export std::ostream& operator<<(std::ostream& os, const Event& e) { return os << e.ToString(); }
+export std::string format_as(const Event& e) { return e.ToString(); }
 
 } // namespace iGe
 

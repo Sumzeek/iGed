@@ -1,4 +1,5 @@
-#include "Macro.h"
+module;
+#include "iGeMacro.h"
 #include <glad/gl.h>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -24,7 +25,7 @@ Window* Window::Create(const iGe::WindowProps& props) { return new WindowsWindow
 
 void WindowsWindow::OnUpdate() {
     glfwPollEvents();
-    glfwSwapBuffers(m_Window);
+    m_Context->SwapBuffers();
 }
 
 unsigned int WindowsWindow::GetWidth() const { return m_Data.Width; }
@@ -63,9 +64,10 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
     }
 
     m_Window = glfwCreateWindow((int) m_Data.Width, (int) m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
-    glfwMakeContextCurrent(m_Window);
-    int status = gladLoadGL((GLADloadfunc) glfwGetProcAddress);
-    IGE_CORE_ASSERT(status, "Failed to initialize Glad!");
+
+    m_Context = new OpenGLContext{m_Window};
+    m_Context->Init();
+
     glfwSetWindowUserPointer(m_Window, &m_Data);
     SetVSync(true);
 

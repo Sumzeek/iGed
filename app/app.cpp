@@ -1,4 +1,4 @@
-#include "EntryPoint.h"
+#include "iGeEntryPoint.h"
 
 class ExampleLayer : public iGe::Layer {
 public:
