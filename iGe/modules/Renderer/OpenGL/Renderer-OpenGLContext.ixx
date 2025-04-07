@@ -4,9 +4,8 @@ module;
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-export module iGe.GraphicsContext:OpenGLContext;
+export module iGe.Renderer:OpenGLContext;
 import :GraphicsContext;
-import iGe.Log;
 
 namespace iGe
 {

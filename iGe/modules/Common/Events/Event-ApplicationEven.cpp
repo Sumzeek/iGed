@@ -3,7 +3,11 @@ import std;
 
 namespace iGe
 {
-// ---------------------------------- WindowResizeEvent::Implementation ----------------------------------
+
+/////////////////////////////////////////////////////////////////////////////
+// WindowResizeEvent ////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 WindowResizeEvent::WindowResizeEvent(unsigned int width, unsigned int height) : m_Width{width}, m_Height{height} {}
 
 unsigned int WindowResizeEvent::GetWidth() const { return m_Width; }
@@ -24,7 +28,10 @@ const char* WindowResizeEvent::GetName() const { return "WindowResize"; }
 //EVENT_CLASS_CATEGORY(EventCategoryApplication)
 int WindowResizeEvent::GetCategoryFlags() const { return EventCategoryApplication; }
 
-// ---------------------------------- WindowCloseEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// WindowCloseEvent /////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 WindowCloseEvent::WindowCloseEvent() {}
 
 EventType WindowCloseEvent::GetStaticType() { return EventType::WindowClose; }
@@ -35,7 +42,10 @@ const char* WindowCloseEvent::GetName() const { return "WindowClose"; }
 
 int WindowCloseEvent::GetCategoryFlags() const { return EventCategoryApplication; }
 
-// ---------------------------------- AppTickEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// AppTickEvent /////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 AppTickEvent::AppTickEvent() {}
 
 EventType AppTickEvent::GetStaticType() { return EventType::AppTick; }
@@ -46,7 +56,10 @@ const char* AppTickEvent::GetName() const { return "AppTick"; }
 
 int AppTickEvent::GetCategoryFlags() const { return EventCategoryApplication; }
 
-// ---------------------------------- AppUpdateEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// AppUpdateEvent ///////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 AppUpdateEvent::AppUpdateEvent() {}
 
 EventType AppUpdateEvent::GetStaticType() { return EventType::AppUpdate; }
@@ -57,7 +70,10 @@ const char* AppUpdateEvent::GetName() const { return "AppUpdate"; }
 
 int AppUpdateEvent::GetCategoryFlags() const { return EventCategoryApplication; }
 
-// ---------------------------------- AppRenderEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// AppRenderEvent ///////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 AppRenderEvent::AppRenderEvent() {}
 
 EventType AppRenderEvent::GetStaticType() { return EventType::AppRender; }

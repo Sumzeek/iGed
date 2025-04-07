@@ -1,8 +1,8 @@
 # Set the application name
-set(APPLICATION_NAME "app")
+set(APPLICATION_NAME "ExampleLayer")
 
 # Add the app executable
-add_executable(${APPLICATION_NAME} app.cpp)
+add_executable(${APPLICATION_NAME} ExampleLayer.cpp)
 
 # Link the iGe shared library
 target_link_libraries(${APPLICATION_NAME} PRIVATE iGe)

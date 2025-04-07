@@ -34,6 +34,7 @@ endif ()
 # Add IGE_ENABLE_ASSERTS in Debug mode
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(${TARGET_NAME} PRIVATE IGE_ENABLE_ASSERTS)
+    target_compile_definitions(${TARGET_NAME} PRIVATE IGE_DEBUG)
 endif ()
 
 # Set include directories

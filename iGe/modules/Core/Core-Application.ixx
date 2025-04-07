@@ -8,6 +8,8 @@ import iGe.Layer;
 import iGe.LayerStack;
 import iGe.Event;
 import iGe.Window;
+import iGe.Renderer;
+import iGe.SmartPointer;
 
 namespace iGe
 {

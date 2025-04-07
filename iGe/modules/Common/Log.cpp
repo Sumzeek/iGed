@@ -2,7 +2,9 @@ module iGe.Log;
 
 namespace iGe
 {
+// -----------------------------------------------------------------------------------------
 // ---------------------------------- Log::Implementation ----------------------------------
+// -----------------------------------------------------------------------------------------
 std::shared_ptr<spdlog::logger> Log::m_CoreLogger = nullptr;
 std::shared_ptr<spdlog::logger> Log::m_ClientLogger = nullptr;
 

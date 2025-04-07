@@ -4,6 +4,7 @@ module;
 export module iGe.Window:Window;
 import std;
 import iGe.Event;
+import iGe.SmartPointer;
 
 namespace iGe
 {
@@ -36,10 +37,7 @@ public:
 
     virtual void* GetNativeWindow() const = 0;
 
-    static Window* Create(const WindowProps& props = WindowProps());
+    static Scope<Window> Create(const WindowProps& props = WindowProps());
 };
-
-// ----------------- Window::Implementation -----------------
-Window::~Window() {}
 
 } // namespace iGe

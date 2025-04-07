@@ -5,10 +5,14 @@ module;
 #include <GLFW/glfw3.h>
 
 module iGe.Window;
+import :WindowsWindow;
 
 namespace iGe
 {
-// ---------------------------------- WindowsWindow::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// WindowsWindow ////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 static bool s_GLFWInitialized = false;
 
 static void GLFWErrorCallback(int error_code, const char* description) {
@@ -20,8 +24,6 @@ iGeKey GlfwKeyToiGeKey(int keycode);
 WindowsWindow::WindowsWindow(const iGe::WindowProps& props) { Init(props); }
 
 WindowsWindow::~WindowsWindow() { ShutDown(); }
-
-Window* Window::Create(const iGe::WindowProps& props) { return new WindowsWindow{props}; }
 
 void WindowsWindow::OnUpdate() {
     glfwPollEvents();
@@ -65,7 +67,7 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
 
     m_Window = glfwCreateWindow((int) m_Data.Width, (int) m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 
-    m_Context = new OpenGLContext{m_Window};
+    m_Context = GraphicsContext::Create(m_Window);
     m_Context->Init();
 
     glfwSetWindowUserPointer(m_Window, &m_Data);

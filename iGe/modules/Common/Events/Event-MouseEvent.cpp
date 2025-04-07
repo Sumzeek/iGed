@@ -3,7 +3,10 @@ import std;
 
 namespace iGe
 {
-// ---------------------------------- MouseMoveEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// MouseMoveEvent ///////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 MouseMoveEvent::MouseMoveEvent(float x, float y) : m_MouseX{x}, m_MouseY{y} {}
 
 inline float MouseMoveEvent::GetX() const { return m_MouseX; }
@@ -20,7 +23,10 @@ const char* MouseMoveEvent::GetName() const { return "MouseMoved"; }
 
 int MouseMoveEvent::GetCategoryFlags() const { return EventCategoryInput | EventCategoryMouse; }
 
-// ---------------------------------- MouseScrolledEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// MouseScrolledEvent ///////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 MouseScrolledEvent::MouseScrolledEvent(float xOffset, float yOffset) : m_XOffset{xOffset}, m_YOffset{yOffset} {}
 
 inline float MouseScrolledEvent::GetXOffset() const { return m_XOffset; }
@@ -41,7 +47,10 @@ const char* MouseScrolledEvent::GetName() const { return "MouseScrolled"; }
 //EVENT_CLASS_CATEGORY(EventCategoryInput | EventCategoryMouse)
 int MouseScrolledEvent::GetCategoryFlags() const { return EventCategoryInput | EventCategoryMouse; }
 
-// ---------------------------------- MouseButtonEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// MouseButtonEvent /////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 MouseButtonEvent::MouseButtonEvent(iGeKey button) : m_Button{button} {}
 
 iGeKey MouseButtonEvent::GetMouseButton() const { return m_Button; }
@@ -49,7 +58,10 @@ iGeKey MouseButtonEvent::GetMouseButton() const { return m_Button; }
 //EVENT_CLASS_CATEGORY(EventCategoryInput | EventCategoryMouse)
 int MouseButtonEvent::GetCategoryFlags() const { return EventCategoryInput | EventCategoryMouseButton; }
 
-// ---------------------------------- MouseButtonPressedEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// MouseButtonPressedEvent //////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 MouseButtonPressedEvent::MouseButtonPressedEvent(iGeKey button) : MouseButtonEvent{button} {}
 
 std::string MouseButtonPressedEvent::ToString() const { return std::format("MousePressedEvent: {0}", m_Button); }
@@ -60,7 +72,10 @@ EventType MouseButtonPressedEvent::GetEventType() const { return GetStaticType()
 
 const char* MouseButtonPressedEvent::GetName() const { return "MouseButtonPressed"; }
 
-// ---------------------------------- MouseButtonReleasedEvent::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// MouseButtonReleasedEvent /////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+
 MouseButtonReleasedEvent::MouseButtonReleasedEvent(iGeKey button) : MouseButtonEvent{button} {}
 
 std::string MouseButtonReleasedEvent::ToString() const { return std::format("MouseReleasedEvent: {0}", m_Button); }

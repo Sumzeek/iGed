@@ -7,7 +7,7 @@ import std;
 namespace iGe
 {
 
-export enum class EventType {
+export enum class EventType : int {
     None = 0,
     WindowClose,
     WindowResize,

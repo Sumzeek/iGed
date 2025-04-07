@@ -5,12 +5,13 @@ module;
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-export module iGe.Window:Windows;
+export module iGe.Window:WindowsWindow;
 import std;
 import :Window;
 import iGe.Event;
 import iGe.Log;
-import iGe.GraphicsContext;
+import iGe.Renderer;
+import iGe.SmartPointer;
 
 namespace iGe
 {
@@ -46,7 +47,7 @@ private:
     };
 
     GLFWwindow* m_Window;
-    GraphicsContext* m_Context;
+    Scope<GraphicsContext> m_Context;
     WindowData m_Data;
 };
 
