@@ -12,7 +12,6 @@ namespace iGe
 /////////////////////////////////////////////////////////////////////////////
 // OpenGLShader /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-
 OpenGLShader::OpenGLShader(const std::string& filepath) { IGE_CORE_ERROR("Not implementation now"); }
 
 OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc) {
@@ -41,7 +40,7 @@ OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc
         glDeleteShader(vertexShader);
 
         IGE_CORE_ERROR("{0}", infoLog.data());
-        IGE_ASSERT(false, "Vertex shader compilation failure!");
+        IGE_CORE_ASSERT(false, "Vertex shader compilation failure!");
         return;
     }
 
@@ -71,7 +70,7 @@ OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc
         glDeleteShader(vertexShader);
 
         IGE_CORE_ERROR("{0}", infoLog.data());
-        IGE_ASSERT(false, "Fragment shader compilation failure!");
+        IGE_CORE_ASSERT(false, "Fragment shader compilation failure!");
         return;
     }
 
@@ -106,7 +105,7 @@ OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc
         glDeleteShader(fragmentShader);
 
         IGE_CORE_ERROR("{0}", infoLog.data());
-        IGE_ASSERT(false, "Shader link failure!");
+        IGE_CORE_ASSERT(false, "Shader link failure!");
         return;
     }
 
@@ -151,9 +150,9 @@ void OpenGLShader::SetFloat4(const std::string& name, const glm::vec4& value) {
     glUniform4f(location, value.x, value.y, value.z, value.w);
 }
 
-void OpenGLShader::SetMat4(const std::string& name, const glm::mat4& value) {
+void OpenGLShader::SetMat4(const std::string& name, const glm::mat4& matrix) {
     GLint location = glGetUniformLocation(m_RendererID, name.c_str());
-    glUniformMatrix4fv(location, 1, GL_FALSE, glm::gtc::value_ptr(value));
+    glUniformMatrix4fv(location, 1, GL_FALSE, glm::gtc::value_ptr(matrix));
 }
 
 const std::string& OpenGLShader::GetName() const { return m_Name; }

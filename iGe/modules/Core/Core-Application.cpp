@@ -3,6 +3,8 @@ module;
 
 module iGe.Core;
 import std;
+import iGe.Timestep;
+import iGe.Renderer;
 
 namespace iGe
 {
@@ -18,7 +20,8 @@ Application::Application() {
 
     m_Window = std::unique_ptr<Window>(Window::Create());
     m_Window->SetEventCallback(IGE_BIND_EVENT_FN(Application::OnEvent));
-    m_Running = true;
+
+    Renderer::Init();
 
     m_ImGuiLayer = new ImGuiLayer{};
     PushOverlay(m_ImGuiLayer);
@@ -28,7 +31,14 @@ Application::~Application() {}
 
 void Application::Run() {
     while (m_Running) {
-        for (Layer* layer: m_LayerStack) { layer->OnUpdate(); }
+        static auto startTime = std::chrono::high_resolution_clock::now();
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+        Timestep timestep{time - m_LastTime};
+        m_LastTime = time;
+
+        for (Layer* layer: m_LayerStack) { layer->OnUpdate(timestep); }
 
         m_ImGuiLayer->Begin();
         for (Layer* layer: m_LayerStack) { layer->OnImGuiRender(); }

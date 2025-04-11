@@ -10,3 +10,4 @@ export import :Buffer;
 export import :VertexArray;
 export import :RenderCommand;
 export import :OrthographicCamera;
+export import :Texture;

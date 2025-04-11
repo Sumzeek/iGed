@@ -2,11 +2,11 @@ module iGe.Log;
 
 namespace iGe
 {
-// -----------------------------------------------------------------------------------------
-// ---------------------------------- Log::Implementation ----------------------------------
-// -----------------------------------------------------------------------------------------
-std::shared_ptr<spdlog::logger> Log::m_CoreLogger = nullptr;
-std::shared_ptr<spdlog::logger> Log::m_ClientLogger = nullptr;
+/////////////////////////////////////////////////////////////////////////////
+// Log //////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+Ref<spdlog::logger> Log::m_CoreLogger = nullptr;
+Ref<spdlog::logger> Log::m_ClientLogger = nullptr;
 
 Log::Log() {}
 
@@ -21,8 +21,8 @@ void Log::Init() {
     m_ClientLogger->set_level(spdlog::level::trace);
 }
 
-std::shared_ptr<spdlog::logger>& Log::GetCoreLogger() { return m_CoreLogger; }
+Ref<spdlog::logger>& Log::GetCoreLogger() { return m_CoreLogger; }
 
-std::shared_ptr<spdlog::logger>& Log::GetClientLogger() { return m_ClientLogger; }
+Ref<spdlog::logger>& Log::GetClientLogger() { return m_ClientLogger; }
 
 } // namespace iGe

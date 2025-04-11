@@ -4,6 +4,7 @@ module;
 export module iGe.Layer;
 import std;
 import iGe.Event;
+import iGe.Timestep;
 
 namespace iGe
 {
@@ -15,7 +16,7 @@ public:
 
     virtual void OnAttach();
     virtual void OnDetach();
-    virtual void OnUpdate();
+    virtual void OnUpdate(Timestep ts);
     virtual void OnImGuiRender();
     virtual void OnEvent(Event& event);
 

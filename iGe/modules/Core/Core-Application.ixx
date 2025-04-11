@@ -3,12 +3,10 @@ module;
 
 export module iGe.Core:Application;
 import std;
-import iGe.Log;
 import iGe.Layer;
 import iGe.LayerStack;
 import iGe.Event;
 import iGe.Window;
-import iGe.Renderer;
 import iGe.SmartPointer;
 
 namespace iGe
@@ -37,8 +35,9 @@ private:
 
     std::unique_ptr<Window> m_Window;
     ImGuiLayer* m_ImGuiLayer;
-    bool m_Running;
+    bool m_Running = true;
     LayerStack m_LayerStack;
+    float m_LastTime = 0.0f;
 };
 
 // ----------------- Application::Implementation -----------------

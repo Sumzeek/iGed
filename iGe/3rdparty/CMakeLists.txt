@@ -39,3 +39,8 @@ if (NOT TARGET glm)
     #    add_subdirectory(glm-1.0.1)
     #    set_target_properties(glm PROPERTIES FOLDER ${third_party_folder}/glm)
 endif ()
+
+if (NOT TARGET stb_image)
+    include(stb_image.cmake)
+    set_target_properties(stb_image PROPERTIES FOLDER ${third_party_folder}/stb_image)
+endif ()

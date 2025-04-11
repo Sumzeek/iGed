@@ -20,6 +20,7 @@ target_link_libraries(${TARGET_NAME} PUBLIC glfw)
 target_link_libraries(${TARGET_NAME} PUBLIC glad)
 target_link_libraries(${TARGET_NAME} PUBLIC imgui)
 target_link_libraries(${TARGET_NAME} PUBLIC glm::glm)
+target_link_libraries(${TARGET_NAME} PUBLIC stb_image)
 
 # Set export symbols for the library
 target_compile_definitions(${TARGET_NAME} PRIVATE IGE_EXPORT)
@@ -31,10 +32,9 @@ else ()
     message(FATAL_ERROR "Unknown Platform: iGe only supports Windows!")
 endif ()
 
-# Add IGE_ENABLE_ASSERTS in Debug mode
+# Add IGE_DEBUG in Debug mode
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_definitions(${TARGET_NAME} PRIVATE IGE_ENABLE_ASSERTS)
-    target_compile_definitions(${TARGET_NAME} PRIVATE IGE_DEBUG)
+    target_compile_definitions(${TARGET_NAME} PUBLIC IGE_DEBUG)
 endif ()
 
 # Set include directories

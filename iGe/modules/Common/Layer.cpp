@@ -4,6 +4,9 @@ namespace iGe
 {
 
 // ---------------------------------- Layer::Implementation ----------------------------------
+/////////////////////////////////////////////////////////////////////////////
+// Layer ////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
 Layer::Layer(const std::string& name) : m_DebugName(name) {}
 
 Layer::~Layer() {}
@@ -12,7 +15,7 @@ void Layer::OnAttach() {}
 
 void Layer::OnDetach() {}
 
-void Layer::OnUpdate() {}
+void Layer::OnUpdate(Timestep ts) {}
 
 void Layer::OnImGuiRender() {}
 

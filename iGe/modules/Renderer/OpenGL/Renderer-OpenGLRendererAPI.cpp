@@ -32,7 +32,6 @@ static void OpenGLMessageCallback(unsigned source, unsigned type, unsigned id, u
 /////////////////////////////////////////////////////////////////////////////
 // OpenGLRendererAPI ////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-
 void OpenGLRendererAPI::Init() {
 #ifdef IGE_DEBUG
     glEnable(GL_DEBUG_OUTPUT);
@@ -45,7 +44,7 @@ void OpenGLRendererAPI::Init() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glEnable(GL_DEPTH_TEST);
+    //glEnable(GL_DEPTH_TEST);
     glEnable(GL_LINE_SMOOTH);
 }
 
