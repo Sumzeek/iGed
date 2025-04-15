@@ -13,13 +13,11 @@ public:
 private:
     bool OnPressedEvent(iGe::KeyPressedEvent& event);
 
+    iGe::ShaderLibrary m_ShaderLibrary;
+
     iGe::Ref<iGe::VertexArray> m_VertexArray;
-    iGe::Ref<iGe::Shader> m_Shader;
-
     iGe::Ref<iGe::VertexArray> m_SquareVertexArray;
-    iGe::Ref<iGe::Shader> m_TextureShader;
     iGe::Ref<iGe::Texture2D> m_Texture;
-
     iGe::Ref<iGe::Texture2D> m_iGameLogoTexture;
 
     iGe::OrthographicCamera m_Camera;

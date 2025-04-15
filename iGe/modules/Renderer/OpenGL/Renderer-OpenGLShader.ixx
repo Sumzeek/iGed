@@ -1,5 +1,6 @@
 module;
 #include "iGeMacro.h"
+#include <glad/gl.h>
 
 export module iGe.Renderer:OpenGLShader;
 import :Shader;
@@ -28,9 +29,18 @@ public:
     virtual const std::string& GetName() const override;
 
 private:
+    std::string ReadFile(const std::string& filepath);
+    std::unordered_map<GLenum, std::string> PreProcess(const std::string& source);
+
+    void Compile(std::unordered_map<GLenum, std::string>);
+    void CreateProgram();
+
     std::uint32_t m_RendererID;
     std::string m_FilePath;
     std::string m_Name;
+
+    std::unordered_map<GLenum, std::string> m_SourceCode;
+    std::unordered_map<GLenum, GLuint> m_Shaders;
 };
 
 } // namespace iGe

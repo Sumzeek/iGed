@@ -19,6 +19,34 @@ Start by cloning the repository with:
 git clone --recursive https://github.com/Sumzeek/iGed.git
 ```
 
+If the repository was cloned non-recursively previously, use ``git submodule update --init --recursive`` to clone the
+necessary submodules.
+
+If you encounter the error:
+
+```pgsql
+Failed to connect to 127.0.0.1 port 1080 after 2104 ms: Couldn't connect to server
+```
+
+It means you need to manually configure Git's proxy settings and enable your proxy (VPN or similar).
+
+Use the following commands to set up Git's proxy (for example, using Clash with default port 7890; adjust the port based
+on your own proxy software):
+
+```git
+git config --global http.proxy http://127.0.0.1:7890
+git config --global https.proxy http://127.0.0.1:7890
+```
+
+After setting the proxy, re-run the previous commands to retry your operation.
+
+Once finished, restore the default Git settings by removing the proxy:
+
+```git
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+```
+
 <ins>**2. Building the project:**</ins>
 
 1. Ensure that you have Visual Studio 2022 installed with MSVC version 17.6 or higher. You can check your MSVC version
