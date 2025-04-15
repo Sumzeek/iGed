@@ -1,4 +1,4 @@
-set(glm_SOURCE_DIR_ ${CMAKE_CURRENT_SOURCE_DIR}/glm-1.0.1)
+set(glm_SOURCE_DIR_ ${CMAKE_CURRENT_SOURCE_DIR}/glm)
 
 file(GLOB glm_sources CONFIGURE_DEPENDS "${glm_SOURCE_DIR_}/glm/glm.cppm")
 
