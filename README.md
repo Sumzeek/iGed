@@ -119,3 +119,11 @@ To ensure consistency, all modules should be **separated into module interface f
 all function implementations placed in ``.cpp`` files.
 
 ---
+
+## Notice
+
+Due to the author's current research and professional commitments, this project is temporarily paused with no set date
+for future updates. However, all existing code and documentation remain open for learning and reference purposes.
+
+Contributions, forks, and further exploration are warmly welcomed by the community. Thank you for your understanding and
+support.

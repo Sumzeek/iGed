@@ -3,6 +3,7 @@ module;
 
 module iGe.Core;
 import std;
+import iGe.Log;
 import iGe.Timestep;
 import iGe.Renderer;
 
@@ -14,7 +15,7 @@ namespace iGe
 
 Application* Application::s_Instance = nullptr;
 
-Application::Application() {
+Application::Application(const ApplicationSpecification& specification) : m_Specification{specification} {
     IGE_CORE_ASSERT(!s_Instance, "Application already exists!");
     s_Instance = this;
 
@@ -76,5 +77,7 @@ void Application::PushOverlay(Layer* layer) {
 Window& Application::GetWindow() { return *m_Window; }
 
 Application& Application::Get() { return *s_Instance; }
+
+const ApplicationSpecification& Application::GetSpecification() const { return m_Specification; }
 
 } // namespace iGe

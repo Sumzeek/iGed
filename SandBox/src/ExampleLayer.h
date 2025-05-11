@@ -1,6 +1,6 @@
 #pragma once
 
-#include "iGeEntryPoint.h"
+import iGe;
 
 class ExampleLayer : public iGe::Layer {
 public:
@@ -26,14 +26,3 @@ private:
     float m_CameraRotation = 0.0f;
     float m_CameraRotationSpeed = 90.0f;
 };
-
-class Sandbox : public iGe::Application {
-public:
-    Sandbox();
-    ~Sandbox() override;
-};
-
-namespace iGe
-{
-Application* CreateApplication() { return new Sandbox(); }
-} // namespace iGe
