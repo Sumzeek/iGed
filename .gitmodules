@@ -11,3 +11,6 @@
 	path = iGe/3rdparty/imgui
 	url = https://github.com/ocornut/imgui.git
 	branch = docking
+[submodule "Sandbox/3rdparty/assimp"]
+	path = Sandbox/3rdparty/assimp
+	url = https://github.com/assimp/assimp.git

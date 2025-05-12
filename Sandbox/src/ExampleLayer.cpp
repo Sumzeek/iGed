@@ -1,7 +1,10 @@
-#include "ExampleLayer.h"
+module;
+#include "iGeMacro.h"
 
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
+
+module iGed.ExampleLayer;
 
 /////////////////////////////////////////////////////////////////////////////
 // ExampleLayer /////////////////////////////////////////////////////////////

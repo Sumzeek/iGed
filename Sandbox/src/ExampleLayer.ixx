@@ -1,8 +1,10 @@
-#pragma once
+module;
+#include "iGeMacro.h"
 
+export module iGed.ExampleLayer;
 import iGe;
 
-class ExampleLayer : public iGe::Layer {
+export class ExampleLayer : public iGe::Layer {
 public:
     ExampleLayer();
 
