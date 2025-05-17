@@ -39,4 +39,18 @@ private:
     uint32_t m_Count;
 };
 
+export class IGE_API OpenGLUniformBuffer : public UniformBuffer {
+public:
+    OpenGLUniformBuffer(const void* data, uint32_t size);
+    virtual ~OpenGLUniformBuffer();
+
+    virtual void SetData(const void* data, uint32_t size, uint32_t offset = 0) override;
+
+    virtual void Bind(uint32_t bindingPoint) const override;
+    virtual void Unbind() const override;
+
+private:
+    uint32_t m_RendererID;
+};
+
 } // namespace iGe

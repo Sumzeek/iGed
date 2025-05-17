@@ -1,4 +1,4 @@
-set(TARGET_NAME iGe)
+set(TARGET_NAME "iGe")
 
 # Create a shared library (DLL)
 add_library(${TARGET_NAME} SHARED)

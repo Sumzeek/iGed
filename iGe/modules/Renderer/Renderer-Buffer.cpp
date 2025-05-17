@@ -9,6 +9,7 @@ import iGe.Log;
 
 namespace iGe
 {
+
 static uint32_t ShaderDataTypeSize(ShaderDataType type) {
     switch (type) {
         case ShaderDataType::Float:
@@ -42,7 +43,6 @@ static uint32_t ShaderDataTypeSize(ShaderDataType type) {
 /////////////////////////////////////////////////////////////////////////////
 // BufferElement ////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-
 BufferElement::BufferElement(ShaderDataType type, const std::string& name, bool normalized)
     : Name{name}, Type{type}, Size{ShaderDataTypeSize(type)}, Offset{0}, Normalized{normalized} {}
 
@@ -79,7 +79,6 @@ uint32_t BufferElement::GetComponentCount() const {
 /////////////////////////////////////////////////////////////////////////////
 // BufferLayout /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-
 BufferLayout::BufferLayout() {}
 
 BufferLayout::BufferLayout(std::initializer_list<BufferElement> elements) : m_Elements(elements) {
@@ -108,7 +107,6 @@ void BufferLayout::CalculateOffsetsAndStride() {
 /////////////////////////////////////////////////////////////////////////////
 // VertexBuffer /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-
 Ref<VertexBuffer> VertexBuffer::Create(float* vertices, uint32_t size) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
@@ -128,7 +126,6 @@ Ref<VertexBuffer> VertexBuffer::Create(float* vertices, uint32_t size) {
 /////////////////////////////////////////////////////////////////////////////
 // IndexBuffer //////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-
 Ref<IndexBuffer> IndexBuffer::Create(uint32_t* indices, uint32_t count) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
@@ -136,6 +133,25 @@ Ref<IndexBuffer> IndexBuffer::Create(uint32_t* indices, uint32_t count) {
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLIndexBuffer>(indices, count);
+        case RendererAPI::API::Vulkan:
+            IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
+            return nullptr;
+    }
+
+    IGE_CORE_ASSERT(false, "Unknown RendererAPI!");
+    return nullptr;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// UniformBuffer ////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+Ref<UniformBuffer> UniformBuffer::Create(const void* data, uint32_t size) {
+    switch (Renderer::GetAPI()) {
+        case RendererAPI::API::None:
+            IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
+            return nullptr;
+        case RendererAPI::API::OpenGL:
+            return CreateRef<OpenGLUniformBuffer>(data, size);
         case RendererAPI::API::Vulkan:
             IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
             return nullptr;

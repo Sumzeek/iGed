@@ -1,11 +1,10 @@
 #include "iGeEntryPoint.h"
 
-#include "ExampleLayer.h"
+import iGed.ExampleLayer;
 
 class Sandbox : public iGe::Application {
 public:
     Sandbox(iGe::ApplicationSpecification& specification) : iGe::Application{specification} {
-        //PushLayer(new ExampleLayer{});
         PushLayer(new ExampleLayer{});
     }
     ~Sandbox() override {}

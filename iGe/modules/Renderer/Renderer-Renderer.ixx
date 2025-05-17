@@ -29,8 +29,8 @@ private:
     struct SceneData {
         glm::mat4 ViewProjectionMatrix;
     };
-
     static Scope<SceneData> s_SceneData;
+    static Ref<UniformBuffer> s_SceneDataUniform;
 };
 
 } // namespace iGe

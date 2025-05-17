@@ -12,8 +12,14 @@ namespace iGe
 // Renderer /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
 Scope<Renderer::SceneData> Renderer::s_SceneData = CreateScope<Renderer::SceneData>();
+Ref<UniformBuffer> Renderer::s_SceneDataUniform = nullptr;
 
-void Renderer::Init() { RenderCommand::Init(); }
+void Renderer::Init() {
+    RenderCommand::Init();
+
+    // SceneData + Transform
+    s_SceneDataUniform = UniformBuffer::Create(nullptr, sizeof(SceneData) + sizeof(glm::mat4));
+}
 
 void Renderer::Shutdown() {}
 
@@ -27,8 +33,10 @@ void Renderer::EndScene() {}
 
 void Renderer::Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexArray, const glm::mat4& transform) {
     shader->Bind();
-    shader->SetMat4("u_ViewProjection", s_SceneData->ViewProjectionMatrix);
-    shader->SetMat4("u_Transform", transform);
+
+    s_SceneDataUniform->Bind(0);
+    s_SceneDataUniform->SetData(s_SceneData.get(), sizeof(SceneData));
+    s_SceneDataUniform->SetData(&transform, sizeof(transform), sizeof(SceneData));
 
     vertexArray->Bind();
     RenderCommand::DrawIndexed(vertexArray);
