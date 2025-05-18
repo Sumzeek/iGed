@@ -18,7 +18,9 @@ target_link_libraries(${TARGET_NAME} PRIVATE iGe)
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_SCAN_FOR_MODULES 1)
 
 # Compile shaders
-#add_subdirectory(assets/shaders)
+set(SHADER_COMPILE_TARGET "iGedShaderCompile")
+add_subdirectory(assets/shaders)
+add_dependencies(${TARGET_NAME} ${SHADER_COMPILE_TARGET})
 
 # Set the output directory for the executable to ensure it can find the DLL
 set_target_properties(${TARGET_NAME} PROPERTIES

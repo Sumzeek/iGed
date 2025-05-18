@@ -120,15 +120,6 @@ all function implementations placed in ``.cpp`` files.
 
 ---
 
-## Slang Shaders
-
-Originally, I intended to automatically compile ``.slang`` files into GLSL during the post-build phase. However, for
-reasons I haven't fully identified, the corresponding commands fail to execute properly within CMake—even though they
-run successfully from the command line (CMD). As a result, the compilation step currently needs to be performed manually
-by executing a ``Sandbox/assets/shaders/tools/compile.bat`` script.
-
----
-
 ## Notice
 
 Due to the author's current research and professional commitments, this project is temporarily paused with no set date
