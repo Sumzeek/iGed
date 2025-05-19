@@ -9,5 +9,5 @@ export import :Shader;
 export import :Buffer;
 export import :VertexArray;
 export import :RenderCommand;
-export import :OrthographicCamera;
+export import :Camera;
 export import :Texture;

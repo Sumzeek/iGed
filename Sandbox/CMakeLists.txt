@@ -17,6 +17,10 @@ target_sources(${TARGET_NAME} PUBLIC ${SOURCES})
 target_link_libraries(${TARGET_NAME} PRIVATE iGe)
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_SCAN_FOR_MODULES 1)
 
+# Add third party denpendency
+add_subdirectory(3rdparty)
+target_link_libraries(${TARGET_NAME} PUBLIC assimp::assimp)
+
 # Compile shaders
 set(SHADER_COMPILE_TARGET "iGedShaderCompile")
 add_subdirectory(assets/shaders)
@@ -66,3 +70,21 @@ add_custom_command(
 )
 add_custom_target(CopyShadersTarget DEPENDS ${COPIED_SHADER_FLAG})
 add_dependencies(${TARGET_NAME} CopyShadersTarget)
+
+# Copy models
+file(GLOB_RECURSE MODEL_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/models/*")
+SOURCE_GROUP("models" FILES ${MODEL_FILES})
+
+set(COPIED_MODEL_FLAG "${ASSETS_OUTPUT_DIR}/models/.copy")
+add_custom_command(
+        OUTPUT ${COPIED_MODEL_FLAG}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${ASSETS_SOURCE_DIR}/models"
+        "${ASSETS_OUTPUT_DIR}/models"
+        COMMAND ${CMAKE_COMMAND} -E touch "${COPIED_MODEL_FLAG}" # create dummy file
+        DEPENDS ${MODEL_FILES}
+        COMMENT "Copying shaders..."
+        VERBATIM
+)
+add_custom_target(CopyModelsTarget DEPENDS ${COPIED_MODEL_FLAG})
+add_dependencies(${TARGET_NAME} CopyModelsTarget)
