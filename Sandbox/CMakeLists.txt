@@ -31,14 +31,38 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 set(ASSETS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets")
 set(ASSETS_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin/assets")
 
-# Custom command to copy assets after build
-add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+# Copy textures
+file(GLOB_RECURSE TEXTURE_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/textures/*")
+SOURCE_GROUP("textures" FILES ${TEXTURE_FILES})
+
+set(COPIED_TEXTURE_FLAG "${ASSETS_OUTPUT_DIR}/textures/.copy")
+add_custom_command(
+        OUTPUT ${COPIED_TEXTURE_FLAG}
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${ASSETS_SOURCE_DIR}/textures"
         "${ASSETS_OUTPUT_DIR}/textures"
+        COMMAND ${CMAKE_COMMAND} -E touch "${COPIED_TEXTURE_FLAG}" # create dummy file
+        DEPENDS ${TEXTURE_FILES}
+        COMMENT "Copying textures..."
+        VERBATIM
 )
-add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+add_custom_target(CopyTexturesTarget DEPENDS ${COPIED_TEXTURE_FLAG})
+add_dependencies(${TARGET_NAME} CopyTexturesTarget)
+
+# Copy shaders
+file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/shaders/generated/*")
+SOURCE_GROUP("shaders" FILES ${SHADER_FILES})
+
+set(COPIED_SHADER_FLAG "${ASSETS_OUTPUT_DIR}/shaders/.copy")
+add_custom_command(
+        OUTPUT ${COPIED_SHADER_FLAG}
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${ASSETS_SOURCE_DIR}/shaders/generated/glsl"
-        "${ASSETS_OUTPUT_DIR}/shaders/glsl"
+        "${ASSETS_SOURCE_DIR}/shaders/generated"
+        "${ASSETS_OUTPUT_DIR}/shaders"
+        COMMAND ${CMAKE_COMMAND} -E touch "${COPIED_SHADER_FLAG}" # create dummy file
+        DEPENDS ${SHADER_FILES}
+        COMMENT "Copying shaders..."
+        VERBATIM
 )
+add_custom_target(CopyShadersTarget DEPENDS ${COPIED_SHADER_FLAG})
+add_dependencies(${TARGET_NAME} CopyShadersTarget)

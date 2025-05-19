@@ -18,4 +18,4 @@ add_compile_definitions(_UTF8)
 set(IGED_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_subdirectory(iGe)
-add_subdirectory(SandBox)
+add_subdirectory(Sandbox)
