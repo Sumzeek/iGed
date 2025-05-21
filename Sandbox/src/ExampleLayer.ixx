@@ -15,7 +15,7 @@ public:
 private:
     bool OnPressedEvent(iGe::KeyPressedEvent& event);
 
-    iGe::ShaderLibrary m_ShaderLibrary;
+    iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
 
     iGe::Ref<iGe::VertexArray> m_VertexArray;
     iGe::Ref<iGe::VertexArray> m_SquareVertexArray;

@@ -20,11 +20,11 @@ RuntimeLodLayer::RuntimeLodLayer()
     LoadModel("assets/models/Armadillo.obj");
 
     // Create camera data uniform
-    m_CameraDataUniform = iGe::UniformBuffer::Create(nullptr, sizeof(glm::vec3));
-    m_CameraDataUniform->Bind(1);
+    m_CameraDataUniform = iGe::Buffer::Create(nullptr, sizeof(glm::vec3));
+    m_CameraDataUniform->Bind(1, iGe::BufferType::Uniform);
 
-    m_ShaderLibrary.Load("assets/shaders/glsl/BlinnPhong.glsl");
-    m_ShaderLibrary.Load("assets/shaders/glsl/Tessellation.glsl");
+    m_GraphicsShaderLibrary.Load("assets/shaders/glsl/BlinnPhong.glsl");
+    m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Tessellation.glsl");
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -65,7 +65,7 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
     iGe::Renderer::BeginScene(m_Camera);
     {
         // Models
-        auto shader = m_ShaderLibrary.Get("BlinnPhong");
+        auto shader = m_GraphicsShaderLibrary.Get("BlinnPhong");
         shader->Bind();
         iGe::Renderer::Submit(shader, m_VertexArray, m_ModelTransform);
     }

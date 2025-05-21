@@ -26,7 +26,7 @@ ExampleLayer::ExampleLayer() : Layer{"Example"}, m_Camera{-1.6f, 1.6f, -0.9f, 0.
         auto indexBuffer = iGe::IndexBuffer::Create(indices, 3);
         m_VertexArray->SetIndexBuffer(indexBuffer);
 
-        m_ShaderLibrary.Load("assets/shaders/glsl/Color.glsl");
+        m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Color.glsl");
     }
 
     // Square
@@ -47,9 +47,7 @@ ExampleLayer::ExampleLayer() : Layer{"Example"}, m_Camera{-1.6f, 1.6f, -0.9f, 0.
         auto indexBuffer = iGe::IndexBuffer::Create(indices, 6);
         m_SquareVertexArray->SetIndexBuffer(indexBuffer);
 
-        auto shader = m_ShaderLibrary.Load("assets/shaders/glsl/Texture.glsl");
-        shader->Bind();
-        shader->SetInt("u_Texture", 0);
+        m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Texture.glsl");
 
         m_Texture = iGe::Texture2D::Create("assets/textures/Checkerboard.png");
         m_iGameLogoTexture = iGe::Texture2D::Create("assets/textures/iGameLogo.png");
@@ -92,15 +90,15 @@ void ExampleLayer::OnUpdate(iGe::Timestep ts) {
     iGe::Renderer::BeginScene(m_Camera);
     {
         // Triangle
-        iGe::Renderer::Submit(m_ShaderLibrary.Get("Color"), m_VertexArray, model);
+        iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Color"), m_VertexArray, model);
 
         // Square
         //m_Texture->Bind(1);
-        //iGe::Renderer::Submit(m_ShaderLibrary.Get("Texture"), m_SquareVertexArray);
+        //iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Texture"), m_SquareVertexArray);
 
         // iGame Logo
         //m_iGameLogoTexture->Bind(1);
-        //iGe::Renderer::Submit(m_ShaderLibrary.Get("Texture"), m_SquareVertexArray);
+        //iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Texture"), m_SquareVertexArray);
     }
     iGe::Renderer::EndScene();
 }

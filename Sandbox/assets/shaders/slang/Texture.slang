@@ -25,6 +25,7 @@ VertexOutput vsMain(VertexInput input)
 
 // Texture2D u_Texture;
 // SamplerState u_Sampler;
+[[gl::binding(1)]]
 Sampler2D u_Texture;
 
 [shader("pixel")]

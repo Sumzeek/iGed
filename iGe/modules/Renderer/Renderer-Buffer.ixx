@@ -86,16 +86,18 @@ public:
     static Ref<IndexBuffer> Create(std::uint32_t* indices, std::uint32_t count);
 };
 
-export class IGE_API UniformBuffer {
-public:
-    virtual ~UniformBuffer() = default;
+export enum class BufferType : int { Uniform = 0, Storage };
 
-    virtual void Bind(uint32_t bindingPoint) const = 0;
+export class IGE_API Buffer {
+public:
+    virtual ~Buffer() = default;
+
+    virtual void Bind(uint32_t bindingPoint, BufferType type) = 0;
     virtual void Unbind() const = 0;
 
     virtual void SetData(const void* data, uint32_t size, uint32_t offset = 0) = 0;
 
-    static Ref<UniformBuffer> Create(const void* data, uint32_t size);
+    static Ref<Buffer> Create(const void* data, uint32_t size);
 };
 
 } // namespace iGe

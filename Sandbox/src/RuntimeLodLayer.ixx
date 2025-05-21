@@ -24,11 +24,11 @@ private:
     void ModelRotation();
     void ViewTranslation();
 
-    iGe::ShaderLibrary m_ShaderLibrary;
+    iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
 
     iGe::Ref<iGe::VertexArray> m_VertexArray;
     iGe::Ref<iGe::Texture2D> m_Texture;
-    iGe::Ref<iGe::UniformBuffer> m_CameraDataUniform;
+    iGe::Ref<iGe::Buffer> m_CameraDataUniform;
 
     iGe::PerspectiveCamera m_Camera;
     glm::vec3 m_CameraPosition;
@@ -38,6 +38,6 @@ private:
 
     glm::vec3 m_ModelCenter = glm::vec3{0.0f};
     glm::mat4 m_ModelTransform = glm::mat4{1.0f};
-    
+
     glm::vec2 m_LastMousePosition = glm::vec2{0.0f};
 };

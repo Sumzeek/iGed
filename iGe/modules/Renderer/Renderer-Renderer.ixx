@@ -20,7 +20,7 @@ public:
     static void BeginScene(Camera& camera);
     static void EndScene();
 
-    static void Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexArray,
+    static void Submit(const Ref<GraphicsShader>& shader, const Ref<VertexArray>& vertexArray,
                        const glm::mat4& transform = glm::mat4(1.0f));
 
     static RendererAPI::API GetAPI();
@@ -30,7 +30,7 @@ private:
         glm::mat4 ViewProjectionMatrix;
     };
     static Scope<SceneData> s_SceneData;
-    static Ref<UniformBuffer> s_SceneDataUniform;
+    static Ref<Buffer> s_SceneDataUniform;
 };
 
 } // namespace iGe

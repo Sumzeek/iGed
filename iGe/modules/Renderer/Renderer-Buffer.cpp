@@ -143,15 +143,15 @@ Ref<IndexBuffer> IndexBuffer::Create(uint32_t* indices, uint32_t count) {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// UniformBuffer ////////////////////////////////////////////////////////////
+// Buffer ///////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-Ref<UniformBuffer> UniformBuffer::Create(const void* data, uint32_t size) {
+Ref<Buffer> Buffer::Create(const void* data, uint32_t size) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
             IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
-            return CreateRef<OpenGLUniformBuffer>(data, size);
+            return CreateRef<OpenGLBuffer>(data, size);
         case RendererAPI::API::Vulkan:
             IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
             return nullptr;
