@@ -19,11 +19,36 @@ RuntimeLodLayer::RuntimeLodLayer()
     // Load model
     LoadModel("assets/models/Armadillo.obj");
 
+    // Cube
+    {
+        m_CubeVertexArray = iGe::VertexArray::Create();
+
+        std::vector<glm::vec3> vertices = {glm::vec3{-0.5f, -0.5f, 0.5f},  glm::vec3{0.5f, -0.5f, 0.5f},
+                                           glm::vec3{0.5f, 0.5f, 0.5f},    glm::vec3{-0.5f, 0.5f, 0.5f},
+                                           glm::vec3{-0.5f, -0.5f, -0.5f}, glm::vec3{0.5f, -0.5f, -0.5f},
+                                           glm::vec3{0.5f, 0.5f, -0.5f},   glm::vec3{-0.5f, 0.5f, -0.5f}};
+        std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5,
+                                         4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4};
+
+        auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+                                                      vertices.size() * sizeof(glm::vec3));
+        iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
+        vertexBuffer->SetLayout(layout);
+        m_CubeVertexArray->AddVertexBuffer(vertexBuffer);
+
+        auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size() * sizeof(uint32_t));
+        m_CubeVertexArray->SetIndexBuffer(indexBuffer);
+
+        m_ModelCenter = glm::vec3{0.0f, 0.0f, 0.0f};
+        m_CameraPosition = glm::vec3{0.0f, 0.0f, 3.0f};
+    }
+
     // Create camera data uniform
     m_CameraDataUniform = iGe::Buffer::Create(nullptr, sizeof(glm::vec3));
     m_CameraDataUniform->Bind(1, iGe::BufferType::Uniform);
 
-    m_GraphicsShaderLibrary.Load("assets/shaders/glsl/BlinnPhong.glsl");
+    m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Lighting.glsl");
+    m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Test.glsl");
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Tessellation.glsl");
 }
 
@@ -65,9 +90,12 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
     iGe::Renderer::BeginScene(m_Camera);
     {
         // Models
-        auto shader = m_GraphicsShaderLibrary.Get("BlinnPhong");
-        shader->Bind();
-        iGe::Renderer::Submit(shader, m_VertexArray, m_ModelTransform);
+        //auto shader = m_GraphicsShaderLibrary.Get("Lighting");
+        //iGe::Renderer::Submit(shader, m_VertexArray, m_ModelTransform);
+
+        // Cube
+        auto shader = m_GraphicsShaderLibrary.Get("Test");
+        iGe::Renderer::Submit(shader, m_CubeVertexArray, m_ModelTransform);
     }
     iGe::Renderer::EndScene();
 }
@@ -111,7 +139,8 @@ bool RuntimeLodLayer::OnWindowResizeEvent(iGe::WindowResizeEvent& event) {
 }
 
 bool RuntimeLodLayer::OnMouseScrolledEvent(iGe::MouseScrolledEvent& event) {
-    m_CameraPosition.z -= event.GetYOffset() * 10.0f;
+    auto speed = length(m_ModelCenter - m_CameraPosition);
+    m_CameraPosition.z -= event.GetYOffset() * speed / 10.0f;
 
     return false;
 }

@@ -9,41 +9,31 @@ function(CompileToGLSL TARGET_NAME WORKING_DIR SHADERS GENERATED_DIR)
         file(MAKE_DIRECTORY "${GENERATED_DIR}/glsl")
     endif ()
 
-    set(SHADER_FILE_ARGS "")
     set(ALL_GENERATED_GLSL_FILES "")
-    foreach (SHADER ${SHADERS})
-        list(APPEND SHADER_FILE_ARGS ${SHADER})
 
+    foreach (SHADER ${SHADERS})
         get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
         set(GLSL_FILE "${GENERATED_DIR}/glsl/${SHADER_NAME}.glsl")
-        list(APPEND ALL_GENERATED_GLSL_FILES ${GLSL_FILE})
-    endforeach ()
 
-    add_custom_command(
-            OUTPUT ${ALL_GENERATED_GLSL_FILES}
-            COMMAND ${Python3_EXECUTABLE} ${SHADER_COMPILE_PY}
-            ${SLANGC_EXECUTABLE}
-            ${GENERATED_DIR}/glsl
-            ${SHADER_FILE_ARGS}
-            DEPENDS ${SHADERS}
-            WORKING_DIRECTORY ${WORKING_DIR}
-            COMMENT "Compiling shaders via Python script..."
-            VERBATIM
-    )
+        add_custom_command(
+                OUTPUT ${GLSL_FILE}
+                COMMAND ${Python3_EXECUTABLE} ${SHADER_COMPILE_PY}
+                ${SLANGC_EXECUTABLE}
+                ${GENERATED_DIR}/glsl
+                ${SHADER}
+                DEPENDS ${SHADER}
+                WORKING_DIRECTORY ${WORKING_DIR}
+                COMMENT "Compiling shaders via Python script: ${SHADER} -> ${GLSL_FILE}"
+                VERBATIM
+        )
+
+        list(APPEND ALL_GENERATED_GLSL_FILES ${GLSL_FILE})
+
+    endforeach ()
 
     add_custom_target(${TARGET_NAME}
             DEPENDS ${ALL_GENERATED_GLSL_FILES}
     )
-
-    #    add_custom_target(${TARGET_NAME}
-    #            COMMAND ${Python3_EXECUTABLE} ${SHADER_COMPILE_PY}
-    #            ${SLANGC_EXECUTABLE}
-    #            ${GENERATED_DIR}/glsl
-    #            ${SHADER_FILE_ARGS}
-    #            WORKING_DIRECTORY ${WORKING_DIR}
-    #            COMMENT "Compiling shaders via Python script"
-    #            VERBATIM
-    #    )
 
 endfunction()
 
@@ -82,7 +72,7 @@ endfunction()
 #                COMMAND ${CMAKE_COMMAND} -E rm -f ${FRAG_FILE}
 #                DEPENDS ${SHADER}
 #                WORKING_DIRECTORY "${WORKING_DIR}"
-#                COMMENT "Compiling & merging ${SHADER} -> ${GLSL_FILE}"
+#                COMMENT "Compiling & merging: ${SHADER} -> ${GLSL_FILE}"
 #                VERBATIM
 #        )
 #

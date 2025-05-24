@@ -2,123 +2,125 @@ import os
 import sys
 import subprocess
 import re
+from pathlib import Path
+from typing import Dict, List, Tuple
 
-LOG_FILE = "shader_compile.log"
 
-def log(message):
-    pass
-    # with open(LOG_FILE, "a", encoding="utf-8") as f:
-    #     f.write(message + "\n")
-    # print(message)
+def log_error(message: str):
+    print(f"\033[91m[Error] {message}\033[0m", file=sys.stderr)  # red format
 
-def detect_entry_points(shader_path):
-    """Simple detection of which entry points exist in the shader file: vsMain, psMain, computeMain"""
-    with open(shader_path, "r", encoding="utf-8") as f:
-        content = f.read()
-    entry_points = {
-        "vsMain": bool(re.search(r'\bvsMain\b', content)),
-        "psMain": bool(re.search(r'\bpsMain\b', content)),
-        "computeMain": bool(re.search(r'\bcomputeMain\b', content))
-    }
-    return entry_points
 
-def compile_and_merge(slangc_path, output_dir, shaders):
-    os.makedirs(output_dir, exist_ok=True)
-    log(f"Output directory ensured: {output_dir}")
+def log_warning(message: str):
+    print(f"\033[93m[Warning] {message}\033[0m", file=sys.stderr)  # yellow format
 
-    for shader_path in shaders:
-        shader_name = os.path.splitext(os.path.basename(shader_path))[0]
-        entry_points = detect_entry_points(shader_path)
 
-        vert_file = os.path.join(output_dir, f"{shader_name}.vert")
-        frag_file = os.path.join(output_dir, f"{shader_name}.frag")
-        comp_file = os.path.join(output_dir, f"{shader_name}.comp")
-        glsl_file = os.path.join(output_dir, f"{shader_name}.glsl")
+class ShaderCompiler:
+    def __init__(self, slangc_path: str, output_dir: str):
+        self.slangc_path = slangc_path
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        compiled_parts = []
+    def detect_entry_points(self, shader_path: Path) -> Dict[str, bool]:
+        """Detect entry points like vsMain, psMain, computeMain in the shader source"""
+        try:
+            content = shader_path.read_text(encoding="utf-8")
+            return {
+                "vsMain": bool(re.search(r'\bvsMain\b', content)),
+                "psMain": bool(re.search(r'\bpsMain\b', content)),
+                "computeMain": bool(re.search(r'\bcomputeMain\b', content))
+            }
+        except Exception as e:
+            log_error(f"Failed to read {shader_path}: {e}")
+            return {}
 
-        # compile vertex shader
+    def compile_shader(self, shader_path: Path, profile: str, entry: str, output_file: Path) -> bool:
+        """Invoke slangc compiler for given shader entry point"""
         # slangc.exe ../slang/Texture.slang -profile glsl_450 -target glsl -o ../generated/glsl/Texture.vert -entry vsMain
-        if entry_points["vsMain"]:
-            log(f"Compiling vertex shader for {shader_name}...")
-            cmd_vert = [
-                slangc_path,
-                shader_path,
-                "-profile", "glsl_450",
-                "-target", "glsl",
-                "-entry", "vsMain",
-                "-o", vert_file
-            ]
-            res = subprocess.run(cmd_vert, capture_output=True, text=True)
-            if res.returncode != 0:
-                log(f"Error compiling vertex shader for {shader_name}:\n{res.stderr}")
-            else:
-                with open(vert_file, "r", encoding="utf-8") as vf:
-                    vert_code = vf.read()
-                compiled_parts.append(("#type vertex", vert_code))
-                os.remove(vert_file)
+        cmd = [
+            self.slangc_path,
+            str(shader_path),
+            "-profile", profile,
+            "-target", "glsl",
+            "-entry", entry,
+            "-o", str(output_file)
+        ]
 
-        # compile fragment shader
-        # slangc.exe ../slang/Texture.slang -profile glsl_450 -target glsl -o ../generated/glsl/Texture.frag -entry psMain
-        if entry_points["psMain"]:
-            log(f"Compiling fragment shader for {shader_name}...")
-            cmd_frag = [
-                slangc_path,
-                shader_path,
-                "-profile", "glsl_450",
-                "-target", "glsl",
-                "-entry", "psMain",
-                "-o", frag_file
-            ]
-            res = subprocess.run(cmd_frag, capture_output=True, text=True)
-            if res.returncode != 0:
-                log(f"Error compiling fragment shader for {shader_name}:\n{res.stderr}")
-            else:
-                with open(frag_file, "r", encoding="utf-8") as ff:
-                    frag_code = ff.read()
-                compiled_parts.append(("#type fragment", frag_code))
-                os.remove(frag_file)
+        try:
+            result = subprocess.run(
+                cmd, check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            if result.stderr:
+                log_warning(result.stderr)
+            return True
+        except subprocess.CalledProcessError as e:
+            log_error(f"Compilation failed for entry '{entry}':\n"
+                      f"    Command: {' '.join(cmd)}\n"
+                      f"    Exit Code: {e.returncode}\n"
+                      f"    Error Output:\n{e.stderr}")
+            return False
+        except Exception as e:
+            log_error(f"Unexpected error while compiling {entry}: {e}")
+            return False
 
-        # compile compute shader
-        # slangc.exe hello-world.slang -profile glsl_450 -target glsl -o hello-world.glsl -entry computeMain
-        if entry_points["computeMain"]:
-            log(f"Compiling compute shader for {shader_name}...")
-            cmd_comp = [
-                slangc_path,
-                shader_path,
-                "-profile", "glsl_450",
-                "-target", "glsl",
-                "-entry", "computeMain",
-                "-o", comp_file
-            ]
-            res = subprocess.run(cmd_comp, capture_output=True, text=True)
-            if res.returncode != 0:
-                log(f"Error compiling compute shader for {shader_name}:\n{res.stderr}")
-            else:
-                with open(comp_file, "r", encoding="utf-8") as cf:
-                    comp_code = cf.read()
-                compiled_parts.append(("#type compute", comp_code))
-                os.remove(comp_file)
+    def compile_and_merge_shader(self, shader_path: Path):
+        """Compile all valid entry points and merge into a single .glsl file"""
+        shader_name = shader_path.stem
+        entry_points = self.detect_entry_points(shader_path)
+        if not entry_points:
+            log_warning(f"No valid entry points found in {shader_path}")
+            return
 
+        compiled_parts: List[Tuple[str, str]] = []
+        temp_files: List[Path] = []
+
+        entries = {
+            "vsMain": ("vertex", f"{shader_name}.vert"),
+            "psMain": ("fragment", f"{shader_name}.frag"),
+            "computeMain": ("compute", f"{shader_name}.comp")
+        }
+
+        for entry, (shader_type, filename) in entries.items():
+            if not entry_points.get(entry):
+                continue
+            output_file = self.output_dir / filename
+            if self.compile_shader(shader_path, "glsl_450", entry, output_file):
+                compiled_code = output_file.read_text(encoding="utf-8")
+                compiled_parts.append((f"#type {shader_type}", compiled_code))
+                temp_files.append(output_file)
+
+        # Write merged .glsl file
         if compiled_parts:
-            with open(glsl_file, "w", encoding="utf-8") as gf:
+            merged_path = self.output_dir / f"{shader_name}.glsl"
+            with merged_path.open("w", encoding="utf-8") as f:
                 for tag, code in compiled_parts:
-                    gf.write(tag + "\n")
-                    gf.write(code + "\n")
-            log(f"Compiled and merged shader: {glsl_file}")
-        else:
-            log(f"No valid entry points found in {shader_name}, skipped.")
+                    f.write(f"{tag}\n{code}\n")
 
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        log(f"Usage: python ShaderCompile.py <slangc_path> <output_dir> <shader1> [<shader2> ...]")
+        # Cleanup
+        for temp in temp_files:
+            try:
+                temp.unlink()
+            except Exception as e:
+                log_warning(f"Could not delete temp file {temp}: {e}")
+
+
+def main():
+    if len(sys.argv) != 4:
+        log_error("Usage: python ShaderCompile.py <slangc_path> <output_dir> <shader1>")
         sys.exit(1)
 
     slangc_path = sys.argv[1]
     output_dir = sys.argv[2]
-    shaders = sys.argv[3:]
+    shader_file = Path(sys.argv[3])
 
-    if os.path.exists(LOG_FILE):
-        os.remove(LOG_FILE)
+    compiler = ShaderCompiler(slangc_path, output_dir)
+    if shader_file.exists():
+        compiler.compile_and_merge_shader(shader_file)
+    else:
+        log_error(f"Shader file not found: {shader_file}")
 
-    compile_and_merge(slangc_path, output_dir, shaders)
+
+if __name__ == "__main__":
+    main()

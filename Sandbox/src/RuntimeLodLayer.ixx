@@ -26,9 +26,11 @@ private:
 
     iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
 
+    iGe::Ref<iGe::Buffer> m_CameraDataUniform;
+
     iGe::Ref<iGe::VertexArray> m_VertexArray;
     iGe::Ref<iGe::Texture2D> m_Texture;
-    iGe::Ref<iGe::Buffer> m_CameraDataUniform;
+    iGe::Ref<iGe::VertexArray> m_CubeVertexArray;
 
     iGe::PerspectiveCamera m_Camera;
     glm::vec3 m_CameraPosition;
