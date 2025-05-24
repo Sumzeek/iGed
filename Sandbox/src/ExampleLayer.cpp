@@ -49,7 +49,6 @@ ExampleLayer::ExampleLayer() : Layer{"Example"}, m_Camera{-1.6f, 1.6f, -0.9f, 0.
 
         auto shader = m_ShaderLibrary.Load("assets/shaders/glsl/Texture.glsl");
         shader->Bind();
-        shader->SetInt("u_Texture", 0);
 
         m_Texture = iGe::Texture2D::Create("assets/textures/Checkerboard.png");
         m_iGameLogoTexture = iGe::Texture2D::Create("assets/textures/iGameLogo.png");
