@@ -78,6 +78,10 @@ void OpenGLBuffer::SetData(const void* data, uint32_t size, uint32_t offset) {
     glNamedBufferSubData(m_RendererID, offset, size, data);
 }
 
+void OpenGLBuffer::GetData(void* data, uint32_t size, uint32_t offset) {
+    glGetNamedBufferSubData(m_RendererID, offset, size, data);
+}
+
 void OpenGLBuffer::Bind(uint32_t slot, BufferType type) {
     m_Target = ToGLBufferTarget(type);
     if (m_Target == 0) { return; }

@@ -45,6 +45,7 @@ public:
     virtual ~OpenGLBuffer();
 
     virtual void SetData(const void* data, uint32_t size, uint32_t offset = 0) override;
+    virtual void GetData(void* data, uint32_t size, uint32_t offset = 0) override;
 
     virtual void Bind(uint32_t slot, BufferType type) override;
     virtual void Unbind() const override;

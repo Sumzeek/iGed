@@ -19,7 +19,7 @@ RuntimeLodLayer::RuntimeLodLayer()
     // Load model
     LoadModel("assets/models/Armadillo.obj");
 
-    // Cube
+    // Cube model
     {
         m_CubeVertexArray = iGe::VertexArray::Create();
 
@@ -36,20 +36,52 @@ RuntimeLodLayer::RuntimeLodLayer()
         vertexBuffer->SetLayout(layout);
         m_CubeVertexArray->AddVertexBuffer(vertexBuffer);
 
-        auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size() * sizeof(uint32_t));
+        auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
         m_CubeVertexArray->SetIndexBuffer(indexBuffer);
 
         m_ModelCenter = glm::vec3{0.0f, 0.0f, 0.0f};
+        m_ModelRadius = 0.86602f;
         m_CameraPosition = glm::vec3{0.0f, 0.0f, 3.0f};
+
+        // Cube lod
+        {
+            // Input buffer
+            m_VertexBuffer =
+                    iGe::Buffer::Create(reinterpret_cast<void*>(vertices.data()), vertices.size() * sizeof(glm::vec3));
+            m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
+            m_IndexBuffer = iGe::Buffer::Create(indices.data(), indices.size() * sizeof(uint32_t));
+            m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
+            m_SubBufferIn =
+                    iGe::Buffer::Create(nullptr, indices.size() * std::pow(2, kMaxLodLevel) * sizeof(glm::uvec2));
+            m_SubBufferIn->Bind(12, iGe::BufferType::Storage);
+
+            // Output buffer
+            m_SubBufferCounter = iGe::Buffer::Create(nullptr, sizeof(glm::uvec2));
+            m_SubBufferCounter->Bind(20, iGe::BufferType::Storage);
+            m_SubBufferOut =
+                    iGe::Buffer::Create(nullptr, indices.size() * std::pow(2, kMaxLodLevel) * sizeof(glm::uvec2));
+            m_SubBufferOut->Bind(21, iGe::BufferType::Storage);
+
+            // Initial data
+            int triCount = indices.size() / 3;
+
+            std::vector<glm::uvec2> initialSubBuffer;
+            for (int i = 0; i < triCount; ++i) { initialSubBuffer.push_back(glm::uvec2{1, i}); }
+            m_SubBufferIn->SetData(reinterpret_cast<void*>(initialSubBuffer.data()),
+                                   initialSubBuffer.size() * sizeof(glm::uvec2));
+
+            glm::uvec2 initialSubBufferCounter{triCount, triCount};
+            m_SubBufferCounter->SetData(glm::gtc::value_ptr(initialSubBufferCounter), sizeof(glm::uvec2));
+        }
     }
 
     // Create camera data uniform
-    m_CameraDataUniform = iGe::Buffer::Create(nullptr, sizeof(glm::vec3));
+    m_CameraDataUniform = iGe::Buffer::Create(nullptr, sizeof(glm::vec3) + sizeof(int));
     m_CameraDataUniform->Bind(1, iGe::BufferType::Uniform);
 
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Lighting.glsl");
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Test.glsl");
-    m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Tessellation.glsl");
+    m_ComputeShaderLibrary.Load("assets/shaders/glsl/Tessellation.glsl");
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -85,17 +117,112 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
 
     m_Camera.SetPosition(m_CameraPosition);
     m_Camera.SetRotation(m_CameraRotation);
+
+    auto GetLod = [&](float fovy, float d, float r) -> int {
+        float fov = fovy / 2.0f * 3.1415926f / 180.0f;
+        float radius = 1.0f / std::tan(fov) * r / std::sqrt(d * d - r * r); // Right
+
+        float width = float(iGe::Application::Get().GetWindow().GetHeight());
+        float pixels = std::pow((radius * width / 2.0f), 2) * std::numbers::pi_v<float>;
+
+        return std::max(0, int(std::log2(pixels / 2 / 16)));
+    };
+    int targetLod = GetLod(45.0f, m_CameraPosition.z, m_ModelRadius) / 2;
+
     m_CameraDataUniform->SetData(&m_CameraPosition, sizeof(m_CameraPosition));
+    m_CameraDataUniform->SetData(&targetLod, sizeof(int), sizeof(glm::vec3));
 
     iGe::Renderer::BeginScene(m_Camera);
     {
+        iGe::Ref<iGe::GraphicsShader> gShader;
+        iGe::Ref<iGe::ComputeShader> cShader;
+
         // Models
-        //auto shader = m_GraphicsShaderLibrary.Get("Lighting");
+        //graphicsShader = m_GraphicsShaderLibrary.Get("Lighting");
         //iGe::Renderer::Submit(shader, m_VertexArray, m_ModelTransform);
 
         // Cube
-        auto shader = m_GraphicsShaderLibrary.Get("Test");
-        iGe::Renderer::Submit(shader, m_CubeVertexArray, m_ModelTransform);
+        std::vector<glm::vec3> cubeVertices;
+        std::vector<uint32_t> cubeIndices;
+        {
+            // Get vertex/index buffer
+            std::vector<glm::vec3> vertices = {glm::vec3{-0.5f, -0.5f, 0.5f},  glm::vec3{0.5f, -0.5f, 0.5f},
+                                               glm::vec3{0.5f, 0.5f, 0.5f},    glm::vec3{-0.5f, 0.5f, 0.5f},
+                                               glm::vec3{-0.5f, -0.5f, -0.5f}, glm::vec3{0.5f, -0.5f, -0.5f},
+                                               glm::vec3{0.5f, 0.5f, -0.5f},   glm::vec3{-0.5f, 0.5f, -0.5f}};
+            std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5,
+                                             4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4};
+
+            // Get subBuffer
+            std::vector<glm::uvec2> subBuffer(m_CubeVertexArray->GetIndexBuffer()->GetCount() *
+                                              std::pow(2, kMaxLodLevel));
+            m_SubBufferIn->GetData(reinterpret_cast<void*>(subBuffer.data()), subBuffer.size() * sizeof(glm::vec2));
+
+            // Use key to tessellation
+            auto BitToXform = [](uint32_t bit) -> glm::mat3 {
+                float s = float(bit) - 0.5f;
+                glm::vec3 c1 = glm::vec3{s, -0.5f, 0.0f};
+                glm::vec3 c2 = glm::vec3{-0.5f, -s, 0.0f};
+                glm::vec3 c3 = glm::vec3{0.5f, 0.5f, 1.0f};
+                return glm::mat3{c1, c2, c3};
+            };
+            auto KeyToXform = [&BitToXform](uint32_t key) -> glm::mat3 {
+                glm::mat3 xf = glm::mat3{1.0f};
+                while (key > 1u) {
+                    xf = BitToXform(key & 1u) * xf;
+                    key = key >> 1u;
+                }
+                return xf;
+            };
+            auto Berp = [](std::array<glm::vec3, 3> v, glm::vec2 u) -> glm::vec3 {
+                return v[0] + u.x * (v[1] - v[0]) + u.y * (v[2] - v[0]);
+            };
+
+            glm::uvec2 counter;
+            m_SubBufferCounter->GetData(glm::gtc::value_ptr(counter), sizeof(glm::uvec2));
+            for (int i = 0; i < counter.x; ++i) {
+                uint32_t key = subBuffer[i].x;
+                uint32_t triId = subBuffer[i].y;
+
+                std::array<glm::vec3, 3> vIn;
+                vIn[0] = vertices[indices[triId * 3]];
+                vIn[1] = vertices[indices[triId * 3 + 1]];
+                vIn[2] = vertices[indices[triId * 3 + 2]];
+
+                std::array<glm::vec2, 3> u;
+                glm::mat3 xForm = KeyToXform(key);
+                u[0] = glm::vec2{xForm * glm::vec3{0.0f, 0.0f, 1.0f}};
+                u[1] = glm::vec2{xForm * glm::vec3{1.0f, 0.0f, 1.0f}};
+                u[2] = glm::vec2{xForm * glm::vec3{0.0f, 1.0f, 1.0f}};
+
+                cubeVertices.push_back(Berp(vIn, u[0]));
+                cubeVertices.push_back(Berp(vIn, u[1]));
+                cubeVertices.push_back(Berp(vIn, u[2]));
+
+                cubeIndices.push_back(cubeIndices.size());
+                cubeIndices.push_back(cubeIndices.size());
+                cubeIndices.push_back(cubeIndices.size());
+            }
+        }
+
+        // Draw cube
+        {
+            auto vertexArray = iGe::VertexArray::Create();
+
+            auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(cubeVertices.data()),
+                                                          cubeVertices.size() * sizeof(glm::vec3));
+            iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
+            vertexBuffer->SetLayout(layout);
+            vertexArray->AddVertexBuffer(vertexBuffer);
+
+            auto indexBuffer = iGe::IndexBuffer::Create(cubeIndices.data(), cubeIndices.size());
+            vertexArray->SetIndexBuffer(indexBuffer);
+
+            //std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            gShader = m_GraphicsShaderLibrary.Get("Test");
+            iGe::Renderer::Submit(gShader, vertexArray, m_ModelTransform);
+        }
     }
     iGe::Renderer::EndScene();
 }
@@ -216,6 +343,7 @@ void RuntimeLodLayer::LoadModel(std::string const& path) {
     float radius = glm::length(maxBounds - minBounds) * 0.5f;
 
     m_ModelCenter = center;
+    m_ModelRadius = radius;
     m_CameraPosition = glm::vec3{center.x, center.y, center.z + 3.0f * radius};
 }
 
@@ -288,6 +416,8 @@ void RuntimeLodLayer::ModelRotation() {
 
     glm::mat4 rotateSelf = translateBack * rotate * translateToOrigin;
     m_ModelTransform = rotateSelf * m_ModelTransform;
+
+    Tessllation();
 }
 
 void RuntimeLodLayer::ViewTranslation() {
@@ -326,4 +456,28 @@ void RuntimeLodLayer::ViewTranslation() {
     glm::vec3 translation = modelCenter - glm::vec3{offsetWorld};
     m_CameraMoveSpeed = glm::length(glm::vec2{translation}) / glm::length(mouseDelta);
     m_CameraPosition += glm::vec3{-mouseDelta.x * m_CameraMoveSpeed, mouseDelta.y * m_CameraMoveSpeed, 0.0f};
+
+    Tessllation();
 }
+
+void RuntimeLodLayer::Tessllation() {
+    // Runtime Tessellation
+    std::vector<glm::uvec2> subBuffer(m_CubeVertexArray->GetIndexBuffer()->GetCount() * std::pow(2, kMaxLodLevel));
+    m_SubBufferIn->GetData(reinterpret_cast<void*>(subBuffer.data()), subBuffer.size() * sizeof(glm::uvec2));
+
+    m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
+    m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
+    m_SubBufferIn->Bind(12, iGe::BufferType::Storage);
+    m_SubBufferCounter->Bind(20, iGe::BufferType::Storage);
+    m_SubBufferOut->Bind(21, iGe::BufferType::Storage);
+
+    glm::uvec2 counter;
+    m_SubBufferCounter->GetData(glm::gtc::value_ptr(counter), sizeof(glm::uvec2));
+    m_SubBufferCounter->SetData(glm::gtc::value_ptr(glm::uvec2{0, counter.x}), sizeof(glm::uvec2));
+
+    auto shader = m_ComputeShaderLibrary.Get("Tessellation");
+    shader->Dispatch(((counter.x + 31) / 32), 1, 1);
+
+    // Swap ping-pong buffer
+    std::swap(m_SubBufferIn, m_SubBufferOut);
+};

@@ -24,12 +24,24 @@ private:
     void ModelRotation();
     void ViewTranslation();
 
+    void Tessllation();
+
     iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
+    iGe::ShaderLibrary<iGe::ComputeShader> m_ComputeShaderLibrary;
 
     iGe::Ref<iGe::Buffer> m_CameraDataUniform;
 
+    // model
     iGe::Ref<iGe::VertexArray> m_VertexArray;
     iGe::Ref<iGe::Texture2D> m_Texture;
+
+    // cube lod
+    static constexpr std::uint32_t kMaxLodLevel = 15;
+    iGe::Ref<iGe::Buffer> m_VertexBuffer;
+    iGe::Ref<iGe::Buffer> m_IndexBuffer;
+    iGe::Ref<iGe::Buffer> m_SubBufferIn;
+    iGe::Ref<iGe::Buffer> m_SubBufferCounter;
+    iGe::Ref<iGe::Buffer> m_SubBufferOut;
     iGe::Ref<iGe::VertexArray> m_CubeVertexArray;
 
     iGe::PerspectiveCamera m_Camera;
@@ -39,6 +51,7 @@ private:
     float m_CameraRotationSpeed = 90.0f;
 
     glm::vec3 m_ModelCenter = glm::vec3{0.0f};
+    float m_ModelRadius = 1.0f;
     glm::mat4 m_ModelTransform = glm::mat4{1.0f};
 
     glm::vec2 m_LastMousePosition = glm::vec2{0.0f};

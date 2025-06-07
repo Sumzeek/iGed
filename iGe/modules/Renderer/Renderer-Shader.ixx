@@ -21,12 +21,12 @@ public:
     static Ref<GraphicsShader> Create(const std::string& filepath);
     static Ref<GraphicsShader> Create(const std::string& name, const std::string& vertexSrc,
                                       const std::string& fragmentSrc);
-    
+
     virtual void Bind() const = 0;
     virtual void Unbind() const = 0;
 };
 
-class IGE_API ComputeShader : public ShaderBase {
+export class IGE_API ComputeShader : public ShaderBase {
 public:
     static Ref<ComputeShader> Create(const std::string& filepath);
     static Ref<ComputeShader> Create(const std::string& name, const std::string& computeSrc);

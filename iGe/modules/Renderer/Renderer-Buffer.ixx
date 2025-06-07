@@ -96,6 +96,7 @@ public:
     virtual void Unbind() const = 0;
 
     virtual void SetData(const void* data, uint32_t size, uint32_t offset = 0) = 0;
+    virtual void GetData(void* data, uint32_t size, uint32_t offset = 0) = 0;
 
     static Ref<Buffer> Create(const void* data, uint32_t size);
 };
