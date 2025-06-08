@@ -29,19 +29,17 @@ private:
     iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
     iGe::ShaderLibrary<iGe::ComputeShader> m_ComputeShaderLibrary;
 
-    iGe::Ref<iGe::Buffer> m_CameraDataUniform;
+    iGe::Ref<iGe::Buffer> m_TessDataUniform;
 
     // model
     iGe::Ref<iGe::VertexArray> m_VertexArray;
     iGe::Ref<iGe::Texture2D> m_Texture;
 
     // cube lod
-    static constexpr std::uint32_t kMaxLodLevel = 15;
     iGe::Ref<iGe::Buffer> m_VertexBuffer;
     iGe::Ref<iGe::Buffer> m_IndexBuffer;
-    iGe::Ref<iGe::Buffer> m_SubBufferIn;
-    iGe::Ref<iGe::Buffer> m_SubBufferCounter;
-    iGe::Ref<iGe::Buffer> m_SubBufferOut;
+    iGe::Ref<iGe::Buffer> m_TessFactorBuffer;
+    iGe::Ref<iGe::Buffer> m_CounterBuffer;
     iGe::Ref<iGe::VertexArray> m_CubeVertexArray;
 
     iGe::PerspectiveCamera m_Camera;

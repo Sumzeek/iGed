@@ -45,43 +45,32 @@ RuntimeLodLayer::RuntimeLodLayer()
 
         // Cube lod
         {
+            int triSize = indices.size() / 3;
+
             // Input buffer
             m_VertexBuffer =
                     iGe::Buffer::Create(reinterpret_cast<void*>(vertices.data()), vertices.size() * sizeof(glm::vec3));
             m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
+
             m_IndexBuffer = iGe::Buffer::Create(indices.data(), indices.size() * sizeof(uint32_t));
             m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
-            m_SubBufferIn =
-                    iGe::Buffer::Create(nullptr, indices.size() * std::pow(2, kMaxLodLevel) * sizeof(glm::uvec2));
-            m_SubBufferIn->Bind(12, iGe::BufferType::Storage);
 
-            // Output buffer
-            m_SubBufferCounter = iGe::Buffer::Create(nullptr, sizeof(glm::uvec2));
-            m_SubBufferCounter->Bind(20, iGe::BufferType::Storage);
-            m_SubBufferOut =
-                    iGe::Buffer::Create(nullptr, indices.size() * std::pow(2, kMaxLodLevel) * sizeof(glm::uvec2));
-            m_SubBufferOut->Bind(21, iGe::BufferType::Storage);
+            m_TessFactorBuffer = iGe::Buffer::Create(nullptr, triSize * sizeof(glm::uvec2));
+            m_TessFactorBuffer->Bind(12, iGe::BufferType::Storage);
 
-            // Initial data
-            int triCount = indices.size() / 3;
-
-            std::vector<glm::uvec2> initialSubBuffer;
-            for (int i = 0; i < triCount; ++i) { initialSubBuffer.push_back(glm::uvec2{1, i}); }
-            m_SubBufferIn->SetData(reinterpret_cast<void*>(initialSubBuffer.data()),
-                                   initialSubBuffer.size() * sizeof(glm::uvec2));
-
-            glm::uvec2 initialSubBufferCounter{triCount, triCount};
-            m_SubBufferCounter->SetData(glm::gtc::value_ptr(initialSubBufferCounter), sizeof(glm::uvec2));
+            m_CounterBuffer = iGe::Buffer::Create(nullptr, sizeof(uint32_t));
+            m_CounterBuffer->Bind(13, iGe::BufferType::Storage);
         }
     }
 
     // Create camera data uniform
-    m_CameraDataUniform = iGe::Buffer::Create(nullptr, sizeof(glm::vec3) + sizeof(int));
-    m_CameraDataUniform->Bind(1, iGe::BufferType::Uniform);
+    m_TessDataUniform = iGe::Buffer::Create(nullptr, sizeof(glm::uvec2) + sizeof(uint32_t) + +sizeof(uint32_t));
+    m_TessDataUniform->Bind(1, iGe::BufferType::Uniform);
 
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Lighting.glsl");
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Test.glsl");
     m_ComputeShaderLibrary.Load("assets/shaders/glsl/Tessellation.glsl");
+    m_ComputeShaderLibrary.Load("assets/shaders/glsl/CalTessFactor.glsl");
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -118,19 +107,11 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
     m_Camera.SetPosition(m_CameraPosition);
     m_Camera.SetRotation(m_CameraRotation);
 
-    auto GetLod = [&](float fovy, float d, float r) -> int {
-        float fov = fovy / 2.0f * 3.1415926f / 180.0f;
-        float radius = 1.0f / std::tan(fov) * r / std::sqrt(d * d - r * r); // Right
-
-        float width = float(iGe::Application::Get().GetWindow().GetHeight());
-        float pixels = std::pow((radius * width / 2.0f), 2) * std::numbers::pi_v<float>;
-
-        return std::max(0, int(std::log2(pixels / 2 / 16)));
-    };
-    int targetLod = GetLod(45.0f, m_CameraPosition.z, m_ModelRadius) / 2;
-
-    m_CameraDataUniform->SetData(&m_CameraPosition, sizeof(m_CameraPosition));
-    m_CameraDataUniform->SetData(&targetLod, sizeof(int), sizeof(glm::vec3));
+    auto& window = iGe::Application::Get().GetWindow();
+    glm::uvec2 screenSize{window.GetWidth(), window.GetHeight()};
+    uint32_t triSize = m_CubeVertexArray->GetIndexBuffer()->GetCount() / 3;
+    m_TessDataUniform->SetData(&screenSize, sizeof(glm::uvec2));
+    m_TessDataUniform->SetData(&triSize, sizeof(uint32_t), sizeof(glm::uvec2));
 
     iGe::Renderer::BeginScene(m_Camera);
     {
@@ -138,8 +119,10 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         iGe::Ref<iGe::ComputeShader> cShader;
 
         // Models
-        //graphicsShader = m_GraphicsShaderLibrary.Get("Lighting");
-        //iGe::Renderer::Submit(shader, m_VertexArray, m_ModelTransform);
+        //gShader = m_GraphicsShaderLibrary.Get("Lighting");
+        //iGe::Renderer::Submit(gShader, m_VertexArray, m_ModelTransform);
+
+        Tessllation();
 
         // Cube
         std::vector<glm::vec3> cubeVertices;
@@ -153,55 +136,68 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
             std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5,
                                              4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4};
 
-            // Get subBuffer
-            std::vector<glm::uvec2> subBuffer(m_CubeVertexArray->GetIndexBuffer()->GetCount() *
-                                              std::pow(2, kMaxLodLevel));
-            m_SubBufferIn->GetData(reinterpret_cast<void*>(subBuffer.data()), subBuffer.size() * sizeof(glm::vec2));
+            uint32_t triSize = m_CubeVertexArray->GetIndexBuffer()->GetCount() / 3;
+            std::vector<glm::uvec2> tessFactors(triSize);
+            m_TessFactorBuffer->GetData(tessFactors.data(), tessFactors.size() * sizeof(glm::uvec2));
+            for (int i = 0; i < triSize; ++i) {
+                uint32_t triId = tessFactors[i].y;
 
-            // Use key to tessellation
-            auto BitToXform = [](uint32_t bit) -> glm::mat3 {
-                float s = float(bit) - 0.5f;
-                glm::vec3 c1 = glm::vec3{s, -0.5f, 0.0f};
-                glm::vec3 c2 = glm::vec3{-0.5f, -s, 0.0f};
-                glm::vec3 c3 = glm::vec3{0.5f, 0.5f, 1.0f};
-                return glm::mat3{c1, c2, c3};
-            };
-            auto KeyToXform = [&BitToXform](uint32_t key) -> glm::mat3 {
-                glm::mat3 xf = glm::mat3{1.0f};
-                while (key > 1u) {
-                    xf = BitToXform(key & 1u) * xf;
-                    key = key >> 1u;
+                std::array<glm::vec3, 3> v;
+                v[0] = vertices[indices[triId * 3]];
+                v[1] = vertices[indices[triId * 3 + 1]];
+                v[2] = vertices[indices[triId * 3 + 2]];
+
+                uint32_t packed = tessFactors[i].x;
+                int32_t r = (packed >> 16) & 0xFF;
+                int32_t g = (packed >> 8) & 0xFF;
+                int32_t b = (packed >> 0) & 0xFF;
+                int32_t a = (packed >> 24) & 0xFF;
+
+                glm::vec3 center = (v[0] + v[1] + v[2]) / 3.0f;
+                for (int j = 0; j < r + 1; ++j) {
+                    float t1 = float(j) / (r + 1);
+                    float t2 = float(j + 1) / (r + 1);
+                    glm::vec3 p1 = glm::mix(v[0], v[1], t1);
+                    glm::vec3 p2 = glm::mix(v[0], v[1], t2);
+
+                    cubeVertices.push_back(center);
+                    cubeVertices.push_back(p1);
+                    cubeVertices.push_back(p2);
+
+                    cubeIndices.push_back(cubeIndices.size());
+                    cubeIndices.push_back(cubeIndices.size());
+                    cubeIndices.push_back(cubeIndices.size());
                 }
-                return xf;
-            };
-            auto Berp = [](std::array<glm::vec3, 3> v, glm::vec2 u) -> glm::vec3 {
-                return v[0] + u.x * (v[1] - v[0]) + u.y * (v[2] - v[0]);
-            };
 
-            glm::uvec2 counter;
-            m_SubBufferCounter->GetData(glm::gtc::value_ptr(counter), sizeof(glm::uvec2));
-            for (int i = 0; i < counter.x; ++i) {
-                uint32_t key = subBuffer[i].x;
-                uint32_t triId = subBuffer[i].y;
+                for (int j = 0; j < g + 1; ++j) {
+                    float t1 = float(j) / (g + 1);
+                    float t2 = float(j + 1) / (g + 1);
+                    glm::vec3 p1 = glm::mix(v[1], v[2], t1);
+                    glm::vec3 p2 = glm::mix(v[1], v[2], t2);
 
-                std::array<glm::vec3, 3> vIn;
-                vIn[0] = vertices[indices[triId * 3]];
-                vIn[1] = vertices[indices[triId * 3 + 1]];
-                vIn[2] = vertices[indices[triId * 3 + 2]];
+                    cubeVertices.push_back(center);
+                    cubeVertices.push_back(p1);
+                    cubeVertices.push_back(p2);
 
-                std::array<glm::vec2, 3> u;
-                glm::mat3 xForm = KeyToXform(key);
-                u[0] = glm::vec2{xForm * glm::vec3{0.0f, 0.0f, 1.0f}};
-                u[1] = glm::vec2{xForm * glm::vec3{1.0f, 0.0f, 1.0f}};
-                u[2] = glm::vec2{xForm * glm::vec3{0.0f, 1.0f, 1.0f}};
+                    cubeIndices.push_back(cubeIndices.size());
+                    cubeIndices.push_back(cubeIndices.size());
+                    cubeIndices.push_back(cubeIndices.size());
+                }
 
-                cubeVertices.push_back(Berp(vIn, u[0]));
-                cubeVertices.push_back(Berp(vIn, u[1]));
-                cubeVertices.push_back(Berp(vIn, u[2]));
+                for (int j = 0; j < b + 1; ++j) {
+                    float t1 = float(j) / (b + 1);
+                    float t2 = float(j + 1) / (b + 1);
+                    glm::vec3 p1 = glm::mix(v[2], v[0], t1);
+                    glm::vec3 p2 = glm::mix(v[2], v[0], t2);
 
-                cubeIndices.push_back(cubeIndices.size());
-                cubeIndices.push_back(cubeIndices.size());
-                cubeIndices.push_back(cubeIndices.size());
+                    cubeVertices.push_back(center);
+                    cubeVertices.push_back(p1);
+                    cubeVertices.push_back(p2);
+
+                    cubeIndices.push_back(cubeIndices.size());
+                    cubeIndices.push_back(cubeIndices.size());
+                    cubeIndices.push_back(cubeIndices.size());
+                }
             }
         }
 
@@ -217,8 +213,6 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
 
             auto indexBuffer = iGe::IndexBuffer::Create(cubeIndices.data(), cubeIndices.size());
             vertexArray->SetIndexBuffer(indexBuffer);
-
-            //std::this_thread::sleep_for(std::chrono::seconds(1));
 
             gShader = m_GraphicsShaderLibrary.Get("Test");
             iGe::Renderer::Submit(gShader, vertexArray, m_ModelTransform);
@@ -461,23 +455,17 @@ void RuntimeLodLayer::ViewTranslation() {
 }
 
 void RuntimeLodLayer::Tessllation() {
-    // Runtime Tessellation
-    std::vector<glm::uvec2> subBuffer(m_CubeVertexArray->GetIndexBuffer()->GetCount() * std::pow(2, kMaxLodLevel));
-    m_SubBufferIn->GetData(reinterpret_cast<void*>(subBuffer.data()), subBuffer.size() * sizeof(glm::uvec2));
-
+    // Calculate Tessellation factor
     m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
     m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
-    m_SubBufferIn->Bind(12, iGe::BufferType::Storage);
-    m_SubBufferCounter->Bind(20, iGe::BufferType::Storage);
-    m_SubBufferOut->Bind(21, iGe::BufferType::Storage);
+    m_TessFactorBuffer->Bind(12, iGe::BufferType::Storage);
+    m_CounterBuffer->Bind(13, iGe::BufferType::Storage);
 
-    glm::uvec2 counter;
-    m_SubBufferCounter->GetData(glm::gtc::value_ptr(counter), sizeof(glm::uvec2));
-    m_SubBufferCounter->SetData(glm::gtc::value_ptr(glm::uvec2{0, counter.x}), sizeof(glm::uvec2));
+    // Reset counter
+    uint32_t zero = 0;
+    m_CounterBuffer->SetData(&zero, sizeof(uint32_t));
 
-    auto shader = m_ComputeShaderLibrary.Get("Tessellation");
-    shader->Dispatch(((counter.x + 31) / 32), 1, 1);
-
-    // Swap ping-pong buffer
-    std::swap(m_SubBufferIn, m_SubBufferOut);
-};
+    auto shader = m_ComputeShaderLibrary.Get("CalTessFactor");
+    uint32_t triSize = m_CubeVertexArray->GetIndexBuffer()->GetCount() / 3;
+    shader->Dispatch(((triSize + 31) / 32), 1, 1);
+}
