@@ -4,11 +4,9 @@ module;
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 
-#include <assimp/Importer.hpp>
-#include <assimp/postprocess.h>
-#include <assimp/scene.h>
-
 module iGed.RuntimeLodLayer;
+import MeshFitting;
+import std;
 import glm;
 
 /////////////////////////////////////////////////////////////////////////////
@@ -17,31 +15,43 @@ import glm;
 RuntimeLodLayer::RuntimeLodLayer()
     : Layer{"Example"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 1000.f}, m_CameraPosition{0.0f} {
     // Load model
-    LoadModel("assets/models/Armadillo.obj");
-
-    // Cube model
     {
-        m_CubeVertexArray = iGe::VertexArray::Create();
+        m_Armadillo = MeshFitting::LoadObjFile("assets/models/Armadillo.obj");
+        auto vertices = m_Armadillo.Vertices;
+        auto indices = m_Armadillo.Indices;
 
-        std::vector<glm::vec3> vertices = {glm::vec3{-0.5f, -0.5f, 0.5f},  glm::vec3{0.5f, -0.5f, 0.5f},
-                                           glm::vec3{0.5f, 0.5f, 0.5f},    glm::vec3{-0.5f, 0.5f, 0.5f},
-                                           glm::vec3{-0.5f, -0.5f, -0.5f}, glm::vec3{0.5f, -0.5f, -0.5f},
-                                           glm::vec3{0.5f, 0.5f, -0.5f},   glm::vec3{-0.5f, 0.5f, -0.5f}};
-        std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5,
-                                         4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4};
+        m_VertexArray = iGe::VertexArray::Create();
 
         auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
                                                       vertices.size() * sizeof(glm::vec3));
         iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
         vertexBuffer->SetLayout(layout);
-        m_CubeVertexArray->AddVertexBuffer(vertexBuffer);
+        m_VertexArray->AddVertexBuffer(vertexBuffer);
+
+        auto indexBuffer = iGe::IndexBuffer::Create(reinterpret_cast<uint32_t*>(indices.data()), indices.size());
+        m_VertexArray->SetIndexBuffer(indexBuffer);
+    }
+
+    auto mesh1 = MeshFitting::LoadObjFile("assets/models/Bunny_Sim.obj");
+    auto mesh2 = MeshFitting::LoadObjFile("assets/models/Bunny.obj");
+    m_Fitter = MeshFitting::Fit(mesh1, mesh2);
+
+    // Bunny model
+    {
+        m_Bunny = MeshFitting::LoadObjFile("assets/models/Bunny_Sim.obj");
+        auto vertices = m_Bunny.Vertices;
+        auto indices = m_Bunny.Indices;
+
+        m_BunnyVertexArray = iGe::VertexArray::Create();
+
+        auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+                                                      vertices.size() * sizeof(glm::vec3));
+        iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
+        vertexBuffer->SetLayout(layout);
+        m_BunnyVertexArray->AddVertexBuffer(vertexBuffer);
 
         auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-        m_CubeVertexArray->SetIndexBuffer(indexBuffer);
-
-        m_ModelCenter = glm::vec3{0.0f, 0.0f, 0.0f};
-        m_ModelRadius = 0.86602f;
-        m_CameraPosition = glm::vec3{0.0f, 0.0f, 3.0f};
+        m_BunnyVertexArray->SetIndexBuffer(indexBuffer);
 
         // Cube lod
         {
@@ -63,13 +73,19 @@ RuntimeLodLayer::RuntimeLodLayer()
         }
     }
 
+    // Set Model bbx
+    //m_ModelCenter = (m_Armadillo.Center + m_Bunny.Center) / 2;
+    //m_ModelRadius = (m_Armadillo.Radius - m_Bunny.Radius) / 2;
+    m_ModelCenter = m_Bunny.Center;
+    m_ModelRadius = m_Bunny.Radius;
+    m_CameraPosition = m_ModelCenter + glm::vec3{0.0f, 0.0f, 3 * m_ModelRadius};
+
     // Create camera data uniform
     m_TessDataUniform = iGe::Buffer::Create(nullptr, sizeof(glm::uvec2) + sizeof(uint32_t) + +sizeof(uint32_t));
     m_TessDataUniform->Bind(1, iGe::BufferType::Uniform);
 
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Lighting.glsl");
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Test.glsl");
-    m_ComputeShaderLibrary.Load("assets/shaders/glsl/Tessellation.glsl");
     m_ComputeShaderLibrary.Load("assets/shaders/glsl/CalTessFactor.glsl");
 }
 
@@ -109,7 +125,7 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
 
     auto& window = iGe::Application::Get().GetWindow();
     glm::uvec2 screenSize{window.GetWidth(), window.GetHeight()};
-    uint32_t triSize = m_CubeVertexArray->GetIndexBuffer()->GetCount() / 3;
+    uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
     m_TessDataUniform->SetData(&screenSize, sizeof(glm::uvec2));
     m_TessDataUniform->SetData(&triSize, sizeof(uint32_t), sizeof(glm::uvec2));
 
@@ -129,29 +145,25 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         std::vector<uint32_t> cubeIndices;
         {
             // Get vertex/index buffer
-            std::vector<glm::vec3> vertices = {glm::vec3{-0.5f, -0.5f, 0.5f},  glm::vec3{0.5f, -0.5f, 0.5f},
-                                               glm::vec3{0.5f, 0.5f, 0.5f},    glm::vec3{-0.5f, 0.5f, 0.5f},
-                                               glm::vec3{-0.5f, -0.5f, -0.5f}, glm::vec3{0.5f, -0.5f, -0.5f},
-                                               glm::vec3{0.5f, 0.5f, -0.5f},   glm::vec3{-0.5f, 0.5f, -0.5f}};
-            std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5,
-                                             4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4};
+            auto vertices = m_Bunny.Vertices;
+            auto indices = m_Bunny.Indices;
 
-            uint32_t triSize = m_CubeVertexArray->GetIndexBuffer()->GetCount() / 3;
+            uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
             std::vector<glm::uvec2> tessFactors(triSize);
             m_TessFactorBuffer->GetData(tessFactors.data(), tessFactors.size() * sizeof(glm::uvec2));
             for (int i = 0; i < triSize; ++i) {
                 uint32_t triId = tessFactors[i].y;
 
                 std::array<glm::vec3, 3> v;
-                v[0] = vertices[indices[triId * 3]];
-                v[1] = vertices[indices[triId * 3 + 1]];
-                v[2] = vertices[indices[triId * 3 + 2]];
+                v[0] = m_Fitter->Apply(vertices[indices[triId * 3]]);
+                v[1] = m_Fitter->Apply(vertices[indices[triId * 3 + 1]]);
+                v[2] = m_Fitter->Apply(vertices[indices[triId * 3 + 2]]);
 
                 uint32_t packed = tessFactors[i].x;
-                int32_t r = (packed >> 16) & 0xFF;
-                int32_t g = (packed >> 8) & 0xFF;
-                int32_t b = (packed >> 0) & 0xFF;
-                int32_t a = (packed >> 24) & 0xFF;
+                std::int32_t r = (packed >> 16) & 0xFF;
+                std::int32_t g = (packed >> 8) & 0xFF;
+                std::int32_t b = (packed >> 0) & 0xFF;
+                std::int32_t a = (packed >> 24) & 0xFF;
 
                 glm::vec3 center = (v[0] + v[1] + v[2]) / 3.0f;
                 for (int j = 0; j < r + 1; ++j) {
@@ -216,6 +228,9 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
 
             gShader = m_GraphicsShaderLibrary.Get("Test");
             iGe::Renderer::Submit(gShader, vertexArray, m_ModelTransform);
+
+            //gShader = m_GraphicsShaderLibrary.Get("Test");
+            //iGe::Renderer::Submit(gShader, m_BunnyVertexArray, m_ModelTransform);
         }
     }
     iGe::Renderer::EndScene();
@@ -278,69 +293,6 @@ bool RuntimeLodLayer::OnMouseButtonReleasedEvent(iGe::MouseButtonReleasedEvent& 
     return false;
 }
 
-void RuntimeLodLayer::LoadModel(std::string const& path) {
-    // read file via assimp
-    Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals |
-                                                           aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
-    // check for errors
-    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
-    {
-        IGE_ERROR("Assimp Error: {}", importer.GetErrorString());
-        return;
-    }
-
-    // assuming the file has only one grid
-    aiMesh* mesh = scene->mMeshes[0];
-
-    std::vector<float> vertices;
-    for (int i = 0; i < mesh->mNumVertices; ++i) {
-        auto vertex = mesh->mVertices[i];
-        vertices.push_back(vertex.x);
-        vertices.push_back(vertex.y);
-        vertices.push_back(vertex.z);
-    }
-
-    std::vector<uint32_t> indices;
-    for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-        aiFace face = mesh->mFaces[i];
-        for (unsigned int j = 0; j < face.mNumIndices; j++) { indices.push_back(face.mIndices[j]); }
-    }
-
-    m_VertexArray = iGe::VertexArray::Create();
-
-    auto vertexBuffer = iGe::VertexBuffer::Create(vertices.data(), vertices.size() * sizeof(float));
-    iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
-    vertexBuffer->SetLayout(layout);
-    m_VertexArray->AddVertexBuffer(vertexBuffer);
-
-    auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-    m_VertexArray->SetIndexBuffer(indexBuffer);
-
-    // update camera position
-    glm::vec3 minBounds(FLT_MAX);
-    glm::vec3 maxBounds(-FLT_MAX);
-
-    for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-        const aiVector3D& v = mesh->mVertices[i];
-
-        minBounds.x = std::min(minBounds.x, v.x);
-        minBounds.y = std::min(minBounds.y, v.y);
-        minBounds.z = std::min(minBounds.z, v.z);
-
-        maxBounds.x = std::max(maxBounds.x, v.x);
-        maxBounds.y = std::max(maxBounds.y, v.y);
-        maxBounds.z = std::max(maxBounds.z, v.z);
-    }
-
-    glm::vec3 center = (minBounds + maxBounds) * 0.5f;
-    float radius = glm::length(maxBounds - minBounds) * 0.5f;
-
-    m_ModelCenter = center;
-    m_ModelRadius = radius;
-    m_CameraPosition = glm::vec3{center.x, center.y, center.z + 3.0f * radius};
-}
-
 void RuntimeLodLayer::ModelRotation() {
     auto& window = iGe::Application::Get().GetWindow();
     auto width = window.GetWidth();
@@ -359,9 +311,9 @@ void RuntimeLodLayer::ModelRotation() {
         oldPoint3D.x = oldX;
         oldPoint3D.y = oldY;
         if (old_x2y2 < 0.5 * rsqr) {
-            oldPoint3D.z = sqrt(rsqr - old_x2y2);
+            oldPoint3D.z = std::sqrt(rsqr - old_x2y2);
         } else {
-            oldPoint3D.z = 0.5 * rsqr / sqrt(old_x2y2);
+            oldPoint3D.z = 0.5 * rsqr / std::sqrt(old_x2y2);
         }
     }
 
@@ -401,7 +353,7 @@ void RuntimeLodLayer::ModelRotation() {
     }
 
     constexpr double PI = 3.14159265358979323846;
-    double phi = 2.0 * asin(t);
+    double phi = 2.0 * std::asin(t);
     double angle = phi * 180.0 / PI;
 
     glm::mat4 translateToOrigin = glm::gtc::translate(glm::mat4{1.0f}, -m_ModelCenter);
@@ -466,6 +418,6 @@ void RuntimeLodLayer::Tessllation() {
     m_CounterBuffer->SetData(&zero, sizeof(uint32_t));
 
     auto shader = m_ComputeShaderLibrary.Get("CalTessFactor");
-    uint32_t triSize = m_CubeVertexArray->GetIndexBuffer()->GetCount() / 3;
+    uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
     shader->Dispatch(((triSize + 31) / 32), 1, 1);
 }

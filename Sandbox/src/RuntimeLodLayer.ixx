@@ -3,6 +3,7 @@ module;
 
 export module iGed.RuntimeLodLayer;
 import iGe;
+import MeshFitting;
 
 export class RuntimeLodLayer : public iGe::Layer {
 public:
@@ -20,7 +21,6 @@ private:
     bool OnMouseButtonReleasedEvent(iGe::MouseButtonReleasedEvent& event);
     bool OnMouseMoveEvent(iGe::MouseMoveEvent& event);
 
-    void LoadModel(std::string const& path);
     void ModelRotation();
     void ViewTranslation();
 
@@ -31,16 +31,21 @@ private:
 
     iGe::Ref<iGe::Buffer> m_TessDataUniform;
 
+    // fitter
+    std::shared_ptr<MeshFitting::Fitter> m_Fitter;
+
     // model
+    MeshFitting::Mesh m_Armadillo;
     iGe::Ref<iGe::VertexArray> m_VertexArray;
     iGe::Ref<iGe::Texture2D> m_Texture;
 
     // cube lod
+    MeshFitting::Mesh m_Bunny;
     iGe::Ref<iGe::Buffer> m_VertexBuffer;
     iGe::Ref<iGe::Buffer> m_IndexBuffer;
     iGe::Ref<iGe::Buffer> m_TessFactorBuffer;
     iGe::Ref<iGe::Buffer> m_CounterBuffer;
-    iGe::Ref<iGe::VertexArray> m_CubeVertexArray;
+    iGe::Ref<iGe::VertexArray> m_BunnyVertexArray;
 
     iGe::PerspectiveCamera m_Camera;
     glm::vec3 m_CameraPosition;

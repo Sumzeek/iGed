@@ -14,3 +14,6 @@
 [submodule "Sandbox/3rdparty/assimp"]
 	path = Sandbox/3rdparty/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "Sandbox/3rdparty/eigen"]
+	path = Sandbox/3rdparty/eigen
+	url = https://gitlab.com/libeigen/eigen.git

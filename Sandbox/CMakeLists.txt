@@ -20,6 +20,7 @@ set_property(TARGET ${TARGET_NAME} PROPERTY CXX_SCAN_FOR_MODULES 1)
 # Add third party denpendency
 add_subdirectory(3rdparty)
 target_link_libraries(${TARGET_NAME} PUBLIC assimp::assimp)
+target_link_libraries(${TARGET_NAME} PUBLIC Eigen3::Eigen)
 
 # Compile shaders
 set(SHADER_COMPILE_TARGET "iGedShaderCompile")
