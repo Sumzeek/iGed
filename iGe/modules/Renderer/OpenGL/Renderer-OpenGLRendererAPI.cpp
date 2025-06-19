@@ -13,16 +13,16 @@ static void OpenGLMessageCallback(unsigned source, unsigned type, unsigned id, u
                                   const char* message, const void* userParam) {
     switch (severity) {
         case GL_DEBUG_SEVERITY_HIGH:
-            IGE_CORE_CRITICAL(message);
+            IGE_CORE_CRITICAL("OpenGL message: {}", message);
             return;
         case GL_DEBUG_SEVERITY_MEDIUM:
-            IGE_CORE_ERROR(message);
+            IGE_CORE_ERROR("OpenGL message: {}", message);
             return;
         case GL_DEBUG_SEVERITY_LOW:
-            IGE_CORE_WARN(message);
+            IGE_CORE_WARN("OpenGL message: {}", message);
             return;
         case GL_DEBUG_SEVERITY_NOTIFICATION:
-            IGE_CORE_TRACE(message);
+            IGE_CORE_TRACE("OpenGL message: {}", message);
             return;
     }
 
