@@ -235,6 +235,10 @@ OpenGLComputeShader::OpenGLComputeShader(const std::string& name, const std::str
 
 OpenGLComputeShader::~OpenGLComputeShader() { glDeleteProgram(m_RendererID); }
 
+void OpenGLComputeShader::Bind() const { glUseProgram(m_RendererID); }
+
+void OpenGLComputeShader::Unbind() const { glUseProgram(0); }
+
 void OpenGLComputeShader::Dispatch(std::uint32_t groupX, std::uint32_t groupY, std::uint32_t groupZ) {
     glUseProgram(m_RendererID);
     glDispatchCompute(groupX, groupY, groupZ);

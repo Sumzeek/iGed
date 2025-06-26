@@ -31,6 +31,8 @@ public:
     static Ref<ComputeShader> Create(const std::string& filepath);
     static Ref<ComputeShader> Create(const std::string& name, const std::string& computeSrc);
 
+    virtual void Bind() const = 0;
+    virtual void Unbind() const = 0;
     virtual void Dispatch(std::uint32_t groupX, std::uint32_t groupY, std::uint32_t groupZ) = 0;
 };
 

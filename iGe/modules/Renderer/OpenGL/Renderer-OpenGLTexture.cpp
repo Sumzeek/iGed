@@ -13,24 +13,28 @@ namespace iGe
 namespace Utils
 {
 
-static GLenum HazelImageFormatToGLDataFormat(ImageFormat format) {
+static GLenum iGeImageFormatToGLDataFormat(ImageFormat format) {
     switch (format) {
         case ImageFormat::RGB8:
             return GL_RGB;
         case ImageFormat::RGBA8:
             return GL_RGBA;
+        case ImageFormat::R32:
+            return GL_RED_INTEGER;
     }
 
     IGE_CORE_ASSERT(false);
     return 0;
 }
 
-static GLenum HazelImageFormatToGLInternalFormat(ImageFormat format) {
+static GLenum iGeImageFormatToGLInternalFormat(ImageFormat format) {
     switch (format) {
         case ImageFormat::RGB8:
             return GL_RGB8;
         case ImageFormat::RGBA8:
             return GL_RGBA8;
+        case ImageFormat::R32:
+            return GL_R32UI;
     }
 
     IGE_CORE_ASSERT(false);
@@ -44,8 +48,8 @@ static GLenum HazelImageFormatToGLInternalFormat(ImageFormat format) {
 /////////////////////////////////////////////////////////////////////////////
 OpenGLTexture2D::OpenGLTexture2D(const TextureSpecification& specification)
     : m_Specification(specification), m_Width(m_Specification.Width), m_Height(m_Specification.Height) {
-    m_InternalFormat = Utils::HazelImageFormatToGLInternalFormat(m_Specification.Format);
-    m_DataFormat = Utils::HazelImageFormatToGLDataFormat(m_Specification.Format);
+    m_InternalFormat = Utils::iGeImageFormatToGLInternalFormat(m_Specification.Format);
+    m_DataFormat = Utils::iGeImageFormatToGLDataFormat(m_Specification.Format);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
     glTextureStorage2D(m_RendererID, 1, m_InternalFormat, m_Width, m_Height);
@@ -122,6 +126,10 @@ void OpenGLTexture2D::SetData(void* data, uint32_t size) {
 }
 
 void OpenGLTexture2D::Bind(uint32_t slot) const { glBindTextureUnit(slot, m_RendererID); }
+
+void OpenGLTexture2D::BindImage(uint32_t binding) const {
+    glBindImageTexture(binding, m_RendererID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
+}
 
 bool OpenGLTexture2D::IsLoaded() const { return m_IsLoaded; }
 

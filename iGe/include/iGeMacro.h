@@ -13,11 +13,11 @@
 #endif
 
 // Core log macros
-#define IGE_CORE_TRACE(...) ::iGe::Log::GetCoreLogger()->trace(__VA_ARGS__)
-#define IGE_CORE_INFO(...) ::iGe::Log::GetCoreLogger()->info(__VA_ARGS__)
-#define IGE_CORE_WARN(...) ::iGe::Log::GetCoreLogger()->warn(__VA_ARGS__)
-#define IGE_CORE_ERROR(...) ::iGe::Log::GetCoreLogger()->error(__VA_ARGS__)
-#define IGE_CORE_CRITICAL(...) ::iGe::Log::GetCoreLogger()->critical(__VA_ARGS__)
+#define IGE_CORE_TRACE(...) ::iGe::Log::GetCoreLogger()->trace(std::format(__VA_ARGS__))
+#define IGE_CORE_INFO(...) ::iGe::Log::GetCoreLogger()->info(std::format(__VA_ARGS__))
+#define IGE_CORE_WARN(...) ::iGe::Log::GetCoreLogger()->warn(std::format(__VA_ARGS__))
+#define IGE_CORE_ERROR(...) ::iGe::Log::GetCoreLogger()->error(std::format(__VA_ARGS__))
+#define IGE_CORE_CRITICAL(...) ::iGe::Log::GetCoreLogger()->critical(std::format(__VA_ARGS__))
 
 // Client log macros
 #define IGE_TRACE(...) ::iGe::Log::GetClientLogger()->trace(__VA_ARGS__)

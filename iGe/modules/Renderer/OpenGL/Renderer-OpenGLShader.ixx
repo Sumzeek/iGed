@@ -33,6 +33,8 @@ public:
     OpenGLComputeShader(const std::string& name, const std::string& computeSrc);
     virtual ~OpenGLComputeShader();
 
+    virtual void Bind() const override;
+    virtual void Unbind() const override;
     virtual void Dispatch(std::uint32_t groupX, std::uint32_t groupY, std::uint32_t groupZ) override;
 
     virtual const std::string& GetName() const override;

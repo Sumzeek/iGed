@@ -8,7 +8,7 @@ import iGe.SmartPointer;
 namespace iGe
 {
 
-export enum class ImageFormat : int { None = 0, R8, RGB8, RGBA8, RGBA32F };
+export enum class ImageFormat : int { None = 0, R8, RGB8, RGBA8, RGBA32F, R32 };
 
 export struct TextureSpecification {
     std::uint32_t Width = 1;
@@ -32,6 +32,7 @@ public:
     virtual void SetData(void* data, uint32_t size) = 0;
 
     virtual void Bind(uint32_t slot = 0) const = 0;
+    virtual void BindImage(uint32_t binding = 0) const = 0;
 
     virtual bool IsLoaded() const = 0;
 

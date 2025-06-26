@@ -25,11 +25,13 @@ private:
     void ViewTranslation();
 
     void Tessllation();
+    void SoftwareRasterization();
 
     iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
     iGe::ShaderLibrary<iGe::ComputeShader> m_ComputeShaderLibrary;
 
     iGe::Ref<iGe::Buffer> m_TessDataUniform;
+    iGe::Ref<iGe::Texture2D> m_DepthBuffer;
 
     // fitter
     std::shared_ptr<MeshFitting::Fitter> m_Fitter;
@@ -37,7 +39,6 @@ private:
     // model
     MeshFitting::Mesh m_Armadillo;
     iGe::Ref<iGe::VertexArray> m_VertexArray;
-    iGe::Ref<iGe::Texture2D> m_Texture;
 
     // cube lod
     MeshFitting::Mesh m_Bunny;

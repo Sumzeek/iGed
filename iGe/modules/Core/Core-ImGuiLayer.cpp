@@ -1,8 +1,8 @@
 module;
 #include "iGeMacro.h"
 
-// TEMPORARY
-#include <glad/gl.h>
+//// TEMPORARY
+//#include <glad/gl.h>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 

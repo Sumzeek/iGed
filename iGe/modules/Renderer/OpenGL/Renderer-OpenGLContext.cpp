@@ -27,6 +27,14 @@ void OpenGLContext::Init() {
     IGE_CORE_INFO("    Vendor: {0}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
     IGE_CORE_INFO("    Renderer: {0}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
     IGE_CORE_INFO("    Version: {0}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+
+    //GLint numExtensions;
+    //glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
+    //IGE_CORE_INFO("OpenGL Extensions:");
+    //for (GLint i = 0; i < numExtensions; ++i) {
+    //    const char* ext = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i));
+    //    IGE_CORE_INFO("    {0}", ext);
+    //}
 }
 
 void OpenGLContext::SwapBuffers() { glfwSwapBuffers(m_WindowHandle); }

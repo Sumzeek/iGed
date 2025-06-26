@@ -32,9 +32,9 @@ RuntimeLodLayer::RuntimeLodLayer()
         m_VertexArray->SetIndexBuffer(indexBuffer);
     }
 
-    auto mesh1 = MeshFitting::LoadObjFile("assets/models/Bunny_Sim.obj");
-    auto mesh2 = MeshFitting::LoadObjFile("assets/models/Bunny.obj");
-    m_Fitter = MeshFitting::Fit(mesh1, mesh2);
+    //auto mesh1 = MeshFitting::LoadObjFile("assets/models/Dark_Finger_Reef_Crab_Sim.obj");
+    //auto mesh2 = MeshFitting::LoadObjFile("assets/models/Dark_Finger_Reef_Crab.obj");
+    //m_Fitter = MeshFitting::Fit(mesh1, mesh2);
 
     // Bunny model
     {
@@ -56,6 +56,15 @@ RuntimeLodLayer::RuntimeLodLayer()
         // Cube lod
         {
             int triSize = indices.size() / 3;
+
+            // depth buffer
+            auto& window = iGe::Application::Get().GetWindow();
+            iGe::TextureSpecification specification;
+            specification.Width = window.GetWidth();
+            specification.Height = window.GetHeight();
+            specification.Format = iGe::ImageFormat::R32;
+            specification.GenerateMips = false;
+            m_DepthBuffer = iGe::Texture2D::Create(specification);
 
             // Input buffer
             m_VertexBuffer =
@@ -87,6 +96,7 @@ RuntimeLodLayer::RuntimeLodLayer()
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Lighting.glsl");
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Test.glsl");
     m_ComputeShaderLibrary.Load("assets/shaders/glsl/CalTessFactor.glsl");
+    m_ComputeShaderLibrary.Load("assets/shaders/glsl/SWRasterizer.glsl");
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -138,99 +148,101 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         //gShader = m_GraphicsShaderLibrary.Get("Lighting");
         //iGe::Renderer::Submit(gShader, m_VertexArray, m_ModelTransform);
 
-        Tessllation();
+        //Tessllation();
+        SoftwareRasterization();
 
         // Cube
-        std::vector<glm::vec3> cubeVertices;
-        std::vector<uint32_t> cubeIndices;
-        {
-            // Get vertex/index buffer
-            auto vertices = m_Bunny.Vertices;
-            auto indices = m_Bunny.Indices;
+        //std::vector<glm::vec3> cubeVertices;
+        //std::vector<uint32_t> cubeIndices;
+        //{
+        //    // Get vertex/index buffer
+        //    auto vertices = m_Bunny.Vertices;
+        //    auto indices = m_Bunny.Indices;
+        //
+        //    uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
+        //    std::vector<glm::uvec2> tessFactors(triSize);
+        //    m_TessFactorBuffer->GetData(tessFactors.data(), tessFactors.size() * sizeof(glm::uvec2));
+        //    for (int i = 0; i < triSize; ++i) {
+        //        uint32_t triId = tessFactors[i].y;
+        //
+        //        std::array<glm::vec3, 3> v;
+        //        v[0] = m_Fitter->Apply(vertices[indices[triId * 3]]);
+        //        v[1] = m_Fitter->Apply(vertices[indices[triId * 3 + 1]]);
+        //        v[2] = m_Fitter->Apply(vertices[indices[triId * 3 + 2]]);
+        //
+        //        uint32_t packed = tessFactors[i].x;
+        //        std::int32_t r = (packed >> 16) & 0xFF;
+        //        std::int32_t g = (packed >> 8) & 0xFF;
+        //        std::int32_t b = (packed >> 0) & 0xFF;
+        //        std::int32_t a = (packed >> 24) & 0xFF;
+        //
+        //        glm::vec3 center = (v[0] + v[1] + v[2]) / 3.0f;
+        //        for (int j = 0; j < r + 1; ++j) {
+        //            float t1 = float(j) / (r + 1);
+        //            float t2 = float(j + 1) / (r + 1);
+        //            glm::vec3 p1 = glm::mix(v[0], v[1], t1);
+        //            glm::vec3 p2 = glm::mix(v[0], v[1], t2);
+        //
+        //            cubeVertices.push_back(center);
+        //            cubeVertices.push_back(p1);
+        //            cubeVertices.push_back(p2);
+        //
+        //            cubeIndices.push_back(cubeIndices.size());
+        //            cubeIndices.push_back(cubeIndices.size());
+        //            cubeIndices.push_back(cubeIndices.size());
+        //        }
+        //
+        //        for (int j = 0; j < g + 1; ++j) {
+        //            float t1 = float(j) / (g + 1);
+        //            float t2 = float(j + 1) / (g + 1);
+        //            glm::vec3 p1 = glm::mix(v[1], v[2], t1);
+        //            glm::vec3 p2 = glm::mix(v[1], v[2], t2);
+        //
+        //            cubeVertices.push_back(center);
+        //            cubeVertices.push_back(p1);
+        //            cubeVertices.push_back(p2);
+        //
+        //            cubeIndices.push_back(cubeIndices.size());
+        //            cubeIndices.push_back(cubeIndices.size());
+        //            cubeIndices.push_back(cubeIndices.size());
+        //        }
+        //
+        //        for (int j = 0; j < b + 1; ++j) {
+        //            float t1 = float(j) / (b + 1);
+        //            float t2 = float(j + 1) / (b + 1);
+        //            glm::vec3 p1 = glm::mix(v[2], v[0], t1);
+        //            glm::vec3 p2 = glm::mix(v[2], v[0], t2);
+        //
+        //            cubeVertices.push_back(center);
+        //            cubeVertices.push_back(p1);
+        //            cubeVertices.push_back(p2);
+        //
+        //            cubeIndices.push_back(cubeIndices.size());
+        //            cubeIndices.push_back(cubeIndices.size());
+        //            cubeIndices.push_back(cubeIndices.size());
+        //        }
+        //    }
+        //}
 
-            uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
-            std::vector<glm::uvec2> tessFactors(triSize);
-            m_TessFactorBuffer->GetData(tessFactors.data(), tessFactors.size() * sizeof(glm::uvec2));
-            for (int i = 0; i < triSize; ++i) {
-                uint32_t triId = tessFactors[i].y;
-
-                std::array<glm::vec3, 3> v;
-                v[0] = m_Fitter->Apply(vertices[indices[triId * 3]]);
-                v[1] = m_Fitter->Apply(vertices[indices[triId * 3 + 1]]);
-                v[2] = m_Fitter->Apply(vertices[indices[triId * 3 + 2]]);
-
-                uint32_t packed = tessFactors[i].x;
-                std::int32_t r = (packed >> 16) & 0xFF;
-                std::int32_t g = (packed >> 8) & 0xFF;
-                std::int32_t b = (packed >> 0) & 0xFF;
-                std::int32_t a = (packed >> 24) & 0xFF;
-
-                glm::vec3 center = (v[0] + v[1] + v[2]) / 3.0f;
-                for (int j = 0; j < r + 1; ++j) {
-                    float t1 = float(j) / (r + 1);
-                    float t2 = float(j + 1) / (r + 1);
-                    glm::vec3 p1 = glm::mix(v[0], v[1], t1);
-                    glm::vec3 p2 = glm::mix(v[0], v[1], t2);
-
-                    cubeVertices.push_back(center);
-                    cubeVertices.push_back(p1);
-                    cubeVertices.push_back(p2);
-
-                    cubeIndices.push_back(cubeIndices.size());
-                    cubeIndices.push_back(cubeIndices.size());
-                    cubeIndices.push_back(cubeIndices.size());
-                }
-
-                for (int j = 0; j < g + 1; ++j) {
-                    float t1 = float(j) / (g + 1);
-                    float t2 = float(j + 1) / (g + 1);
-                    glm::vec3 p1 = glm::mix(v[1], v[2], t1);
-                    glm::vec3 p2 = glm::mix(v[1], v[2], t2);
-
-                    cubeVertices.push_back(center);
-                    cubeVertices.push_back(p1);
-                    cubeVertices.push_back(p2);
-
-                    cubeIndices.push_back(cubeIndices.size());
-                    cubeIndices.push_back(cubeIndices.size());
-                    cubeIndices.push_back(cubeIndices.size());
-                }
-
-                for (int j = 0; j < b + 1; ++j) {
-                    float t1 = float(j) / (b + 1);
-                    float t2 = float(j + 1) / (b + 1);
-                    glm::vec3 p1 = glm::mix(v[2], v[0], t1);
-                    glm::vec3 p2 = glm::mix(v[2], v[0], t2);
-
-                    cubeVertices.push_back(center);
-                    cubeVertices.push_back(p1);
-                    cubeVertices.push_back(p2);
-
-                    cubeIndices.push_back(cubeIndices.size());
-                    cubeIndices.push_back(cubeIndices.size());
-                    cubeIndices.push_back(cubeIndices.size());
-                }
-            }
-        }
 
         // Draw cube
         {
-            auto vertexArray = iGe::VertexArray::Create();
-
-            auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(cubeVertices.data()),
-                                                          cubeVertices.size() * sizeof(glm::vec3));
-            iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
-            vertexBuffer->SetLayout(layout);
-            vertexArray->AddVertexBuffer(vertexBuffer);
-
-            auto indexBuffer = iGe::IndexBuffer::Create(cubeIndices.data(), cubeIndices.size());
-            vertexArray->SetIndexBuffer(indexBuffer);
+            //auto vertexArray = iGe::VertexArray::Create();
+            //
+            //auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(cubeVertices.data()),
+            //                                              cubeVertices.size() * sizeof(glm::vec3));
+            //iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
+            //vertexBuffer->SetLayout(layout);
+            //vertexArray->AddVertexBuffer(vertexBuffer);
+            //
+            //auto indexBuffer = iGe::IndexBuffer::Create(cubeIndices.data(), cubeIndices.size());
+            //vertexArray->SetIndexBuffer(indexBuffer);
+            //
+            //gShader = m_GraphicsShaderLibrary.Get("Test");
+            //iGe::Renderer::Submit(gShader, vertexArray, m_ModelTransform);
 
             gShader = m_GraphicsShaderLibrary.Get("Test");
-            iGe::Renderer::Submit(gShader, vertexArray, m_ModelTransform);
-
-            //gShader = m_GraphicsShaderLibrary.Get("Test");
-            //iGe::Renderer::Submit(gShader, m_BunnyVertexArray, m_ModelTransform);
+            iGe::Renderer::Submit(gShader, m_BunnyVertexArray, m_ModelTransform);
         }
     }
     iGe::Renderer::EndScene();
@@ -264,12 +276,20 @@ void RuntimeLodLayer::OnEvent(iGe::Event& event) {
 bool RuntimeLodLayer::OnWindowResizeEvent(iGe::WindowResizeEvent& event) {
     auto& window = iGe::Application::Get().GetWindow();
 
-    // resize camera
+    // Resize camera
     float aspectRatio = float(window.GetWidth()) / float(window.GetHeight());
     m_Camera.SetProjection(45.0f, aspectRatio, 0.01f, 1000.0f);
 
-    // resize viewport
+    // Resize viewport
     iGe::Renderer::OnWindowResize(window.GetWidth(), window.GetHeight());
+
+    // Resize software rasterizer texture
+    iGe::TextureSpecification specification;
+    specification.Width = window.GetWidth();
+    specification.Height = window.GetHeight();
+    specification.Format = iGe::ImageFormat::R32;
+    specification.GenerateMips = false;
+    m_DepthBuffer = iGe::Texture2D::Create(specification);
 
     return false;
 }
@@ -407,7 +427,10 @@ void RuntimeLodLayer::ViewTranslation() {
 }
 
 void RuntimeLodLayer::Tessllation() {
-    // Calculate Tessellation factor
+    // Calculate tessellation factor
+    auto shader = m_ComputeShaderLibrary.Get("CalTessFactor");
+    shader->Bind();
+
     m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
     m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
     m_TessFactorBuffer->Bind(12, iGe::BufferType::Storage);
@@ -417,7 +440,19 @@ void RuntimeLodLayer::Tessllation() {
     uint32_t zero = 0;
     m_CounterBuffer->SetData(&zero, sizeof(uint32_t));
 
-    auto shader = m_ComputeShaderLibrary.Get("CalTessFactor");
+    uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
+    shader->Dispatch(((triSize + 31) / 32), 1, 1);
+}
+
+void RuntimeLodLayer::SoftwareRasterization() {
+    // Use compute shader to rasterization
+    auto shader = m_ComputeShaderLibrary.Get("SWRasterizer");
+    shader->Bind();
+
+    m_DepthBuffer->BindImage(5);
+    m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
+    m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
+
     uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
     shader->Dispatch(((triSize + 31) / 32), 1, 1);
 }
