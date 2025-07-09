@@ -5,6 +5,7 @@ module;
 
 module iGe.Renderer;
 import :OpenGLShader;
+
 import iGe.Log;
 
 namespace iGe

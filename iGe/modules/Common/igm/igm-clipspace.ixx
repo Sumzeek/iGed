@@ -1,7 +1,11 @@
+module;
+#include "iGeMacro.h"
+
 export module iGe.igm:clipspace;
-import std;
 import :vec3;
 import :mat4x4;
+
+import std;
 
 namespace iGe
 {

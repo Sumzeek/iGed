@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Renderer:Texture;
+
 import std;
 import iGe.SmartPointer;
 

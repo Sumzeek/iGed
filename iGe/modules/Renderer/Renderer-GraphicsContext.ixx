@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Renderer:GraphicsContext;
+
 import iGe.SmartPointer;
 
 namespace iGe

@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Window:Window;
+
 import std;
 import iGe.Event;
 import iGe.SmartPointer;

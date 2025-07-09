@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGed.ExampleLayer;
+
 import iGe;
 
 export class ExampleLayer : public iGe::Layer {

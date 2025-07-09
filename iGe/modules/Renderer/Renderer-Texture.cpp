@@ -3,7 +3,9 @@ module;
 
 module iGe.Renderer;
 import :Texture;
+import :Renderer;
 import :OpenGLTexture;
+
 import iGe.Log;
 
 namespace iGe

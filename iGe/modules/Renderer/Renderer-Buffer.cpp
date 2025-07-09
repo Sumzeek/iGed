@@ -4,6 +4,7 @@ module;
 module iGe.Renderer;
 import :Buffer;
 import :OpenGLBuffer;
+
 import std;
 import iGe.Log;
 

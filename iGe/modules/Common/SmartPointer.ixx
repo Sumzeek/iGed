@@ -1,4 +1,8 @@
+module;
+#include "iGeMacro.h"
+
 export module iGe.SmartPointer;
+
 import std;
 
 export namespace iGe

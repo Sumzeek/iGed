@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.LayerStack;
+
 import std;
 import iGe.Layer;
 

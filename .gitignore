@@ -1,6 +1,12 @@
+# Visual Studio
+/.vs/
+/out/
+/vc140.pdb
+
+# Clion
 /.idea/
 /cmake-build-debug/
 /cmake-build-release/
 
-# shader compiled file
+# Shader Compiled File
 /Sandbox/assets/shaders/generated/

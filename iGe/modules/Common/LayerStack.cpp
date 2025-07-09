@@ -1,3 +1,6 @@
+module;
+#include "iGeMacro.h"
+
 module iGe.LayerStack;
 
 namespace iGe

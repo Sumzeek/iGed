@@ -2,8 +2,12 @@ module;
 #include "iGeMacro.h"
 
 module iGe.Core;
+import :Application;
+
 import std;
+import iGe.Layer;
 import iGe.Log;
+import iGe.Event;
 import iGe.Timestep;
 import iGe.Renderer;
 

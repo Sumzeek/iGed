@@ -2,8 +2,9 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Core:WindowsInput;
-import std;
 import :Input;
+
+import std;
 
 namespace iGe
 {

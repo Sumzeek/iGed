@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Renderer:Shader;
+
 import std;
 import glm;
 import iGe.SmartPointer;

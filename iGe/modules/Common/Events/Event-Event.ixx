@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Event:Event;
+
 import std;
 
 namespace iGe

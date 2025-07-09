@@ -5,6 +5,7 @@ module;
 
 module iGe.Renderer;
 import :OpenGLVertexArray;
+
 import iGe.Log;
 
 namespace iGe

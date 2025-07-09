@@ -120,6 +120,24 @@ all function implementations placed in ``.cpp`` files.
 
 ---
 
+# Cmake Notice
+
+To enable support for ``import std``, which is currently experimental in CMake, you need to modify the top-level
+``CMakeLists.txt`` to explicitly enable the ``CMAKE_EXPERIMENTAL_CXX_IMPORT_STD`` feature.
+
+Specifically, you must set the ``CMAKE_EXPERIMENTAL_CXX_IMPORT_STD`` variable to a required UUID value. This value can
+be found
+on [CMake's official GitHub documentation](https://github.com/Kitware/CMake/blob/master/Help/dev/experimental.rst),
+under the corresponding tag or version branch.
+
+For example, for CMake version 3.31.6, the required value is:
+
+```aiignore
+0e5b6991-d74f-4b3d-a41c-cf096e0b2508
+```
+
+---
+
 ## Notice
 
 Due to the author's current research and professional commitments, this project is temporarily paused with no set date

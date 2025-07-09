@@ -3,7 +3,9 @@ module;
 
 module iGe.Renderer;
 import :Shader;
+import :Renderer;
 import :OpenGLShader;
+
 import std;
 import iGe.Log;
 

@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Core:Application;
+
 import std;
 import iGe.Layer;
 import iGe.Log;
@@ -26,7 +27,7 @@ export struct ApplicationCommandLineArgs {
 };
 
 export struct ApplicationSpecification {
-    std::string Name = "Hazel Application";
+    std::string Name = "iGe Application";
     std::string WorkingDirectory;
     ApplicationCommandLineArgs CommandLineArgs;
 };

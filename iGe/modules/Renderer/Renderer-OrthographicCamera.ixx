@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Renderer:OrthographicCamera;
+
 import glm;
 
 namespace iGe
@@ -25,7 +26,7 @@ public:
 
 private:
     void RecalculateViewMatrix();
-    
+
     glm::mat4 m_ViewMatrix;
     glm::mat4 m_ProjectionMatrix;
     glm::mat4 m_ViewProjectionMatrix;

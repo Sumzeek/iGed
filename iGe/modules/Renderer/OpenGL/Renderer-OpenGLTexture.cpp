@@ -4,7 +4,9 @@ module;
 #include <stb_image.h>
 
 module iGe.Renderer;
+import :Texture;
 import :OpenGLTexture;
+
 import iGe.Log;
 
 namespace iGe
@@ -13,7 +15,7 @@ namespace iGe
 namespace Utils
 {
 
-static GLenum HazelImageFormatToGLDataFormat(ImageFormat format) {
+static GLenum iGeImageFormatToGLDataFormat(ImageFormat format) {
     switch (format) {
         case ImageFormat::RGB8:
             return GL_RGB;
@@ -25,7 +27,7 @@ static GLenum HazelImageFormatToGLDataFormat(ImageFormat format) {
     return 0;
 }
 
-static GLenum HazelImageFormatToGLInternalFormat(ImageFormat format) {
+static GLenum iGeImageFormatToGLInternalFormat(ImageFormat format) {
     switch (format) {
         case ImageFormat::RGB8:
             return GL_RGB8;
@@ -44,8 +46,8 @@ static GLenum HazelImageFormatToGLInternalFormat(ImageFormat format) {
 /////////////////////////////////////////////////////////////////////////////
 OpenGLTexture2D::OpenGLTexture2D(const TextureSpecification& specification)
     : m_Specification(specification), m_Width(m_Specification.Width), m_Height(m_Specification.Height) {
-    m_InternalFormat = Utils::HazelImageFormatToGLInternalFormat(m_Specification.Format);
-    m_DataFormat = Utils::HazelImageFormatToGLDataFormat(m_Specification.Format);
+    m_InternalFormat = Utils::iGeImageFormatToGLInternalFormat(m_Specification.Format);
+    m_DataFormat = Utils::iGeImageFormatToGLDataFormat(m_Specification.Format);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
     glTextureStorage2D(m_RendererID, 1, m_InternalFormat, m_Width, m_Height);

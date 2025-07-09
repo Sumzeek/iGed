@@ -4,8 +4,9 @@ module;
 #include <glad/gl.h>
 
 export module iGe.Renderer:OpenGLTexture;
-import std;
 import :Texture;
+
+import std;
 
 namespace iGe
 {

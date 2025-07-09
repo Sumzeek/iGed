@@ -6,6 +6,7 @@ module;
 
 module iGe.Core;
 import :WindowsInput;
+
 import std;
 
 namespace iGe

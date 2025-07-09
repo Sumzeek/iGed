@@ -5,8 +5,10 @@ module;
 #include <GLFW/glfw3.h>
 
 module iGe.Renderer;
+import :Renderer;
 import :GraphicsContext;
 import :OpenGLContext;
+
 import iGe.Log;
 
 namespace iGe

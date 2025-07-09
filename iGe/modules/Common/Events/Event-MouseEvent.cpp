@@ -1,4 +1,9 @@
+module;
+#include "iGeMacro.h"
+
 module iGe.Event;
+import :MouseEvent;
+
 import std;
 
 namespace iGe

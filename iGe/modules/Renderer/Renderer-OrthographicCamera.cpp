@@ -3,6 +3,7 @@ module;
 
 module iGe.Renderer;
 import :OrthographicCamera;
+
 import glm;
 
 namespace iGe
@@ -43,7 +44,7 @@ const glm::mat4& OrthographicCamera::GetViewProjectionMatrix() const { return m_
 void OrthographicCamera::RecalculateViewMatrix() {
     glm::mat4 transform = glm::gtc::translate(glm::mat4(1.0f), m_Position) *
                           glm::gtc::rotate(glm::mat4(1.0f), glm::radians(m_Rotation), glm::vec3(0, 0, 1));
-    
+
     // Move the camera as if it were an object.
     m_ViewMatrix = glm::inverse(transform);
     m_ViewProjectionMatrix = m_ProjectionMatrix * m_ViewMatrix;

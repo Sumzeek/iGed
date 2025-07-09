@@ -1,4 +1,8 @@
+module;
+#include "iGeMacro.h"
+
 module iGe.Event;
+
 import std;
 
 namespace iGe

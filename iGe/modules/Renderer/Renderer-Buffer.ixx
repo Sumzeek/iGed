@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Renderer:Buffer;
+
 import std;
 import iGe.SmartPointer;
 

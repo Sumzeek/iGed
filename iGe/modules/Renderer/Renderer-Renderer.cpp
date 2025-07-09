@@ -4,6 +4,7 @@ module;
 module iGe.Renderer;
 import :Renderer;
 import :RenderCommand;
+
 import iGe.Log;
 
 namespace iGe

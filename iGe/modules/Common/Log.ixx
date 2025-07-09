@@ -2,6 +2,7 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Log;
+
 import std;
 import spdlog;
 import iGe.SmartPointer;

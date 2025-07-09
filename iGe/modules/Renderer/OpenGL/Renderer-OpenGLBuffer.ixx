@@ -3,6 +3,7 @@ module;
 
 export module iGe.Renderer:OpenGLBuffer;
 import :Buffer;
+
 import std;
 
 namespace iGe

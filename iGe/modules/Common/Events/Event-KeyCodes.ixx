@@ -1,4 +1,8 @@
+module;
+#include "iGeMacro.h"
+
 export module iGe.Event:KeyCodes;
+
 import std;
 
 export enum class iGeKey : int {

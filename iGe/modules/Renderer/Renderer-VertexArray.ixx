@@ -3,6 +3,7 @@ module;
 
 export module iGe.Renderer:VertexArray;
 import :Buffer;
+
 import iGe.SmartPointer;
 
 namespace iGe

@@ -1,4 +1,8 @@
+module;
+#include "iGeMacro.h"
+
 export module iGe.igm:common;
+
 import std;
 
 namespace iGe

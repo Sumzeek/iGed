@@ -10,6 +10,8 @@ module;
 #include <backends/imgui_impl_opengl3.h>
 
 module iGe.Core;
+import :ImGuiLayer;
+
 import std;
 
 namespace iGe

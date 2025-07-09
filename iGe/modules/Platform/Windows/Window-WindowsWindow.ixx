@@ -5,8 +5,9 @@ module;
 #include <GLFW/glfw3.h>
 
 export module iGe.Window:WindowsWindow;
-import std;
 import :Window;
+
+import std;
 import iGe.Event;
 import iGe.Log;
 import iGe.Renderer;

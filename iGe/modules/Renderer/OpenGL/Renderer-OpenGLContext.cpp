@@ -7,6 +7,7 @@ module;
 
 module iGe.Renderer;
 import :OpenGLContext;
+
 import iGe.Log;
 
 namespace iGe
