@@ -16,82 +16,71 @@ RuntimeLodLayer::RuntimeLodLayer()
     : Layer{"Example"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 1000.f}, m_CameraPosition{0.0f} {
     // Load model
     {
-        m_Armadillo = MeshFitting::LoadObjFile("assets/models/Armadillo.obj");
-        auto vertices = m_Armadillo.Vertices;
-        auto indices = m_Armadillo.Indices;
+        m_Model = MeshFitting::LoadObjFile("assets/models/monsterfrog_subd.obj");
+        auto vertices = m_Model.Vertices;
+        auto indices = m_Model.Indices;
 
-        m_VertexArray = iGe::VertexArray::Create();
-
-        auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
-                                                      vertices.size() * sizeof(glm::vec3));
-        iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
-        vertexBuffer->SetLayout(layout);
-        m_VertexArray->AddVertexBuffer(vertexBuffer);
-
-        auto indexBuffer = iGe::IndexBuffer::Create(reinterpret_cast<uint32_t*>(indices.data()), indices.size());
-        m_VertexArray->SetIndexBuffer(indexBuffer);
-    }
-
-    //auto mesh1 = MeshFitting::LoadObjFile("assets/models/Dark_Finger_Reef_Crab_Sim.obj");
-    //auto mesh2 = MeshFitting::LoadObjFile("assets/models/Dark_Finger_Reef_Crab.obj");
-    //m_Fitter = MeshFitting::Fit(mesh1, mesh2);
-
-    // Bunny model
-    {
-        m_Bunny = MeshFitting::LoadObjFile("assets/models/Bunny_Sim.obj");
-        auto vertices = m_Bunny.Vertices;
-        auto indices = m_Bunny.Indices;
-
-        m_BunnyVertexArray = iGe::VertexArray::Create();
+        m_ModelVertexArray = iGe::VertexArray::Create();
 
         auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
-                                                      vertices.size() * sizeof(glm::vec3));
-        iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
+                                                      vertices.size() * sizeof(MeshFitting::Vertex));
+        iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
+                                    {iGe::ShaderDataType::Float3, "a_Normal"},
+                                    {iGe::ShaderDataType::Float2, "a_TexCoord"},
+                                    {iGe::ShaderDataType::Float3, "a_Tangent"},
+                                    {iGe::ShaderDataType::Float3, "a_BiTangent"}};
         vertexBuffer->SetLayout(layout);
-        m_BunnyVertexArray->AddVertexBuffer(vertexBuffer);
+        m_ModelVertexArray->AddVertexBuffer(vertexBuffer);
 
         auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-        m_BunnyVertexArray->SetIndexBuffer(indexBuffer);
+        m_ModelVertexArray->SetIndexBuffer(indexBuffer);
 
-        // Cube lod
-        {
-            int triSize = indices.size() / 3;
-
-            // depth buffer
-            auto& window = iGe::Application::Get().GetWindow();
-            iGe::TextureSpecification specification;
-            specification.Width = window.GetWidth();
-            specification.Height = window.GetHeight();
-            specification.Format = iGe::ImageFormat::R32;
-            specification.GenerateMips = false;
-            m_DepthBuffer = iGe::Texture2D::Create(specification);
-
-            // Input buffer
-            m_VertexBuffer =
-                    iGe::Buffer::Create(reinterpret_cast<void*>(vertices.data()), vertices.size() * sizeof(glm::vec3));
-            m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
-
-            m_IndexBuffer = iGe::Buffer::Create(indices.data(), indices.size() * sizeof(uint32_t));
-            m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
-
-            m_TessFactorBuffer = iGe::Buffer::Create(nullptr, triSize * sizeof(glm::uvec2));
-            m_TessFactorBuffer->Bind(12, iGe::BufferType::Storage);
-
-            m_CounterBuffer = iGe::Buffer::Create(nullptr, sizeof(uint32_t));
-            m_CounterBuffer->Bind(13, iGe::BufferType::Storage);
-        }
+        //// Model lod
+        //{
+        //    int triSize = indices.size() / 3;
+        //
+        //    // depth buffer
+        //    auto& window = iGe::Application::Get().GetWindow();
+        //    iGe::TextureSpecification specification;
+        //    specification.Width = window.GetWidth();
+        //    specification.Height = window.GetHeight();
+        //    specification.Format = iGe::ImageFormat::R32F;
+        //    specification.GenerateMips = false;
+        //    m_DepthBuffer = iGe::Texture2D::Create(specification);
+        //
+        //    // Input buffer
+        //    m_VertexBuffer =
+        //            iGe::Buffer::Create(reinterpret_cast<void*>(vertices.data()), vertices.size() * sizeof(glm::vec3));
+        //    m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
+        //
+        //    m_IndexBuffer = iGe::Buffer::Create(indices.data(), indices.size() * sizeof(uint32_t));
+        //    m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
+        //
+        //    m_TessFactorBuffer = iGe::Buffer::Create(nullptr, triSize * sizeof(glm::uvec2));
+        //    m_TessFactorBuffer->Bind(12, iGe::BufferType::Storage);
+        //
+        //    m_CounterBuffer = iGe::Buffer::Create(nullptr, sizeof(uint32_t));
+        //    m_CounterBuffer->Bind(13, iGe::BufferType::Storage);
+        //}
     }
 
+    // Model displace map
+    //auto mesh1 = MeshFitting::LoadObjFile("assets/models/Bunny_Sim.obj");
+    //auto mesh2 = MeshFitting::LoadObjFile("assets/models/Bunny.obj");
+    //m_ModelDisplaceMap = MeshFitting::GenerateDisplacementMap(mesh1, mesh2, 512);
+    m_ModelNormalMap = iGe::Texture2D::Create("assets/textures/monsterfrog-n.bmp");
+    m_ModelDisplaceMap = iGe::Texture2D::Create("assets/textures/monsterfrog-d.bmp");
+
     // Set Model bbx
-    //m_ModelCenter = (m_Armadillo.Center + m_Bunny.Center) / 2;
-    //m_ModelRadius = (m_Armadillo.Radius - m_Bunny.Radius) / 2;
-    m_ModelCenter = m_Bunny.Center;
-    m_ModelRadius = m_Bunny.Radius;
+    m_ModelCenter = m_Model.Center;
+    m_ModelRadius = m_Model.Radius;
     m_CameraPosition = m_ModelCenter + glm::vec3{0.0f, 0.0f, 3 * m_ModelRadius};
 
     // Create camera data uniform
-    m_TessDataUniform = iGe::Buffer::Create(nullptr, sizeof(glm::uvec2) + sizeof(uint32_t) + +sizeof(uint32_t));
-    m_TessDataUniform->Bind(1, iGe::BufferType::Uniform);
+    m_PerFrameData = iGe::CreateScope<PerFrameData>();
+    m_PerFrameDataUniform = iGe::Buffer::Create(nullptr, sizeof(PerFrameData));
+    m_TessData = iGe::CreateScope<TessData>();
+    m_TessDataUniform = iGe::Buffer::Create(nullptr, sizeof(TessData));
 
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Lighting.glsl");
     m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Test.glsl");
@@ -101,25 +90,7 @@ RuntimeLodLayer::RuntimeLodLayer()
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
     // Camera movement
-    {
-        if (iGe::Input::IsKeyPressed(iGeKey::W)) {
-            m_CameraPosition.y -= m_CameraMoveSpeed * ts;
-        } else if (iGe::Input::IsKeyPressed(iGeKey::S)) {
-            m_CameraPosition.y += m_CameraMoveSpeed * ts;
-        }
-
-        if (iGe::Input::IsKeyPressed(iGeKey::A)) {
-            m_CameraPosition.x += m_CameraMoveSpeed * ts;
-        } else if (iGe::Input::IsKeyPressed(iGeKey::D)) {
-            m_CameraPosition.x -= m_CameraMoveSpeed * ts;
-        }
-
-        if (iGe::Input::IsKeyPressed(iGeKey::Q)) {
-            m_CameraRotation -= m_CameraRotationSpeed * ts;
-        } else if (iGe::Input::IsKeyPressed(iGeKey::E)) {
-            m_CameraRotation += m_CameraRotationSpeed * ts;
-        }
-
+    if (!ImGui::GetIO().WantCaptureMouse) {
         if (iGe::Input::IsMouseButtonPressed(iGeKey::MouseLeft)) {
             ModelRotation();
         } else if (iGe::Input::IsMouseButtonPressed(iGeKey::MouseMiddle)) {
@@ -134,123 +105,49 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
     m_Camera.SetRotation(m_CameraRotation);
 
     auto& window = iGe::Application::Get().GetWindow();
-    glm::uvec2 screenSize{window.GetWidth(), window.GetHeight()};
-    uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
-    m_TessDataUniform->SetData(&screenSize, sizeof(glm::uvec2));
-    m_TessDataUniform->SetData(&triSize, sizeof(uint32_t), sizeof(glm::uvec2));
+    m_TessData->ScreenSize = glm::uvec2{window.GetWidth(), window.GetHeight()};
+    m_TessData->TriSize = m_ModelVertexArray->GetIndexBuffer()->GetCount() / 3;
+    m_TessDataUniform->SetData(m_TessData.get(), sizeof(TessData));
+
+    m_PerFrameData->ViewPos = m_Camera.GetPosition();
+    m_PerFrameData->DisplaceMapScale = m_DisplaceMapScale;
 
     iGe::Renderer::BeginScene(m_Camera);
     {
         iGe::Ref<iGe::GraphicsShader> gShader;
         iGe::Ref<iGe::ComputeShader> cShader;
 
-        // Models
-        //gShader = m_GraphicsShaderLibrary.Get("Lighting");
-        //iGe::Renderer::Submit(gShader, m_VertexArray, m_ModelTransform);
-
         //Tessllation();
-        SoftwareRasterization();
+        //SoftwareRasterization();
 
-        // Cube
-        //std::vector<glm::vec3> cubeVertices;
-        //std::vector<uint32_t> cubeIndices;
-        //{
-        //    // Get vertex/index buffer
-        //    auto vertices = m_Bunny.Vertices;
-        //    auto indices = m_Bunny.Indices;
-        //
-        //    uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
-        //    std::vector<glm::uvec2> tessFactors(triSize);
-        //    m_TessFactorBuffer->GetData(tessFactors.data(), tessFactors.size() * sizeof(glm::uvec2));
-        //    for (int i = 0; i < triSize; ++i) {
-        //        uint32_t triId = tessFactors[i].y;
-        //
-        //        std::array<glm::vec3, 3> v;
-        //        v[0] = m_Fitter->Apply(vertices[indices[triId * 3]]);
-        //        v[1] = m_Fitter->Apply(vertices[indices[triId * 3 + 1]]);
-        //        v[2] = m_Fitter->Apply(vertices[indices[triId * 3 + 2]]);
-        //
-        //        uint32_t packed = tessFactors[i].x;
-        //        std::int32_t r = (packed >> 16) & 0xFF;
-        //        std::int32_t g = (packed >> 8) & 0xFF;
-        //        std::int32_t b = (packed >> 0) & 0xFF;
-        //        std::int32_t a = (packed >> 24) & 0xFF;
-        //
-        //        glm::vec3 center = (v[0] + v[1] + v[2]) / 3.0f;
-        //        for (int j = 0; j < r + 1; ++j) {
-        //            float t1 = float(j) / (r + 1);
-        //            float t2 = float(j + 1) / (r + 1);
-        //            glm::vec3 p1 = glm::mix(v[0], v[1], t1);
-        //            glm::vec3 p2 = glm::mix(v[0], v[1], t2);
-        //
-        //            cubeVertices.push_back(center);
-        //            cubeVertices.push_back(p1);
-        //            cubeVertices.push_back(p2);
-        //
-        //            cubeIndices.push_back(cubeIndices.size());
-        //            cubeIndices.push_back(cubeIndices.size());
-        //            cubeIndices.push_back(cubeIndices.size());
-        //        }
-        //
-        //        for (int j = 0; j < g + 1; ++j) {
-        //            float t1 = float(j) / (g + 1);
-        //            float t2 = float(j + 1) / (g + 1);
-        //            glm::vec3 p1 = glm::mix(v[1], v[2], t1);
-        //            glm::vec3 p2 = glm::mix(v[1], v[2], t2);
-        //
-        //            cubeVertices.push_back(center);
-        //            cubeVertices.push_back(p1);
-        //            cubeVertices.push_back(p2);
-        //
-        //            cubeIndices.push_back(cubeIndices.size());
-        //            cubeIndices.push_back(cubeIndices.size());
-        //            cubeIndices.push_back(cubeIndices.size());
-        //        }
-        //
-        //        for (int j = 0; j < b + 1; ++j) {
-        //            float t1 = float(j) / (b + 1);
-        //            float t2 = float(j + 1) / (b + 1);
-        //            glm::vec3 p1 = glm::mix(v[2], v[0], t1);
-        //            glm::vec3 p2 = glm::mix(v[2], v[0], t2);
-        //
-        //            cubeVertices.push_back(center);
-        //            cubeVertices.push_back(p1);
-        //            cubeVertices.push_back(p2);
-        //
-        //            cubeIndices.push_back(cubeIndices.size());
-        //            cubeIndices.push_back(cubeIndices.size());
-        //            cubeIndices.push_back(cubeIndices.size());
-        //        }
-        //    }
-        //}
-
-
-        // Draw cube
+        // Draw model
         {
-            //auto vertexArray = iGe::VertexArray::Create();
-            //
-            //auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(cubeVertices.data()),
-            //                                              cubeVertices.size() * sizeof(glm::vec3));
-            //iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"}};
-            //vertexBuffer->SetLayout(layout);
-            //vertexArray->AddVertexBuffer(vertexBuffer);
-            //
-            //auto indexBuffer = iGe::IndexBuffer::Create(cubeIndices.data(), cubeIndices.size());
-            //vertexArray->SetIndexBuffer(indexBuffer);
-            //
-            //gShader = m_GraphicsShaderLibrary.Get("Test");
-            //iGe::Renderer::Submit(gShader, vertexArray, m_ModelTransform);
+            m_PerFrameData->NormalMatrix = glm::transpose(glm::inverse(m_ModelTransform));
+            m_PerFrameDataUniform->SetData(m_PerFrameData.get(), sizeof(PerFrameData));
+            m_PerFrameDataUniform->Bind(1, iGe::BufferType::Uniform);
 
-            gShader = m_GraphicsShaderLibrary.Get("Test");
-            iGe::Renderer::Submit(gShader, m_BunnyVertexArray, m_ModelTransform);
+            m_ModelNormalMap->Bind(2);
+            m_ModelDisplaceMap->Bind(3);
+            iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Test"), m_ModelVertexArray, m_ModelTransform);
         }
     }
     iGe::Renderer::EndScene();
 }
 
 void RuntimeLodLayer::OnImGuiRender() {
+    ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
     ImGui::Begin("Settings");
-    ImGui::Text("Hello World");
+    {
+        if (ImGui::BeginTable("SettingsTable", 2, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Displacement Scale");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SliderFloat("##DisplaceMapScale", &m_DisplaceMapScale, 0.0f, 10.0f);
+
+            ImGui::EndTable();
+        }
+    }
     ImGui::End();
 
     //static bool show = true;
@@ -287,7 +184,7 @@ bool RuntimeLodLayer::OnWindowResizeEvent(iGe::WindowResizeEvent& event) {
     iGe::TextureSpecification specification;
     specification.Width = window.GetWidth();
     specification.Height = window.GetHeight();
-    specification.Format = iGe::ImageFormat::R32;
+    specification.Format = iGe::ImageFormat::R32F;
     specification.GenerateMips = false;
     m_DepthBuffer = iGe::Texture2D::Create(specification);
 
@@ -295,21 +192,24 @@ bool RuntimeLodLayer::OnWindowResizeEvent(iGe::WindowResizeEvent& event) {
 }
 
 bool RuntimeLodLayer::OnMouseScrolledEvent(iGe::MouseScrolledEvent& event) {
+    if (ImGui::GetIO().WantCaptureMouse) { return false; }
+
     auto speed = length(m_ModelCenter - m_CameraPosition);
     m_CameraPosition.z -= event.GetYOffset() * speed / 10.0f;
-
     return false;
 }
 
 bool RuntimeLodLayer::OnMouseButtonPresseddEvent(iGe::MouseButtonPressedEvent& event) {
-    m_LastMousePosition = glm::vec2{iGe::Input::GetMouseX(), iGe::Input::GetMouseY()};
+    if (ImGui::GetIO().WantCaptureMouse) { return false; }
 
+    m_LastMousePosition = glm::vec2{iGe::Input::GetMouseX(), iGe::Input::GetMouseY()};
     return false;
 }
 
 bool RuntimeLodLayer::OnMouseButtonReleasedEvent(iGe::MouseButtonReleasedEvent& event) {
-    m_LastMousePosition = glm::vec2{0.0f};
+    if (ImGui::GetIO().WantCaptureMouse) { return false; }
 
+    m_LastMousePosition = glm::vec2{0.0f};
     return false;
 }
 
@@ -383,7 +283,7 @@ void RuntimeLodLayer::ModelRotation() {
     glm::mat4 rotateSelf = translateBack * rotate * translateToOrigin;
     m_ModelTransform = rotateSelf * m_ModelTransform;
 
-    Tessllation();
+    //Tessllation();
 }
 
 void RuntimeLodLayer::ViewTranslation() {
@@ -423,13 +323,15 @@ void RuntimeLodLayer::ViewTranslation() {
     m_CameraMoveSpeed = glm::length(glm::vec2{translation}) / glm::length(mouseDelta);
     m_CameraPosition += glm::vec3{-mouseDelta.x * m_CameraMoveSpeed, mouseDelta.y * m_CameraMoveSpeed, 0.0f};
 
-    Tessllation();
+    //Tessllation();
 }
 
 void RuntimeLodLayer::Tessllation() {
     // Calculate tessellation factor
     auto shader = m_ComputeShaderLibrary.Get("CalTessFactor");
     shader->Bind();
+
+    m_TessDataUniform->Bind(1, iGe::BufferType::Uniform);
 
     m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
     m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
@@ -440,7 +342,7 @@ void RuntimeLodLayer::Tessllation() {
     uint32_t zero = 0;
     m_CounterBuffer->SetData(&zero, sizeof(uint32_t));
 
-    uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
+    uint32_t triSize = m_ModelVertexArray->GetIndexBuffer()->GetCount() / 3;
     shader->Dispatch(((triSize + 31) / 32), 1, 1);
 }
 
@@ -453,6 +355,6 @@ void RuntimeLodLayer::SoftwareRasterization() {
     m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
     m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
 
-    uint32_t triSize = m_BunnyVertexArray->GetIndexBuffer()->GetCount() / 3;
+    uint32_t triSize = m_ModelVertexArray->GetIndexBuffer()->GetCount() / 3;
     shader->Dispatch(((triSize + 31) / 32), 1, 1);
 }

@@ -19,8 +19,10 @@ static GLenum iGeImageFormatToGLDataFormat(ImageFormat format) {
             return GL_RGB;
         case ImageFormat::RGBA8:
             return GL_RGBA;
-        case ImageFormat::R32:
+        case ImageFormat::R32UI:
             return GL_RED_INTEGER;
+        case ImageFormat::R32F:
+            return GL_RED;
     }
 
     IGE_CORE_ASSERT(false);
@@ -33,8 +35,24 @@ static GLenum iGeImageFormatToGLInternalFormat(ImageFormat format) {
             return GL_RGB8;
         case ImageFormat::RGBA8:
             return GL_RGBA8;
-        case ImageFormat::R32:
+        case ImageFormat::R32UI:
             return GL_R32UI;
+        case ImageFormat::R32F:
+            return GL_R32F;
+    }
+
+    IGE_CORE_ASSERT(false);
+    return 0;
+}
+
+static GLenum iGeImageFormatToGLType(ImageFormat format) {
+    switch (format) {
+        case ImageFormat::RGB8:
+        case ImageFormat::RGBA8:
+        case ImageFormat::R32UI:
+            return GL_UNSIGNED_BYTE;
+        case ImageFormat::R32F:
+            return GL_FLOAT;
     }
 
     IGE_CORE_ASSERT(false);
@@ -46,13 +64,13 @@ static GLenum iGeImageFormatToGLInternalFormat(ImageFormat format) {
 /////////////////////////////////////////////////////////////////////////////
 // OpenGLContext ////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-OpenGLTexture2D::OpenGLTexture2D(const TextureSpecification& specification)
-    : m_Specification(specification), m_Width(m_Specification.Width), m_Height(m_Specification.Height) {
-    m_InternalFormat = Utils::iGeImageFormatToGLInternalFormat(m_Specification.Format);
-    m_DataFormat = Utils::iGeImageFormatToGLDataFormat(m_Specification.Format);
+OpenGLTexture2D::OpenGLTexture2D(const TextureSpecification& specification) : m_Specification(specification) {
+    uint32_t width = m_Specification.Width;
+    uint32_t height = m_Specification.Height;
+    GLenum internalFormat = Utils::iGeImageFormatToGLInternalFormat(m_Specification.Format);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
-    glTextureStorage2D(m_RendererID, 1, m_InternalFormat, m_Width, m_Height);
+    glTextureStorage2D(m_RendererID, 1, internalFormat, width, height);
 
     glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -73,25 +91,22 @@ OpenGLTexture2D::OpenGLTexture2D(const std::filesystem::path& path) : m_Path(pat
     if (data) {
         m_IsLoaded = true;
 
-        m_Width = width;
-        m_Height = height;
-
-        GLenum internalFormat = 0, dataFormat = 0;
+        m_Specification.Width = width;
+        m_Specification.Height = height;
         if (channels == 4) {
-            internalFormat = GL_RGBA8;
-            dataFormat = GL_RGBA;
+            m_Specification.Format = ImageFormat::RGBA8;
         } else if (channels == 3) {
-            internalFormat = GL_RGB8;
-            dataFormat = GL_RGB;
+            m_Specification.Format = ImageFormat::RGB8;
         }
 
-        m_InternalFormat = internalFormat;
-        m_DataFormat = dataFormat;
+        GLenum internalFormat = Utils::iGeImageFormatToGLInternalFormat(m_Specification.Format);
+        GLenum dataFormat = Utils::iGeImageFormatToGLDataFormat(m_Specification.Format);
+        GLenum type = Utils::iGeImageFormatToGLType(m_Specification.Format);
 
         IGE_CORE_ASSERT(internalFormat & dataFormat, "Format not supported!");
 
         glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
-        glTextureStorage2D(m_RendererID, 1, internalFormat, m_Width, m_Height);
+        glTextureStorage2D(m_RendererID, 1, internalFormat, width, height);
 
         glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -99,7 +114,7 @@ OpenGLTexture2D::OpenGLTexture2D(const std::filesystem::path& path) : m_Path(pat
         glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-        glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, dataFormat, GL_UNSIGNED_BYTE, data);
+        glTextureSubImage2D(m_RendererID, 0, 0, 0, width, height, dataFormat, type, data);
 
         stbi_image_free(data);
     } else {
@@ -111,18 +126,37 @@ OpenGLTexture2D::~OpenGLTexture2D() { glDeleteTextures(1, &m_RendererID); }
 
 const TextureSpecification& OpenGLTexture2D::GetSpecification() const { return m_Specification; }
 
-uint32_t OpenGLTexture2D::GetWidth() const { return m_Width; }
+uint32_t OpenGLTexture2D::GetWidth() const { return m_Specification.Width; }
 
-uint32_t OpenGLTexture2D::GetHeight() const { return m_Height; }
+uint32_t OpenGLTexture2D::GetHeight() const { return m_Specification.Height; }
 
 uint32_t OpenGLTexture2D::GetRendererID() const { return m_RendererID; }
 
 const std::filesystem::path& OpenGLTexture2D::GetPath() const { return m_Path; }
 
 void OpenGLTexture2D::SetData(void* data, uint32_t size) {
-    uint32_t bpp = m_DataFormat == GL_RGBA ? 4 : 3;
-    IGE_CORE_ASSERT(size == m_Width * m_Height * bpp, "Data must be entire texture!");
-    glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, m_DataFormat, GL_UNSIGNED_BYTE, data);
+    uint32_t width = m_Specification.Width;
+    uint32_t height = m_Specification.Height;
+    GLenum dataFormat = Utils::iGeImageFormatToGLDataFormat(m_Specification.Format);
+    GLenum type = Utils::iGeImageFormatToGLType(m_Specification.Format);
+
+    uint32_t bpp;
+    switch (m_Specification.Format) {
+        case ImageFormat::RGB8:
+            bpp = 3;
+            break;
+        case ImageFormat::RGBA8:
+        case ImageFormat::R32UI:
+        case ImageFormat::R32F:
+            bpp = 4;
+            break;
+        default:
+            IGE_CORE_ASSERT(false, "Unsupported texture format in SetData()");
+            return;
+    }
+    IGE_CORE_ASSERT(size == width * height * bpp, "Data must be entire texture!");
+
+    glTextureSubImage2D(m_RendererID, 0, 0, 0, width, height, dataFormat, type, data);
 }
 
 void OpenGLTexture2D::Bind(uint32_t slot) const { glBindTextureUnit(slot, m_RendererID); }

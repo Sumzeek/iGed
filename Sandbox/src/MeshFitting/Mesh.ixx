@@ -1,17 +1,23 @@
-//
-// Created by Sumzeek on 6/9/2025.
-//
+module;
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 
 export module MeshFitting:Mesh;
-import glm;
-import std;
+import iGe;
 
 namespace MeshFitting
 {
 
+export struct Vertex {
+    glm::vec3 Position;
+    glm::vec3 Normal;
+    glm::vec2 TexCoord;
+    glm::vec3 Tangent;
+    glm::vec3 BiTangent;
+};
+
 export struct Mesh {
-    std::vector<glm::vec3> Vertices;
-    std::vector<glm::vec3> Normals;
+    std::vector<Vertex> Vertices;
     std::vector<std::uint32_t> Indices;
 
     glm::vec3 Center;

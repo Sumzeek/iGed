@@ -1,12 +1,11 @@
 module;
+#include "iGeMacro.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
 module MeshFitting;
 import :Mesh;
-import glm;
-import std;
 
 namespace MeshFitting
 {
@@ -18,24 +17,39 @@ Mesh LoadObjFile(std::string const& path) {
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
                                                            aiProcess_GenBoundingBoxes | aiProcess_ForceGenNormals |
-                                                           aiProcess_GenSmoothNormals);
+                                                           aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
     // check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
     {
-        throw std::runtime_error(std::format("Assimp Error: {}", importer.GetErrorString()));
+        IGE_ERROR("Assimp Error: {}", importer.GetErrorString());
     }
 
     // assuming the file has only one grid
     aiMesh* aiMesh = scene->mMeshes[0];
 
     auto& vertices = mesh.Vertices;
-    auto& normals = mesh.Normals;
-    for (int i = 0; i < aiMesh->mNumVertices; ++i) {
-        auto vertex = aiMesh->mVertices[i];
-        vertices.push_back(glm::vec3{vertex.x, vertex.y, vertex.z});
+    for (uint32_t v = 0; v < aiMesh->mNumVertices; ++v) {
+        Vertex vertex{};
+        vertex.Position = {aiMesh->mVertices[v].x, aiMesh->mVertices[v].y, aiMesh->mVertices[v].z};
+        if (aiMesh->HasNormals()) {
+            vertex.Normal = {aiMesh->mNormals[v].x, aiMesh->mNormals[v].y, aiMesh->mNormals[v].z};
+        } else {
+            vertex.Normal = {0.0f, 0.0f, 0.0f};
+        }
+        if (aiMesh->mTextureCoords[0]) {
+            vertex.TexCoord = {aiMesh->mTextureCoords[0][v].x, aiMesh->mTextureCoords[0][v].y};
+        } else {
+            vertex.TexCoord = {0.0f, 0.0f};
+        }
+        if (aiMesh->HasTangentsAndBitangents()) {
+            vertex.Tangent = {aiMesh->mTangents[v].x, aiMesh->mTangents[v].y, aiMesh->mTangents[v].z};
+            vertex.BiTangent = {aiMesh->mBitangents[v].x, aiMesh->mBitangents[v].y, aiMesh->mBitangents[v].z};
+        } else {
+            vertex.Tangent = {1.0f, 0.0f, 0.0f};
+            vertex.BiTangent = {0.0f, 1.0f, 0.0f};
+        }
 
-        auto normal = aiMesh->mNormals[i];
-        normals.push_back(glm::vec3{normal.x, normal.y, normal.z});
+        vertices.push_back(vertex);
     }
 
     auto& indices = mesh.Indices;

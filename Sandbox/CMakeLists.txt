@@ -20,7 +20,6 @@ set_property(TARGET ${TARGET_NAME} PROPERTY CXX_SCAN_FOR_MODULES 1)
 # Add third party denpendency
 add_subdirectory(3rdparty)
 target_link_libraries(${TARGET_NAME} PUBLIC assimp::assimp)
-target_link_libraries(${TARGET_NAME} PUBLIC Eigen3::Eigen)
 
 # Compile shaders
 set(SHADER_COMPILE_TARGET "iGedShaderCompile")
@@ -84,7 +83,7 @@ add_custom_command(
         "${ASSETS_OUTPUT_DIR}/models"
         COMMAND ${CMAKE_COMMAND} -E touch "${COPIED_MODEL_FLAG}" # create dummy file
         DEPENDS ${MODEL_FILES}
-        COMMENT "Copying shaders..."
+        COMMENT "Copying models..."
         VERBATIM
 )
 add_custom_target(CopyModelsTarget DEPENDS ${COPIED_MODEL_FLAG})

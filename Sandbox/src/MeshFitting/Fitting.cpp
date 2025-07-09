@@ -1,53 +1,70 @@
 module;
-#include <Eigen/Dense>
+#include "iGeMacro.h"
+#include <stb_image_write.h>
 
 module MeshFitting;
 import :Fitting;
 import std;
-import glm;
 
 namespace MeshFitting
 {
 
-static float Gaussian(float r, float eps) { return std::exp(-eps * r * r); }
+static float SaveDisplacementMapAsPNG(const DisplacementMap& displacement, const std::string& filename) {
+    const int pixelCount = displacement.Width * displacement.Height;
+    const float* src = displacement.Data.data();
 
-void RBFInterpolator::Fit(const std::vector<std::pair<glm::vec3, glm::vec3>>& pointPairs) {
-    int N = pointPairs.size();
-    m_Centers.resize(N);
+    // Compute displacement map scale
+    float maxAbs = 0.0f;
+    for (int i = 0; i < pixelCount; ++i) { maxAbs = std::max(maxAbs, std::abs(src[i])); }
+    float scale = (maxAbs < 1e-6f) ? 1.0f : maxAbs;
 
-    for (int i = 0; i < N; ++i) {
-        const glm::vec3& source = pointPairs[i].first;
-        m_Centers[i] = Eigen::Vector3f(source.x, source.y, source.z);
+    // Map data to [0, 255] and fill in RGB channels
+    std::vector<unsigned char> image(pixelCount * 4);
+    for (int i = 0; i < pixelCount; ++i) {
+        float v = src[i];
+        float mapped = 0.5f + (v / (2.0f * scale));
+        mapped = std::clamp(mapped, 0.0f, 1.0f);
+        unsigned char value = static_cast<unsigned char>(mapped * 255.0f);
+
+        image[i * 4 + 0] = value;
+        image[i * 4 + 1] = value;
+        image[i * 4 + 2] = value;
+        image[i * 4 + 3] = 255;
     }
 
-    Eigen::MatrixXf Phi(N, N);
-    for (int i = 0; i < N; ++i) {
-        for (int j = 0; j < N; ++j) { Phi(i, j) = Gaussian((m_Centers[i] - m_Centers[j]).norm(), m_Epsilon); }
+    // Write PNG file
+    if (!stbi_write_png(filename.c_str(), displacement.Width, displacement.Height, 4, image.data(),
+                        displacement.Width * 4)) {
+        IGE_ERROR("Failed to write PNG file: {}", filename);
+        return -1.0f;
     }
 
-    Eigen::MatrixXf Y(N, 3);
-    for (int i = 0; i < N; ++i) {
-        const glm::vec3& target = pointPairs[i].second;
-        Y.row(i) = Eigen::Vector3f(target.x, target.y, target.z);
-    }
-
-    m_Weights = Phi.colPivHouseholderQr().solve(Y);
+    return scale;
 }
 
-glm::vec3 RBFInterpolator::Apply(const glm::vec3& x) const {
-    Eigen::Vector3f ex(x.x, x.y, x.z);
-    int N = m_Centers.size();
-    Eigen::VectorXf phi(N);
+static glm::vec3 ComputeBarycentric(const glm::vec2& a, const glm::vec2& b, const glm::vec2& c, const glm::vec2& p) {
+    glm::vec2 v0 = b - a;
+    glm::vec2 v1 = c - a;
+    glm::vec2 v2 = p - a;
 
-    for (int i = 0; i < N; ++i) { phi(i) = Gaussian((ex - m_Centers[i]).norm(), m_Epsilon); }
+    float d00 = glm::dot(v0, v0);
+    float d01 = glm::dot(v0, v1);
+    float d11 = glm::dot(v1, v1);
+    float d20 = glm::dot(v2, v0);
+    float d21 = glm::dot(v2, v1);
 
-    Eigen::Vector3f y = phi.transpose() * m_Weights;
-    return glm::vec3(y.x(), y.y(), y.z());
+    float denom = d00 * d11 - d01 * d01;
+    if (denom == 0.0f) { return glm::vec3{-1.0f, -1.0f, -1.0f}; }
+
+    float v = (d11 * d20 - d01 * d21) / denom;
+    float w = (d00 * d21 - d01 * d20) / denom;
+    float u = 1.0f - v - w;
+
+    return glm::vec3(u, v, w);
 }
 
-static bool RayIntersectsTriangle(const glm::vec3& origin, const glm::vec3& dir, const glm::vec3& v0,
-                                  const glm::vec3& v1, const glm::vec3& v2, glm::vec3& outIntersectionPoint,
-                                  float& outT) {
+static bool RayTriangleIntersect(const glm::vec3& origin, const glm::vec3& dir, const glm::vec3& v0,
+                                 const glm::vec3& v1, const glm::vec3& v2, float& tOut, glm::vec3& hitPosOut) {
     const float EPSILON = 1e-6f;
     glm::vec3 edge1 = v1 - v0;
     glm::vec3 edge2 = v2 - v0;
@@ -67,102 +84,112 @@ static bool RayIntersectsTriangle(const glm::vec3& origin, const glm::vec3& dir,
     float t = f * glm::dot(edge2, q);
     //if (t > EPSILON) {
     if (t >= 0) {
-        outIntersectionPoint = origin + dir * t;
-        outT = t;
+        hitPosOut = origin + dir * t;
+        tOut = t;
         return true;
     }
 
     return false;
 }
 
-static void DetectMeshIntersection(const Mesh& mesh1, const Mesh& mesh2,
-                                   std::vector<std::pair<glm::vec3, glm::vec3>>& intersectPoints) {
-    // every vertices
-    for (size_t i = 0; i < mesh1.Vertices.size(); ++i) {
-        glm::vec3 origin = mesh1.Vertices[i];
-        glm::vec3 normal = glm::normalize(mesh1.Normals[i]);
+float IntersectAlongNormal(const Mesh& mesh, const glm::vec3& origin, const glm::vec3& normal) {
+    float minT = std::numeric_limits<float>::max();
+    glm::vec3 bestHit = origin;
 
-        float minDistance = std::numeric_limits<float>::max();
-        glm::vec3 closestPoint;
-        bool found = false;
+    for (size_t i = 0; i < mesh.Indices.size(); i += 3) {
+        glm::vec3 v0 = mesh.Vertices[mesh.Indices[i]].Position;
+        glm::vec3 v1 = mesh.Vertices[mesh.Indices[i + 1]].Position;
+        glm::vec3 v2 = mesh.Vertices[mesh.Indices[i + 2]].Position;
 
-        for (int j = 0; j <= 1; ++j) {
-            const glm::vec3 rayDir = (j == 0) ? normal : -normal;
-
-            for (size_t j = 0; j < mesh2.Indices.size(); j += 3) {
-                glm::vec3 v0 = mesh2.Vertices[mesh2.Indices[j]];
-                glm::vec3 v1 = mesh2.Vertices[mesh2.Indices[j + 1]];
-                glm::vec3 v2 = mesh2.Vertices[mesh2.Indices[j + 2]];
-
-                glm::vec3 intersectionPoint;
-                float t;
-                if (RayIntersectsTriangle(origin, rayDir, v0, v1, v2, intersectionPoint, t)) {
-                    if (t < minDistance) {
-                        minDistance = t;
-                        closestPoint = intersectionPoint;
-                        found = true;
-                    }
-                }
-            }
+        float t;
+        glm::vec3 hit;
+        if (RayTriangleIntersect(origin, normal, v0, v1, v2, t, hit)) {
+            if (std::abs(t) < std::abs(minT)) { minT = t; }
         }
 
-        if (found) {
-            intersectPoints.push_back({origin, closestPoint});
-        } else {
-            std::cout << "Not intersect to any triangle." << std::endl;
-            intersectPoints.push_back({origin, origin});
+        if (RayTriangleIntersect(origin, -normal, v0, v1, v2, t, hit)) {
+            if (std::abs(t) < std::abs(minT)) { minT = -t; }
         }
     }
 
-    // every triangle center
-    //for (size_t i = 0; i < mesh1.Indices.size() / 3; ++i) {
-    //    glm::vec3 v0 = mesh1.Vertices[mesh1.Indices[i]];
-    //    glm::vec3 v1 = mesh1.Vertices[mesh1.Indices[i + 1]];
-    //    glm::vec3 v2 = mesh1.Vertices[mesh1.Indices[i + 2]];
-    //
-    //    glm::vec3 center = (v0 + v1 + v2) / 3.0f;
-    //    glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0)); // triangle normal
-    //
-    //    float minDistance = std::numeric_limits<float>::max();
-    //    glm::vec3 closestPoint;
-    //    bool found = false;
-    //
-    //    for (int j = 0; j <= 1; ++j) {
-    //        const glm::vec3 rayDir = (j == 0) ? normal : -normal;
-    //
-    //        for (size_t k = 0; k < mesh2.Indices.size(); k += 3) {
-    //            glm::vec3 u0 = mesh2.Vertices[mesh2.Indices[k]];
-    //            glm::vec3 u1 = mesh2.Vertices[mesh2.Indices[k + 1]];
-    //            glm::vec3 u2 = mesh2.Vertices[mesh2.Indices[k + 2]];
-    //
-    //            glm::vec3 intersectionPoint;
-    //            float t;
-    //            if (RayIntersectsTriangle(center, rayDir, u0, u1, u2, intersectionPoint, t)) {
-    //                if (t < minDistance) {
-    //                    minDistance = t;
-    //                    closestPoint = intersectionPoint;
-    //                    found = true;
-    //                }
-    //            }
-    //        }
-    //    }
-    //
-    //    if (found) {
-    //        intersectPoints.push_back({center, closestPoint});
-    //    } else {
-    //        std::cout << "Triangle center not intersecting." << std::endl;
-    //        //intersectPoints.push_back({center, center});
-    //    }
-    //}
+    return minT;
 }
 
-std::shared_ptr<Fitter> Fit(const Mesh& mesh1, const Mesh& mesh2) {
-    std::vector<std::pair<glm::vec3, glm::vec3>> pointPairs;
-    DetectMeshIntersection(mesh1, mesh2, pointPairs);
+iGe::Ref<iGe::Texture2D> GenerateDisplacementMap(const Mesh& mesh1, const Mesh& mesh2, int resolution) {
+    auto HasTexCoords = [&](const Mesh& mesh) -> bool {
+        for (const auto& vertex: mesh.Vertices) {
+            if (vertex.TexCoord != glm::vec2(0.0f, 0.0f)) { return true; }
+        }
+        return false;
+    };
+    if (!HasTexCoords(mesh1)) {
+        IGE_ERROR("Displacement map generation failed: origin mesh is missing texture coordinates (UVs).");
+    }
 
-    std::shared_ptr<MeshFitting::Fitter> fitter = std::make_shared<MeshFitting::RBFInterpolator>();
-    fitter->Fit(pointPairs);
-    return fitter;
+    DisplacementMap map{};
+    map.Width = resolution;
+    map.Height = resolution;
+    map.Data.resize(resolution * resolution, 0.0f);
+
+    for (size_t i = 0; i < mesh1.Indices.size(); i += 3) {
+        uint32_t i0 = mesh1.Indices[i];
+        uint32_t i1 = mesh1.Indices[i + 1];
+        uint32_t i2 = mesh1.Indices[i + 2];
+
+        glm::vec3 p0 = mesh1.Vertices[i0].Position;
+        glm::vec3 p1 = mesh1.Vertices[i1].Position;
+        glm::vec3 p2 = mesh1.Vertices[i2].Position;
+
+        glm::vec3 n0 = mesh1.Vertices[i0].Normal;
+        glm::vec3 n1 = mesh1.Vertices[i1].Normal;
+        glm::vec3 n2 = mesh1.Vertices[i2].Normal;
+
+        glm::vec2 uv0 = mesh1.Vertices[i0].TexCoord;
+        glm::vec2 uv1 = mesh1.Vertices[i1].TexCoord;
+        glm::vec2 uv2 = mesh1.Vertices[i2].TexCoord;
+
+        glm::vec2 pixel0 = uv0 * float(resolution - 1);
+        glm::vec2 pixel1 = uv1 * float(resolution - 1);
+        glm::vec2 pixel2 = uv2 * float(resolution - 1);
+
+        int minX = std::max(0, int(std::floor(std::min({pixel0.x, pixel1.x, pixel2.x}))));
+        int maxX = std::min(resolution - 1, int(std::ceil(std::max({pixel0.x, pixel1.x, pixel2.x}))));
+        int minY = std::max(0, int(std::floor(std::min({pixel0.y, pixel1.y, pixel2.y}))));
+        int maxY = std::min(resolution - 1, int(std::ceil(std::max({pixel0.y, pixel1.y, pixel2.y}))));
+
+        for (int y = minY; y <= maxY; ++y) {
+            for (int x = minX; x <= maxX; ++x) {
+                glm::vec2 p = glm::vec2(x, y);
+
+                // Compute barycentric
+                glm::vec3 bary = ComputeBarycentric(pixel0, pixel1, pixel2, p);
+                if (bary.x < 0 || bary.y < 0 || bary.z < 0) continue;
+
+                // Compute point and normal after interpolation
+                glm::vec3 posOnMesh1 = bary.x * p0 + bary.y * p1 + bary.z * p2;
+                glm::vec3 norOnMesh1 = glm::normalize(bary.x * n0 + bary.y * n1 + bary.z * n2);
+
+                // Project to mesh2
+                float offset = IntersectAlongNormal(mesh2, posOnMesh1, norOnMesh1);
+
+                int idx = y * resolution + x;
+                map.Data[idx] = offset;
+            }
+        }
+    }
+
+    float scale = SaveDisplacementMapAsPNG(map, "displacement.png");
+    IGE_INFO("Generate Displacement map: {}, scale = {}.", "displacement.png", scale);
+
+    iGe::TextureSpecification specification;
+    specification.Width = resolution;
+    specification.Height = resolution;
+    specification.Format = iGe::ImageFormat::R32F;
+    specification.GenerateMips = false;
+
+    iGe::Ref<iGe::Texture2D> texture = iGe::Texture2D::Create(specification);
+    texture->SetData(map.Data.data(), map.Data.size() * sizeof(float));
+    return texture;
 }
 
 } // namespace MeshFitting
