@@ -15,7 +15,7 @@ cbuffer SceneData {
 };
 
 [shader("vertex")]
-VertexOutput vsMain(VertexInput input)
+VertexOutput vertexMain(VertexInput input)
 {
     VertexOutput out;
     out.v_Position = mul(u_ProjectionView, mul(u_Transform, float4(input.a_Position, 1.0f)));
@@ -23,8 +23,8 @@ VertexOutput vsMain(VertexInput input)
     return out;
 }
 
-[shader("pixel")]
-float4 psMain(VertexOutput input) : SV_Target
+[shader("fragment")]
+float4 fragmentMain(VertexOutput input) : SV_Target
 {
     return float4(input.v_Color, 1.0f);
 }

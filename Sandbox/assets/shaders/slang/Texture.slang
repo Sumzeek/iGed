@@ -15,7 +15,7 @@ cbuffer SceneData {
 };
 
 [shader("vertex")]
-VertexOutput vsMain(VertexInput input)
+VertexOutput vertexMain(VertexInput input)
 {
     VertexOutput out;
     out.v_Position = mul(u_ProjectionView, mul(u_Transform, float4(input.a_Position, 1.0f)));
@@ -27,8 +27,8 @@ VertexOutput vsMain(VertexInput input)
 // SamplerState u_Sampler;
 Sampler2D u_Texture;
 
-[shader("pixel")]
-float4 psMain(VertexOutput input) : SV_Target
+[shader("fragment")]
+float4 fragmentMain(VertexOutput input) : SV_Target
 {
     return u_Texture.Sample(input.v_TexCoord);
 }

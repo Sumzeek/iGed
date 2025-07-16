@@ -14,10 +14,14 @@ namespace iGe
 namespace Utils
 {
 
-static GLenum ShaderTypeFromString(const std::string& type) {
-    if (type == "vertex") { return GL_VERTEX_SHADER; }
-    if (type == "fragment" || type == "pixel") { return GL_FRAGMENT_SHADER; }
-    if (type == "compute") { return GL_COMPUTE_SHADER; }
+static GLenum ShaderTypeFromStage(const ShaderStage stage) {
+    if (stage == ShaderStage::Vertex) { return GL_VERTEX_SHADER; }
+    if (stage == ShaderStage::TessellationControl) { return GL_TESS_CONTROL_SHADER; }
+    if (stage == ShaderStage::TessellationEvaluation) { return GL_TESS_EVALUATION_SHADER; }
+    if (stage == ShaderStage::Geometry) { return GL_GEOMETRY_SHADER; }
+    if (stage == ShaderStage::Fragment) { return GL_FRAGMENT_SHADER; }
+    if (stage == ShaderStage::Compute) { return GL_COMPUTE_SHADER; }
+
     IGE_CORE_ASSERT(false, "Unknown shader type!");
     return 0;
 }
@@ -27,37 +31,29 @@ static GLenum ShaderTypeFromString(const std::string& type) {
 /////////////////////////////////////////////////////////////////////////////
 // OpenGLShader /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-OpenGLShader::OpenGLShader(const std::string& filepath) : m_FilePath(filepath) {
-    std::string source = ReadFile(filepath);
-    auto sources = PreProcess(source);
+OpenGLShader::OpenGLShader(const std::filesystem::path& filepath) : m_FilePath(filepath) {
+    auto shaderMap = ParseShaderEntryMap(filepath);
+    for (const auto& shaderPair: shaderMap) {
+        ShaderStage stage = shaderPair.first;
+        const auto& shaderFile = shaderPair.second;
+        m_SourceCodes[stage] = ReadFile(shaderFile);
+    }
 
-    Compile(sources);
+    Compile(m_SourceCodes);
     CreateProgram();
-
-    // Extract name from filepath
-    auto lastSlash = filepath.find_last_of("/\\");
-    lastSlash = lastSlash == std::string::npos ? 0 : lastSlash + 1;
-    auto lastDot = filepath.rfind('.');
-    auto count = lastDot == std::string::npos ? filepath.size() - lastSlash : lastDot - lastSlash;
-    m_Name = filepath.substr(lastSlash, count);
+    m_Name = filepath.stem().string();
 }
 
-//OpenGLShader::OpenGLShader(const std::string& vertFilepath, const std::string& fragFilepath) {
-//    std::unordered_map<GLenum, std::string> sources;
-//    sources[GL_VERTEX_SHADER] = ReadFile(vertFilepath);
-//    sources[GL_FRAGMENT_SHADER] = ReadFile(fragFilepath);
-//
-//    Compile(sources);
-//    CreateProgram();
-//}
+OpenGLShader::OpenGLShader(const std::string& name, const std::filesystem::path& filepath)
+    : m_Name(name), m_FilePath(filepath) {
+    auto shaderMap = ParseShaderEntryMap(filepath);
+    for (const auto& shaderPair: shaderMap) {
+        ShaderStage stage = shaderPair.first;
+        const auto& shaderFile = shaderPair.second;
+        m_SourceCodes[stage] = ReadFile(shaderFile);
+    }
 
-OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
-    : m_Name(name) {
-    std::unordered_map<GLenum, std::string> sources;
-    sources[GL_VERTEX_SHADER] = vertexSrc;
-    sources[GL_FRAGMENT_SHADER] = fragmentSrc;
-
-    Compile(sources);
+    Compile(m_SourceCodes);
     CreateProgram();
 }
 
@@ -69,56 +65,46 @@ void OpenGLShader::Unbind() const { glUseProgram(0); }
 
 const std::string& OpenGLShader::GetName() const { return m_Name; }
 
-std::string OpenGLShader::ReadFile(const std::string& filepath) {
-    std::string result;
-    std::ifstream in(filepath, std::ios::in | std::ios::binary); // ifstream closes itself due to RAII
-    if (in) {
-        in.seekg(0, std::ios::end);
-        size_t size = in.tellg();
-        if (size != -1) {
-            result.resize(size);
-            in.seekg(0, std::ios::beg);
-            in.read(&result[0], size);
-        } else {
-            IGE_CORE_ERROR("Could not read from file '{0}'", filepath);
-        }
-    } else {
-        IGE_CORE_ERROR("Could not open file '{0}'", filepath);
+std::string OpenGLShader::ReadFile(const std::filesystem::path& filepath) {
+    // Check if file exists
+    std::error_code ec;
+    if (!std::filesystem::exists(filepath, ec)) {
+        IGE_CORE_ERROR("File does not exist: '{0}' (error: {1})", filepath.string(), ec.message());
+        return {};
     }
 
-    return result;
-}
-
-std::unordered_map<GLenum, std::string> OpenGLShader::PreProcess(const std::string& source) {
-    std::unordered_map<GLenum, std::string> shaderSources;
-
-    const char* typeToken = "#type";
-    size_t typeTokenLength = std::strlen(typeToken);
-    size_t pos = source.find(typeToken, 0); //Start of shader type declaration line
-    while (pos != std::string::npos) {
-        size_t eol = source.find_first_of("\r\n", pos); //End of shader type declaration line
-        IGE_CORE_ASSERT(eol != std::string::npos, "Syntax error");
-        size_t begin = pos + typeTokenLength + 1; //Start of shader type name (after "#type " keyword)
-        std::string type = source.substr(begin, eol - begin);
-        IGE_CORE_ASSERT(Utils::ShaderTypeFromString(type), "Invalid shader type specified");
-
-        size_t nextLinePos =
-                source.find_first_not_of("\r\n", eol); //Start of shader code after shader type declaration line
-        IGE_CORE_ASSERT(nextLinePos != std::string::npos, "Syntax error");
-        pos = source.find(typeToken, nextLinePos); //Start of next shader type declaration line
-
-        shaderSources[Utils::ShaderTypeFromString(type)] =
-                (pos == std::string::npos) ? source.substr(nextLinePos) : source.substr(nextLinePos, pos - nextLinePos);
+    // Get the file size
+    auto fileSize = std::filesystem::file_size(filepath, ec);
+    if (ec) {
+        IGE_CORE_ERROR("Could not get file size: '{0}' (error: {1})", filepath.string(), ec.message());
+        return {};
     }
 
-    return shaderSources;
+    // Read file content
+    std::ifstream file(filepath, std::ios::binary);
+    if (!file) {
+        IGE_CORE_ERROR("Could not open file: '{0}'", filepath.string());
+        return {};
+    }
+
+    std::string content;
+    content.resize(fileSize);
+    file.read(content.data(), fileSize);
+
+    if (!file) {
+        IGE_CORE_ERROR("Could not read file: '{0}'", filepath.string());
+        return {};
+    }
+
+    return content;
 }
 
-void OpenGLShader::Compile(std::unordered_map<GLenum, std::string> shaderSources) {
+void OpenGLShader::Compile(std::unordered_map<ShaderStage, std::string> shaderSources) {
     m_Shaders.clear();
     for (auto&& [stage, source]: shaderSources) {
         // Create an empty fragment shader handle
-        GLuint shaderID = glCreateShader(stage);
+        GLenum type = Utils::ShaderTypeFromStage(stage);
+        GLuint shaderID = glCreateShader(type);
 
         // Send the fragment shader source code to GL
         // Note that std::string's .c_str is NULL character terminated.
@@ -180,7 +166,7 @@ void OpenGLShader::CreateProgram() {
         // The maxLength includes the NULL character
         std::vector<GLchar> infoLog(maxLength);
         glGetProgramInfoLog(program, maxLength, &maxLength, infoLog.data());
-        IGE_CORE_ERROR("Shader linking failed ({0}):\n{1}", m_FilePath, infoLog.data());
+        IGE_CORE_ERROR("Shader linking failed ({0}):\n{1}", m_Name, infoLog.data());
 
         // We don't need the program anymore
         glDeleteProgram(program);

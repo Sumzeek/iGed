@@ -12,8 +12,8 @@ namespace iGe
 
 export class IGE_API OpenGLShader : public Shader {
 public:
-    OpenGLShader(const std::string& filepath);
-    OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc);
+    OpenGLShader(const std::filesystem::path& filepath);
+    OpenGLShader(const std::string& name, const std::filesystem::path& filepath);
     virtual ~OpenGLShader();
 
     virtual void Bind() const override;
@@ -22,18 +22,17 @@ public:
     virtual const std::string& GetName() const override;
 
 private:
-    std::string ReadFile(const std::string& filepath);
-    std::unordered_map<GLenum, std::string> PreProcess(const std::string& source);
+    std::string ReadFile(const std::filesystem::path& filepath);
 
-    void Compile(std::unordered_map<GLenum, std::string>);
+    void Compile(std::unordered_map<ShaderStage, std::string>);
     void CreateProgram();
 
-    std::uint32_t m_RendererID;
-    std::string m_FilePath;
     std::string m_Name;
+    std::uint32_t m_RendererID;
 
-    std::unordered_map<GLenum, std::string> m_SourceCode;
-    std::unordered_map<GLenum, GLuint> m_Shaders;
+    std::filesystem::path m_FilePath;
+    std::unordered_map<ShaderStage, std::string> m_SourceCodes;
+    std::unordered_map<ShaderStage, GLuint> m_Shaders;
 };
 
 } // namespace iGe

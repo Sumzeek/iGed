@@ -1,5 +1,6 @@
 module;
 #include "iGeMacro.h"
+#include <nlohmann/json.hpp>
 
 module iGe.Renderer;
 import :Shader;
@@ -11,10 +12,44 @@ import iGe.Log;
 
 namespace iGe
 {
+ShaderStage ShaderStageFromString(const std::string& stageStr) {
+    if (stageStr == "vertex") { return ShaderStage::Vertex; }
+    if (stageStr == "tesscontrol" || stageStr == "hull") { return ShaderStage::TessellationControl; }
+    if (stageStr == "tesseval" || stageStr == "domain") { return ShaderStage::TessellationEvaluation; }
+    if (stageStr == "geometry") { return ShaderStage::Geometry; }
+    if (stageStr == "fragment" || stageStr == "pixel") { return ShaderStage::Fragment; }
+    if (stageStr == "compute") { return ShaderStage::Compute; }
+
+    IGE_CORE_ASSERT(false, "Unknown file stage string!");
+    return ShaderStage::None;
+}
+
+std::unordered_map<ShaderStage, std::filesystem::path> ParseShaderEntryMap(const std::filesystem::path& jsonFilePath) {
+    std::ifstream inFile(jsonFilePath);
+    if (!inFile) {
+        IGE_CORE_WARN("Failed to open JSON file: {}", jsonFilePath.string());
+        return {};
+    }
+
+    nlohmann::json jsonData;
+    inFile >> jsonData;
+
+    auto parentDir = jsonFilePath.parent_path();
+    std::unordered_map<ShaderStage, std::filesystem::path> result;
+
+    for (auto it = jsonData.begin(); it != jsonData.end(); ++it) {
+        ShaderStage stage = ShaderStageFromString(it.key());
+        std::filesystem::path relativePath = it.value().get<std::string>();
+        result[stage] = parentDir / relativePath;
+    }
+
+    return result;
+}
+
 /////////////////////////////////////////////////////////////////////////////
 // Shader ///////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-Ref<Shader> Shader::Create(const std::string filepath) {
+Ref<Shader> Shader::Create(const std::filesystem::path& filepath) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
             IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
@@ -30,13 +65,13 @@ Ref<Shader> Shader::Create(const std::string filepath) {
     return nullptr;
 }
 
-Ref<Shader> Shader::Create(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc) {
+Ref<Shader> Shader::Create(const std::string& name, const std::filesystem::path& filepath) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
             IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
-            return CreateRef<OpenGLShader>(name, vertexSrc, fragmentSrc);
+            return CreateRef<OpenGLShader>(name, filepath);
         case RendererAPI::API::Vulkan:
             IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
             return nullptr;
@@ -60,14 +95,14 @@ void ShaderLibrary::Add(const Ref<Shader>& shader) {
     Add(name, shader);
 }
 
-Ref<Shader> ShaderLibrary::Load(const std::string& filepath) {
+Ref<Shader> ShaderLibrary::Load(const std::filesystem::path& filepath) {
     auto shader = Shader::Create(filepath);
     Add(shader);
     return shader;
 }
 
-Ref<Shader> ShaderLibrary::Load(const std::string& name, const std::string& filepath) {
-    auto shader = Shader::Create(filepath);
+Ref<Shader> ShaderLibrary::Load(const std::string& name, const std::filesystem::path& filepath) {
+    auto shader = Shader::Create(name, filepath);
     Add(name, shader);
     return shader;
 }

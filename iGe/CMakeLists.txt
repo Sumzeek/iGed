@@ -13,8 +13,9 @@ target_sources(${TARGET_NAME} PUBLIC
 file(GLOB_RECURSE SOURCES "modules/*.cpp")
 target_sources(${TARGET_NAME} PUBLIC ${SOURCES})
 
-# Add third party denpendency
+# Add third party denpend ency
 add_subdirectory(3rdparty)
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty)
 target_link_libraries(${TARGET_NAME} PUBLIC spdlog::spdlog)
 target_link_libraries(${TARGET_NAME} PUBLIC glfw)
 target_link_libraries(${TARGET_NAME} PUBLIC glad)
