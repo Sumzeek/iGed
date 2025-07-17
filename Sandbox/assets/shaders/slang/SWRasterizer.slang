@@ -38,7 +38,7 @@ float3 GetVertex(uint vertexIndex) {
 
 [shader("compute")]
 [numthreads(32, 1, 1)]
-void computeMain(uint3 threadId : SV_DispatchThreadID)
+void csMain(uint3 threadId : SV_DispatchThreadID)
 {
     uint primID = threadId.x;
     if (primID >= u_TriSize) { return; }

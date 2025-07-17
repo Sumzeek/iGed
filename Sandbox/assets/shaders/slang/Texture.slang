@@ -28,8 +28,8 @@ VertexOutput vsMain(VertexInput input)
 [[gl::binding(1)]]
 Sampler2D u_Texture;
 
-[shader("pixel")]
-float4 psMain(VertexOutput input) : SV_Target
+[shader("fragment")]
+float4 fsMain(VertexOutput input) : SV_Target
 {
     return u_Texture.Sample(input.v_TexCoord);
 }

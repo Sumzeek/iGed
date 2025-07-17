@@ -13,10 +13,11 @@ import glm;
 // RuntimeLodLayer //////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
 RuntimeLodLayer::RuntimeLodLayer()
-    : Layer{"Example"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 1000.f}, m_CameraPosition{0.0f} {
+    : Layer{"RuntimeLod"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 1000.f}, m_CameraPosition{0.0f} {
     // Load model
     {
-        m_Model = MeshFitting::LoadObjFile("assets/models/monsterfrog_subd.obj");
+        //m_Model = MeshFitting::LoadObjFile("assets/models/Bunny_Sim.obj");
+        m_Model = MeshFitting::LoadObjFile("assets/models/monsterfrog.obj");
         auto vertices = m_Model.Vertices;
         auto indices = m_Model.Indices;
 
@@ -68,6 +69,8 @@ RuntimeLodLayer::RuntimeLodLayer()
     //auto mesh1 = MeshFitting::LoadObjFile("assets/models/Bunny_Sim.obj");
     //auto mesh2 = MeshFitting::LoadObjFile("assets/models/Bunny.obj");
     //m_ModelDisplaceMap = MeshFitting::GenerateDisplacementMap(mesh1, mesh2, 512);
+
+    //m_ModelDisplaceMap = iGe::Texture2D::Create("assets/textures/displacement.png");
     m_ModelNormalMap = iGe::Texture2D::Create("assets/textures/monsterfrog-n.bmp");
     m_ModelDisplaceMap = iGe::Texture2D::Create("assets/textures/monsterfrog-d.bmp");
 
@@ -82,10 +85,11 @@ RuntimeLodLayer::RuntimeLodLayer()
     m_TessData = iGe::CreateScope<TessData>();
     m_TessDataUniform = iGe::Buffer::Create(nullptr, sizeof(TessData));
 
-    m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Lighting.glsl");
-    m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Test.glsl");
-    m_ComputeShaderLibrary.Load("assets/shaders/glsl/CalTessFactor.glsl");
-    m_ComputeShaderLibrary.Load("assets/shaders/glsl/SWRasterizer.glsl");
+    m_GraphicsShaderLibrary.Load("Lighting", "assets/shaders/glsl/Lighting.json");
+    m_GraphicsShaderLibrary.Load("Test", "assets/shaders/glsl/Test.json");
+    m_GraphicsShaderLibrary.Load("HWTessellation", "assets/shaders/glsl/HWTessellation.json");
+    m_ComputeShaderLibrary.Load("CalTessFactor", "assets/shaders/glsl/CalTessFactor.json");
+    m_ComputeShaderLibrary.Load("SWRasterizer", "assets/shaders/glsl/SWRasterizer.json");
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -126,9 +130,10 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
             m_PerFrameDataUniform->SetData(m_PerFrameData.get(), sizeof(PerFrameData));
             m_PerFrameDataUniform->Bind(1, iGe::BufferType::Uniform);
 
-            m_ModelNormalMap->Bind(2);
-            m_ModelDisplaceMap->Bind(3);
-            iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Test"), m_ModelVertexArray, m_ModelTransform);
+            m_ModelDisplaceMap->Bind(2);
+            m_ModelNormalMap->Bind(3);
+            iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellation"), m_ModelVertexArray, m_ModelTransform,
+                                  true);
         }
     }
     iGe::Renderer::EndScene();

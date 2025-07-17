@@ -10,6 +10,20 @@ import iGe.Log;
 namespace iGe
 {
 
+export enum class ShaderStage : int {
+    None = 0,
+    Vertex,
+    TessellationControl,
+    TessellationEvaluation,
+    Geometry,
+    Fragment,
+    Compute,
+};
+
+ShaderStage ShaderStageFromString(const std::string& stageStr);
+
+std::unordered_map<ShaderStage, std::filesystem::path> ParseShaderEntryMap(const std::filesystem::path& jsonFilePath);
+
 class IGE_API ShaderBase {
 public:
     virtual ~ShaderBase() = default;
@@ -18,9 +32,8 @@ public:
 
 export class IGE_API GraphicsShader : public ShaderBase {
 public:
-    static Ref<GraphicsShader> Create(const std::string& filepath);
-    static Ref<GraphicsShader> Create(const std::string& name, const std::string& vertexSrc,
-                                      const std::string& fragmentSrc);
+    static Ref<GraphicsShader> Create(const std::filesystem::path& filepath);
+    static Ref<GraphicsShader> Create(const std::string& name, const std::filesystem::path& filepath);
 
     virtual void Bind() const = 0;
     virtual void Unbind() const = 0;
@@ -28,8 +41,8 @@ public:
 
 export class IGE_API ComputeShader : public ShaderBase {
 public:
-    static Ref<ComputeShader> Create(const std::string& filepath);
-    static Ref<ComputeShader> Create(const std::string& name, const std::string& computeSrc);
+    static Ref<ComputeShader> Create(const std::filesystem::path& filepath);
+    static Ref<ComputeShader> Create(const std::string& name, const std::filesystem::path& filepath);
 
     virtual void Bind() const = 0;
     virtual void Unbind() const = 0;
@@ -43,19 +56,21 @@ public:
         IGE_CORE_ASSERT(!Exists(name), "Shader already exists!");
         m_Shaders[name] = shader;
     }
+
     void Add(const Ref<TShader>& shader) {
         auto& name = shader->GetName();
         IGE_CORE_ASSERT(!Exists(name), "Shader already exists!");
         Add(name, shader);
     }
 
-    Ref<TShader> Load(const std::string& filepath) {
+    Ref<TShader> Load(const std::filesystem::path& filepath) {
         auto shader = TShader::Create(filepath);
         Add(shader);
         return shader;
     }
-    Ref<TShader> Load(const std::string& name, const std::string& filepath) {
-        auto shader = TShader::Create(filepath);
+
+    Ref<TShader> Load(const std::string& name, const std::filesystem::path& filepath) {
+        auto shader = TShader::Create(name, filepath);
         Add(name, shader);
         return shader;
     }

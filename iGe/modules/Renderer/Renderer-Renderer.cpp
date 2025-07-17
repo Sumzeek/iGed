@@ -30,7 +30,7 @@ void Renderer::BeginScene(Camera& camera) { s_SceneData->ViewProjectionMatrix = 
 void Renderer::EndScene() {}
 
 void Renderer::Submit(const Ref<GraphicsShader>& shader, const Ref<VertexArray>& vertexArray,
-                      const glm::mat4& transform) {
+                      const glm::mat4& transform, bool tessOption) {
     shader->Bind();
 
     s_SceneDataUniform->Bind(0, BufferType::Uniform);
@@ -38,7 +38,12 @@ void Renderer::Submit(const Ref<GraphicsShader>& shader, const Ref<VertexArray>&
     s_SceneDataUniform->SetData(&transform, sizeof(transform), sizeof(SceneData));
 
     vertexArray->Bind();
-    RenderCommand::DrawIndexed(vertexArray);
+
+    if (!tessOption) {
+        RenderCommand::DrawIndexed(vertexArray);
+    } else {
+        RenderCommand::DrawPatches(vertexArray);
+    }
 }
 
 RendererAPI::API Renderer::GetAPI() { return RendererAPI::GetAPI(); }

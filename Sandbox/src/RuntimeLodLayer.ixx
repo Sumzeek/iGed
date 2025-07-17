@@ -59,6 +59,7 @@ private:
     iGe::Ref<iGe::Texture2D> m_ModelNormalMap;
     iGe::Ref<iGe::Texture2D> m_ModelDisplaceMap;
     float m_DisplaceMapScale = 2.99f;
+    //float m_DisplaceMapScale = 0.07281857f;
 
     // Camera
     iGe::PerspectiveCamera m_Camera;

@@ -22,7 +22,7 @@ add_subdirectory(3rdparty)
 target_link_libraries(${TARGET_NAME} PUBLIC assimp::assimp)
 
 # Compile shaders
-set(SHADER_COMPILE_TARGET "iGedShaderCompile")
+set(SHADER_COMPILE_TARGET "iGedShaderCompiler")
 add_subdirectory(assets/shaders)
 add_dependencies(${TARGET_NAME} ${SHADER_COMPILE_TARGET})
 
@@ -39,52 +39,62 @@ set(ASSETS_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin/assets")
 file(GLOB_RECURSE TEXTURE_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/textures/*")
 SOURCE_GROUP("textures" FILES ${TEXTURE_FILES})
 
-set(COPIED_TEXTURE_FLAG "${ASSETS_OUTPUT_DIR}/textures/.copy")
-add_custom_command(
-        OUTPUT ${COPIED_TEXTURE_FLAG}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${ASSETS_SOURCE_DIR}/textures"
-        "${ASSETS_OUTPUT_DIR}/textures"
-        COMMAND ${CMAKE_COMMAND} -E touch "${COPIED_TEXTURE_FLAG}" # create dummy file
-        DEPENDS ${TEXTURE_FILES}
-        COMMENT "Copying textures..."
-        VERBATIM
-)
-add_custom_target(CopyTexturesTarget DEPENDS ${COPIED_TEXTURE_FLAG})
+# Create output directory if it doesn't exist
+file(MAKE_DIRECTORY "${ASSETS_OUTPUT_DIR}/textures")
+
+set(COPIED_TEXTURE_FILES "")
+foreach (TEXTURE_FILE ${TEXTURE_FILES})
+    # Get relative path from textures directory
+    file(RELATIVE_PATH RELATIVE_PATH "${ASSETS_SOURCE_DIR}/textures" "${TEXTURE_FILE}")
+    # Create corresponding output path
+    set(OUTPUT_FILE "${ASSETS_OUTPUT_DIR}/textures/${RELATIVE_PATH}")
+    list(APPEND COPIED_TEXTURE_FILES ${OUTPUT_FILE})
+
+    # Get directory of output file
+    get_filename_component(OUTPUT_DIR "${OUTPUT_FILE}" DIRECTORY)
+
+    # Add custom command to copy individual file
+    add_custom_command(
+            OUTPUT "${OUTPUT_FILE}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${TEXTURE_FILE}" "${OUTPUT_FILE}"
+            DEPENDS "${TEXTURE_FILE}"
+            COMMENT "Copying texture: ${RELATIVE_PATH}"
+            VERBATIM
+    )
+endforeach ()
+
+add_custom_target(CopyTexturesTarget DEPENDS ${COPIED_TEXTURE_FILES})
 add_dependencies(${TARGET_NAME} CopyTexturesTarget)
-
-# Copy shaders
-file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/shaders/generated/*")
-SOURCE_GROUP("shaders" FILES ${SHADER_FILES})
-
-set(COPIED_SHADER_FLAG "${ASSETS_OUTPUT_DIR}/shaders/.copy")
-add_custom_command(
-        OUTPUT ${COPIED_SHADER_FLAG}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${ASSETS_SOURCE_DIR}/shaders/generated"
-        "${ASSETS_OUTPUT_DIR}/shaders"
-        COMMAND ${CMAKE_COMMAND} -E touch "${COPIED_SHADER_FLAG}" # create dummy file
-        DEPENDS ${SHADER_FILES}
-        COMMENT "Copying shaders..."
-        VERBATIM
-)
-add_custom_target(CopyShadersTarget DEPENDS ${COPIED_SHADER_FLAG})
-add_dependencies(${TARGET_NAME} CopyShadersTarget)
 
 # Copy models
 file(GLOB_RECURSE MODEL_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/models/*")
 SOURCE_GROUP("models" FILES ${MODEL_FILES})
 
-set(COPIED_MODEL_FLAG "${ASSETS_OUTPUT_DIR}/models/.copy")
-add_custom_command(
-        OUTPUT ${COPIED_MODEL_FLAG}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${ASSETS_SOURCE_DIR}/models"
-        "${ASSETS_OUTPUT_DIR}/models"
-        COMMAND ${CMAKE_COMMAND} -E touch "${COPIED_MODEL_FLAG}" # create dummy file
-        DEPENDS ${MODEL_FILES}
-        COMMENT "Copying models..."
-        VERBATIM
-)
-add_custom_target(CopyModelsTarget DEPENDS ${COPIED_MODEL_FLAG})
-add_dependencies(${TARGET_NAME} CopyModelsTarget)
+# Create output directory if it doesn't exist
+file(MAKE_DIRECTORY "${ASSETS_OUTPUT_DIR}/models")
+
+set(COPIED_MODEL_FILES "")
+foreach (MODEL_FILE ${MODEL_FILES})
+    # Get relative path from MODELs directory
+    file(RELATIVE_PATH RELATIVE_PATH "${ASSETS_SOURCE_DIR}/MODELs" "${MODEL_FILE}")
+    # Create corresponding output path
+    set(OUTPUT_FILE "${ASSETS_OUTPUT_DIR}/models/${RELATIVE_PATH}")
+    list(APPEND COPIED_MODEL_FILES ${OUTPUT_FILE})
+
+    # Get directory of output file
+    get_filename_component(OUTPUT_DIR "${OUTPUT_FILE}" DIRECTORY)
+
+    # Add custom command to copy individual file
+    add_custom_command(
+            OUTPUT "${OUTPUT_FILE}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${MODEL_FILE}" "${OUTPUT_FILE}"
+            DEPENDS "${MODEL_FILE}"
+            COMMENT "Copying MODEL: ${RELATIVE_PATH}"
+            VERBATIM
+    )
+endforeach ()
+
+add_custom_target(CopyModelssTarget DEPENDS ${COPIED_MODEL_FILES})
+add_dependencies(${TARGET_NAME} CopyModelssTarget)

@@ -20,16 +20,22 @@ static float SaveDisplacementMapAsPNG(const DisplacementMap& displacement, const
 
     // Map data to [0, 255] and fill in RGB channels
     std::vector<unsigned char> image(pixelCount * 4);
-    for (int i = 0; i < pixelCount; ++i) {
-        float v = src[i];
-        float mapped = 0.5f + (v / (2.0f * scale));
-        mapped = std::clamp(mapped, 0.0f, 1.0f);
-        unsigned char value = static_cast<unsigned char>(mapped * 255.0f);
+    for (int y = 0; y < displacement.Height; ++y) {
+        int flippedY = displacement.Height - 1 - y;
+        for (int x = 0; x < displacement.Width; ++x) {
+            int srcIdx = y * displacement.Width + x;
+            int dstIdx = flippedY * displacement.Width + x;
 
-        image[i * 4 + 0] = value;
-        image[i * 4 + 1] = value;
-        image[i * 4 + 2] = value;
-        image[i * 4 + 3] = 255;
+            float v = src[srcIdx];
+            float mapped = 0.5f + (v / (2.0f * scale));
+            mapped = std::clamp(mapped, 0.0f, 1.0f);
+            unsigned char value = static_cast<unsigned char>(mapped * 255.0f);
+
+            image[dstIdx * 4 + 0] = value;
+            image[dstIdx * 4 + 1] = value;
+            image[dstIdx * 4 + 2] = value;
+            image[dstIdx * 4 + 3] = 255;
+        }
     }
 
     // Write PNG file
@@ -39,7 +45,7 @@ static float SaveDisplacementMapAsPNG(const DisplacementMap& displacement, const
         return -1.0f;
     }
 
-    return scale;
+    return scale * 2.0f;
 }
 
 static glm::vec3 ComputeBarycentric(const glm::vec2& a, const glm::vec2& b, const glm::vec2& c, const glm::vec2& p) {

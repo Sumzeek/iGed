@@ -11,7 +11,7 @@ namespace iGe
 export class IGE_API OpenGLGraphicsShader : public GraphicsShader {
 public:
     OpenGLGraphicsShader(const std::filesystem::path& filepath);
-    OpenGLGraphicsShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc);
+    OpenGLGraphicsShader(const std::string& name, const std::filesystem::path& filepath);
     virtual ~OpenGLGraphicsShader();
 
     virtual void Bind() const override;
@@ -20,17 +20,18 @@ public:
     virtual const std::string& GetName() const override;
 
 private:
-    std::uint32_t m_RendererID;
-    std::filesystem::path m_FilePath;
     std::string m_Name;
+    std::uint32_t m_RendererID;
 
-    std::unordered_map<GLenum, std::string> m_SourceCode;
+    std::filesystem::path m_FilePath;
+    std::unordered_map<ShaderStage, std::string> m_SourceCodes;
+    std::unordered_map<ShaderStage, GLuint> m_Shaders;
 };
 
 export class IGE_API OpenGLComputeShader : public ComputeShader {
 public:
     OpenGLComputeShader(const std::filesystem::path& filepath);
-    OpenGLComputeShader(const std::string& name, const std::string& computeSrc);
+    OpenGLComputeShader(const std::string& name, const std::filesystem::path& filepath);
     virtual ~OpenGLComputeShader();
 
     virtual void Bind() const override;
@@ -40,11 +41,12 @@ public:
     virtual const std::string& GetName() const override;
 
 private:
-    std::uint32_t m_RendererID;
-    std::filesystem::path m_FilePath;
     std::string m_Name;
+    std::uint32_t m_RendererID;
 
-    std::unordered_map<GLenum, std::string> m_SourceCode;
+    std::filesystem::path m_FilePath;
+    std::unordered_map<ShaderStage, std::string> m_SourceCodes;
+    std::unordered_map<ShaderStage, GLuint> m_Shaders;
 };
 
 } // namespace iGe

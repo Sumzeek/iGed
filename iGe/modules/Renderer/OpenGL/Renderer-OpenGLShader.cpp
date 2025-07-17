@@ -13,10 +13,14 @@ namespace iGe
 namespace Utils
 {
 
-static GLenum ShaderTypeFromString(const std::string_view type) {
-    if (type == "vertex") { return GL_VERTEX_SHADER; }
-    if (type == "fragment" || type == "pixel") { return GL_FRAGMENT_SHADER; }
-    if (type == "compute") { return GL_COMPUTE_SHADER; }
+static GLenum ShaderTypeFromStage(const ShaderStage stage) {
+    if (stage == ShaderStage::Vertex) { return GL_VERTEX_SHADER; }
+    if (stage == ShaderStage::TessellationControl) { return GL_TESS_CONTROL_SHADER; }
+    if (stage == ShaderStage::TessellationEvaluation) { return GL_TESS_EVALUATION_SHADER; }
+    if (stage == ShaderStage::Geometry) { return GL_GEOMETRY_SHADER; }
+    if (stage == ShaderStage::Fragment) { return GL_FRAGMENT_SHADER; }
+    if (stage == ShaderStage::Compute) { return GL_COMPUTE_SHADER; }
+
     IGE_CORE_ASSERT(false, "Unknown shader type!");
     return 0;
 }
@@ -41,46 +45,13 @@ static std::string ReadFile(const std::filesystem::path& filepath) {
     return result;
 }
 
-static std::string ExtractNameFromPath(const std::string& filepath) {
-    auto lastSlash = filepath.find_last_of("/\\");
-    lastSlash = lastSlash == std::string::npos ? 0 : lastSlash + 1;
-    auto lastDot = filepath.rfind('.');
-    auto count = lastDot == std::string::npos ? filepath.size() - lastSlash : lastDot - lastSlash;
-    return filepath.substr(lastSlash, count);
-}
-
-static std::unordered_map<GLenum, std::string> PreProcess(const std::string& source) {
-    std::unordered_map<GLenum, std::string> shaderSources;
-
-    const char* typeToken = "#type";
-    size_t typeTokenLength = std::strlen(typeToken);
-    size_t pos = source.find(typeToken, 0); //Start of shader type declaration line
-    while (pos != std::string::npos) {
-        size_t eol = source.find_first_of("\r\n", pos); //End of shader type declaration line
-        IGE_CORE_ASSERT(eol != std::string::npos, "Syntax error");
-        size_t begin = pos + typeTokenLength + 1; //Start of shader type name (after "#type " keyword)
-        std::string type = source.substr(begin, eol - begin);
-        IGE_CORE_ASSERT(ShaderTypeFromString(type), "Invalid shader type specified");
-
-        size_t nextLinePos =
-                source.find_first_not_of("\r\n", eol); //Start of shader code after shader type declaration line
-        IGE_CORE_ASSERT(nextLinePos != std::string::npos, "Syntax error");
-        pos = source.find(typeToken, nextLinePos); //Start of next shader type declaration line
-
-        shaderSources[ShaderTypeFromString(type)] =
-                (pos == std::string::npos) ? source.substr(nextLinePos) : source.substr(nextLinePos, pos - nextLinePos);
-    }
-
-    return shaderSources;
-}
-
-static std::optional<GLuint> CompileAndLinkProgram(const std::unordered_map<GLenum, std::string>& sources,
+static std::optional<GLuint> CompileAndLinkProgram(const std::unordered_map<ShaderStage, std::string>& sources,
                                                    const std::string& debugOuput = "Unknown Debug Output") {
     // Compile Shaders
     std::unordered_map<GLenum, GLuint> shaders;
     for (auto&& [stage, source]: sources) {
         // Create an empty fragment shader handle
-        GLuint shaderID = glCreateShader(stage);
+        GLuint shaderID = glCreateShader(ShaderTypeFromStage(stage));
 
         // Send the fragment shader source code to GL
         // Note that std::string's .c_str is NULL character terminated.
@@ -111,7 +82,7 @@ static std::optional<GLuint> CompileAndLinkProgram(const std::unordered_map<GLen
             return std::nullopt;
         }
 
-        shaders[stage] = shaderID;
+        shaders[ShaderTypeFromStage(stage)] = shaderID;
     }
 
     // Link Program
@@ -158,38 +129,42 @@ static std::optional<GLuint> CompileAndLinkProgram(const std::unordered_map<GLen
 /////////////////////////////////////////////////////////////////////////////
 // OpenGLGraphicsShader /////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-OpenGLGraphicsShader::OpenGLGraphicsShader(const std::filesystem::path& filepath) : m_FilePath(filepath) {
-    std::string source = Utils::ReadFile(filepath);
-    m_SourceCode = Utils::PreProcess(source);
+OpenGLGraphicsShader::OpenGLGraphicsShader(const std::filesystem::path& filepath)
+    : m_FilePath(filepath), m_Name(filepath.stem().string()) {
+    auto shaderMap = ParseShaderEntryMap(filepath);
+    for (const auto& shaderPair: shaderMap) {
+        ShaderStage stage = shaderPair.first;
+        const auto& shaderFile = shaderPair.second;
+        m_SourceCodes[stage] = Utils::ReadFile(shaderFile);
+    }
 
     // Create Shader
-    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCode, m_FilePath.string());
+    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCodes);
     if (!maybeProgram.has_value()) {
-        IGE_CORE_ERROR("Shader creation failed: {}", m_FilePath.string());
+        IGE_CORE_ERROR("Shader creation failed: {}", m_Name);
         IGE_CORE_ASSERT(false, "shader compilation failure!");
         return;
     }
     m_RendererID = *maybeProgram;
-
-    m_Name = filepath.stem().string();
 }
 
-OpenGLGraphicsShader::OpenGLGraphicsShader(const std::string& name, const std::string& vertexSrc,
-                                           const std::string& fragmentSrc)
-    : m_Name(name) {
-    m_SourceCode[GL_VERTEX_SHADER] = vertexSrc;
-    m_SourceCode[GL_FRAGMENT_SHADER] = fragmentSrc;
+OpenGLGraphicsShader::OpenGLGraphicsShader(const std::string& name, const std::filesystem::path& filepath)
+    : m_FilePath(filepath), m_Name(name) {
+    auto shaderMap = ParseShaderEntryMap(filepath);
+    for (const auto& shaderPair: shaderMap) {
+        ShaderStage stage = shaderPair.first;
+        const auto& shaderFile = shaderPair.second;
+        m_SourceCodes[stage] = Utils::ReadFile(shaderFile);
+    }
 
     // Create Shader
-    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCode, m_FilePath.string());
+    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCodes);
     if (!maybeProgram.has_value()) {
-        IGE_CORE_ERROR("Shader creation failed: {}", m_FilePath.string());
+        IGE_CORE_ERROR("Shader creation failed: {}", m_Name);
         IGE_CORE_ASSERT(false, "shader compilation failure!");
         return;
     }
     m_RendererID = *maybeProgram;
-
-    m_Name = name;
 }
 
 OpenGLGraphicsShader::~OpenGLGraphicsShader() { glDeleteProgram(m_RendererID); }
@@ -203,30 +178,39 @@ const std::string& OpenGLGraphicsShader::GetName() const { return m_Name; }
 /////////////////////////////////////////////////////////////////////////////
 // OpenGLComputeShader //////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-OpenGLComputeShader::OpenGLComputeShader(const std::filesystem::path& filepath) : m_FilePath(filepath) {
-    std::string source = Utils::ReadFile(filepath);
-    m_SourceCode = Utils::PreProcess(source);
+OpenGLComputeShader::OpenGLComputeShader(const std::filesystem::path& filepath) {
+    m_Name = filepath.stem().string();
+
+    auto shaderMap = ParseShaderEntryMap(filepath);
+    for (const auto& shaderPair: shaderMap) {
+        ShaderStage stage = shaderPair.first;
+        const auto& shaderFile = shaderPair.second;
+        m_SourceCodes[stage] = Utils::ReadFile(shaderFile);
+    }
 
     // Create Shader
-    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCode, m_FilePath.string());
+    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCodes);
     if (!maybeProgram.has_value()) {
-        IGE_CORE_ERROR("Shader creation failed: {}", m_FilePath.string());
+        IGE_CORE_ERROR("Shader creation failed: {}", m_Name);
         IGE_CORE_ASSERT(false, "shader compilation failure!");
         return;
     }
     m_RendererID = *maybeProgram;
-
-    // Extract name from filepath
-    m_Name = filepath.stem().string();
 }
 
-OpenGLComputeShader::OpenGLComputeShader(const std::string& name, const std::string& computeSrc) : m_Name(name) {
-    m_SourceCode[GL_COMPUTE_SHADER] = computeSrc;
+OpenGLComputeShader::OpenGLComputeShader(const std::string& name, const std::filesystem::path& filepath)
+    : m_Name(name) {
+    auto shaderMap = ParseShaderEntryMap(filepath);
+    for (const auto& shaderPair: shaderMap) {
+        ShaderStage stage = shaderPair.first;
+        const auto& shaderFile = shaderPair.second;
+        m_SourceCodes[stage] = Utils::ReadFile(shaderFile);
+    }
 
     // Create Shader
-    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCode, m_FilePath.string());
+    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCodes);
     if (!maybeProgram.has_value()) {
-        IGE_CORE_ERROR("Shader creation failed: {}", m_FilePath.string());
+        IGE_CORE_ERROR("Shader creation failed: {}", m_Name);
         IGE_CORE_ASSERT(false, "shader compilation failure!");
         return;
     }

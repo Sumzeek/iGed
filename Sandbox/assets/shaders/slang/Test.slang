@@ -12,7 +12,8 @@ struct VertexOutput {
     float4 v_Position   : SV_Position;
     float3 v_WorldPos   : POSITION;
     float3 v_Normal     : NORMAL;
-    float3x3 v_NormalM : NOR;
+    float2 v_TexCoord   : TEXCOORD;
+    float3x3 v_TBN      : TBN;
 };
 
 [[gl::binding(0)]]
@@ -29,9 +30,6 @@ cbuffer CameraData {
 };
 
 [[gl::binding(2)]]
-Sampler2D u_NormalMap;
-
-[[gl::binding(3)]]
 Sampler2D u_DisplaceMap;
 
 [shader("vertex")]
@@ -41,20 +39,18 @@ VertexOutput vsMain(VertexInput input)
     float3 position = input.a_Position + displacement * input.a_Normal * u_DisplaceMapScale;
 
     // Calculate TBN
-    float3 T = normalize(mul(u_Normal, float4(input.a_Tangent, 0.0f)).xyz);
-    float3 B = normalize(mul(u_Normal, float4(input.a_BiTangent, 0.0f)).xyz);
-    float3 N = normalize(mul(u_Normal, float4(input.a_Normal, 0.0f)).xyz);
-    float3x3 TBN = float3x3(T, B, N);
-
-    // Normal mapping
-    float3 normal = normalize(u_NormalMap.Sample(input.a_TexCoord).xyz);
-    normal = normalize(normal * 2.0f - 1.0f);
-    normal = normalize(mul(TBN, normal));
+    float3 t = normalize(mul(u_Normal, float4(input.a_Tangent, 0.0f)).xyz);
+    float3 b = normalize(mul(u_Normal, float4(input.a_BiTangent, 0.0f)).xyz);
+    float3 n = normalize(mul(u_Normal, float4(input.a_Normal, 0.0f)).xyz);
+    float3x3 tbn = float3x3(t, b, n);
 
     VertexOutput out;
     out.v_Position = mul(u_ProjectionView, mul(u_Transform, float4(position, 1.0f)));
     out.v_WorldPos = mul(u_Transform, float4(position, 1.0f)).xyz;
-    out.v_Normal = normal;
+    out.v_Normal = input.a_Normal;
+    out.v_TexCoord = input.a_TexCoord;
+    out.v_TBN = tbn;
+
     return out;
 }
 
@@ -72,14 +68,17 @@ VertexOutput vsMain(VertexInput input)
 //     float3(1.0f, 0.0f, 0.5f), // Pink
 // };
 
+[[gl::binding(3)]]
+Sampler2D u_NormalMap;
+
 static const float3 ambient = float3(0.4f, 0.4f, 0.4f);
 static const Light light = {
     float3(0.0f, 0.0f, -1.0f),
     float3(1.0f, 1.0f, 1.0f)
 };
 
-[shader("pixel")]
-float4 psMain(VertexOutput input, uint primID : SV_PrimitiveID) : SV_Target
+[shader("fragment")]
+float4 fsMain(VertexOutput input, uint primID : SV_PrimitiveID) : SV_Target
 {
     // float3 color = colors[primID % 11];
     float3 baseColor = float3(1.0f, 1.0f, 1.0f);
@@ -89,7 +88,11 @@ float4 psMain(VertexOutput input, uint primID : SV_PrimitiveID) : SV_Target
     // float3 fdx = ddx(input.v_WorldPos);
     // float3 fdy = ddy(input.v_WorldPos);
     // float3 normal = normalize(cross(fdx, fdy));
-    float3 normal = normalize(input.v_Normal);
+
+    // Normal mapping
+    float3 normal = normalize(u_NormalMap.Sample(input.v_TexCoord).rgb);
+    normal = normalize(normal * 2.0f - 1.0f);
+    normal = normalize(mul(input.v_TBN, normal));
 
     // ambient
     color += ambient * baseColor;

@@ -37,8 +37,8 @@ static const Light light = {
     float3(1.0f, 1.0f, 1.0f)
 };
 
-[shader("pixel")]
-float4 psMain(VertexOutput input) : SV_Target
+[shader("fragment")]
+float4 fsMain(VertexOutput input) : SV_Target
 {
     float3 color = float3(0.0f, 0.0f, 0.0f);
 

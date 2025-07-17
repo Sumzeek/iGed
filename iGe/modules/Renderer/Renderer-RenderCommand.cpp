@@ -29,6 +29,11 @@ void RenderCommand::DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vert
     s_RendererAPI->DrawLines(vertexArray, vertexCount);
 }
 
+void RenderCommand::DrawPatches(const Ref<VertexArray>& vertexArray, uint32_t patchVertexCount, uint32_t indexCount) {
+    s_RendererAPI->DrawPatches(vertexArray, patchVertexCount, indexCount);
+}
+
+
 void RenderCommand::SetLineWidth(float width) { s_RendererAPI->SetLineWidth(width); }
 
 

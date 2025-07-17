@@ -26,7 +26,7 @@ ExampleLayer::ExampleLayer() : Layer{"Example"}, m_Camera{-1.6f, 1.6f, -0.9f, 0.
         auto indexBuffer = iGe::IndexBuffer::Create(indices, 3);
         m_VertexArray->SetIndexBuffer(indexBuffer);
 
-        m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Color.glsl");
+        m_GraphicsShaderLibrary.Load("Color", "assets/shaders/glsl/Color_vs.json");
     }
 
     // Square
@@ -47,7 +47,7 @@ ExampleLayer::ExampleLayer() : Layer{"Example"}, m_Camera{-1.6f, 1.6f, -0.9f, 0.
         auto indexBuffer = iGe::IndexBuffer::Create(indices, 6);
         m_SquareVertexArray->SetIndexBuffer(indexBuffer);
 
-        m_GraphicsShaderLibrary.Load("assets/shaders/glsl/Texture.glsl");
+        m_GraphicsShaderLibrary.Load("Texture", "assets/shaders/glsl/Texture_vs.json");
 
         m_Texture = iGe::Texture2D::Create("assets/textures/Checkerboard.png");
         m_iGameLogoTexture = iGe::Texture2D::Create("assets/textures/iGameLogo.png");

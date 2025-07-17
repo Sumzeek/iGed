@@ -23,8 +23,8 @@ VertexOutput vsMain(VertexInput input)
     return out;
 }
 
-[shader("pixel")]
-float4 psMain(VertexOutput input) : SV_Target
+[shader("fragment")]
+float4 fsMain(VertexOutput input) : SV_Target
 {
     return float4(input.v_Color, 1.0f);
 }

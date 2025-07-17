@@ -19,6 +19,8 @@ public:
 
     static void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0);
     static void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount);
+    static void DrawPatches(const Ref<VertexArray>& vertexArray, uint32_t patchVertexCount = 3,
+                            uint32_t indexCount = 0);
 
     static void SetLineWidth(float width);
 

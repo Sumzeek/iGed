@@ -21,7 +21,7 @@ public:
     static void EndScene();
 
     static void Submit(const Ref<GraphicsShader>& shader, const Ref<VertexArray>& vertexArray,
-                       const glm::mat4& transform = glm::mat4(1.0f));
+                       const glm::mat4& transform = glm::mat4(1.0f), bool tessOption = false);
 
     static RendererAPI::API GetAPI();
 

@@ -67,6 +67,14 @@ void OpenGLRendererAPI::DrawLines(const Ref<VertexArray>& vertexArray, uint32_t 
     glDrawArrays(GL_LINES, 0, vertexCount);
 }
 
+void OpenGLRendererAPI::DrawPatches(const Ref<VertexArray>& vertexArray, uint32_t patchVertexCount,
+                                    uint32_t indexCount) {
+    vertexArray->Bind();
+    glPatchParameteri(GL_PATCH_VERTICES, patchVertexCount);
+    uint32_t count = indexCount ? indexCount : vertexArray->GetIndexBuffer()->GetCount();
+    glDrawElements(GL_PATCHES, count, GL_UNSIGNED_INT, nullptr);
+}
+
 void OpenGLRendererAPI::SetLineWidth(float width) { glLineWidth(width); }
 
 } // namespace iGe
