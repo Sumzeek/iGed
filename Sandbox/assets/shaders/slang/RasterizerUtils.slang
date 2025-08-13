@@ -1,5 +1,8 @@
 module RasterizerUtils;
 
+import Common;
+import BlinnPhong;
+
 /////////////////////////////////////////////////////////////////////////////
 // Triangle /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
@@ -54,6 +57,9 @@ public struct RasterTri {
 
     public bool bIsValid;
     public bool bBackFace;
+
+    public uint PrimitiveID;
+    public float Area;
 };
 
 public float4 CalculateSubpixelCoordinates(Raster raster, float4 pointClip) {
@@ -63,7 +69,7 @@ public float4 CalculateSubpixelCoordinates(Raster raster, float4 pointClip) {
     return subpixel;
 }
 
-public RasterTri SetupTriangle<let bBackFaceCull : bool>(Raster raster, float4 verts[3]) {
+public RasterTri SetupTriangle<let bBackFaceCull : bool>(Raster raster, float4 verts[3], uint primitiveID) {
 	RasterTri Tri;
 	Tri.bIsValid = true;
 	Tri.InvW = float3(verts[0].w, verts[1].w, verts[2].w);
@@ -163,42 +169,62 @@ public RasterTri SetupTriangle<let bBackFaceCull : bool>(Raster raster, float4 v
 	Tri.DepthPlane.z = verts[2].z - verts[0].z;
 	Tri.DepthPlane.yz *= scaleToUnit;
 
+    Tri.PrimitiveID = primitiveID;
+    Tri.Area = Tri.C0 + Tri.C1 + Tri.C2;
+
 	return Tri;
 }
 
 /////////////////////////////////////////////////////////////////////////////
 // Software Rasterizer //////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-uint64_t PackColorDepth(float3 color, float depth) {
+uint64_t PackDepthColor(float depth, float4 color) {
     uint r = (uint)(saturate(color.r) * 255.0);
     uint g = (uint)(saturate(color.g) * 255.0);
     uint b = (uint)(saturate(color.b) * 255.0);
+    uint a = (uint)(saturate(color.a) * 255.0);
 
     uint depthSorted = asuint(saturate(depth)); // reinterpret float as uint
-    uint colorPacked = (r << 16) | (g << 8) | b;
+    uint colorPacked = (r << 24) | (g << 16) | (b << 8) | a;
 
     uint64_t result = (uint64_t(depthSorted) << 32) | uint64_t(colorPacked);
     return result;
 }
 
-// void WritePixel(RWTexture2D<uint64_t> outVisBuffer, uint2 pixelPos, RasterTri tri, float3 c) {
-void WritePixel(RWTexture2D<uint> outDepthBuffer, uint2 pixelPos, RasterTri tri, float3 c) {
-    float3 color = float3(1.0f, 0.0f, 0.0f);
-	float deviceZ = tri.DepthPlane.x + tri.DepthPlane.y * c.y + tri.DepthPlane.z * c.z;
-	uint64_t pixel = PackColorDepth(color, deviceZ);
+uint64_t PackVisBuffer(float depth, uint packed) {
+    uint depthSorted = asuint(saturate(depth));
+    uint64_t result = (uint64_t(depthSorted) << 32) | uint64_t(packed);
+    return result;
+}
 
-    // InterlockedMax(outVisBuffer[pixelPos], pixel);
-    InterlockedMax(outDepthBuffer[pixelPos], asuint(deviceZ));
+// void WritePixel(RWTexture2D<uint> outDepthBuffer, uint2 pixelPos, RasterTri tri, float3 c) {
+// 	float deviceZ = tri.DepthPlane.x + tri.DepthPlane.y * c.y + tri.DepthPlane.z * c.z;
+//     InterlockedMin(outDepthBuffer[pixelPos], asuint(deviceZ));
+// }
+
+static const float3 ambient = float3(0.4f, 0.4f, 0.4f);
+static const Light light = {
+    float3(0.0f, 0.0f, -1.0f),
+    float3(1.0f, 1.0f, 1.0f)
+};
+void WritePixel(RWStructuredBuffer<uint64_t> outPacked64Buffer, uint pixelIndex, RasterTri tri, float3 c) {
+	float deviceZ = tri.DepthPlane.x + tri.DepthPlane.y * c.y + tri.DepthPlane.z * c.z;
+
+	float3 bary = float3(c.x, c.y, c.z) * rcp(tri.Area);
+	uint packed = PackIdBarycentricToUint(tri.PrimitiveID, bary);
+
+	uint64_t pixel = PackVisBuffer(deviceZ, packed);
+    InterlockedMin(outPacked64Buffer[pixelIndex], pixel);
 }
 
 interface IRasterizer {
-    // static void RasterizeTri(RWTexture2D<uint64_t> outVisBuffer, RasterTri tri);
-    static void RasterizeTri(RWTexture2D<uint> outDepthBuffer, RasterTri tri);
+    // static void RasterizeTri(RWTexture2D<uint> outDepthBuffer, RasterTri tri);
+    static void RasterizeTri(RWStructuredBuffer<uint64_t> outPacked64Buffer, RasterTri tri, uint2 screenSize);
 };
 
 public struct Scanline : IRasterizer {
-    // public static void RasterizeTri(RWTexture2D<uint64_t> outVisBuffer, RasterTri tri) {
-    public static void RasterizeTri(RWTexture2D<uint> outDepthBuffer, RasterTri tri) {
+    // public static void RasterizeTri(RWTexture2D<uint> outDepthBuffer, RasterTri tri) {
+    public static void RasterizeTri(RWStructuredBuffer<uint64_t> outPacked64Buffer, RasterTri tri, uint2 screenSize) {
         float cY0 = tri.C0;
         float cY1 = tri.C1;
         float cY2 = tri.C2;
@@ -209,9 +235,9 @@ public struct Scanline : IRasterizer {
 
         int y = tri.MinPixel.y;
         while(true) {
-            if(y >= tri.MaxPixel.y) {
-                break;
-            }
+            // if(y >= tri.MaxPixel.y) {
+            //     break;
+            // }
 
             //float CX0 = CY0 - Edge12.y * (x - MinPixel.x);
             // Edge12.y * (x - MinPixel.x) <= CY0;
@@ -243,13 +269,18 @@ public struct Scanline : IRasterizer {
             // or else artifacts can appear, particularly in VSM near page edges.
             for (float x = x0; x <= x1; x++) {
                 if (min3(cX0, cX1, cX2) >= 0) {
-                    // WritePixel(outVisBuffer, uint2(uint(x), uint(y)), tri, float3(cX0, cX1, cX2));
-                    WritePixel(outDepthBuffer, uint2(uint(x), uint(y)), tri, float3(cX0, cX1, cX2));
+                    // WritePixel(outDepthBuffer, uint2(uint(x), uint(y)), tri, float3(cX0, cX1, cX2));
+                    uint index = uint(y) * screenSize.x + uint(x);
+                    WritePixel(outPacked64Buffer, index, tri, float3(cX0, cX1, cX2));
                 }
 
                 cX0 -= tri.Edge12.y;
                 cX1 -= tri.Edge20.y;
                 cX2 -= tri.Edge01.y;
+            }
+
+            if(y >= tri.MaxPixel.y) {
+                break;
             }
 
             cY0 += tri.Edge12.x;
@@ -258,11 +289,11 @@ public struct Scanline : IRasterizer {
             y++;
         }
     }
-};
+}
 
 public struct EdgeFunction : IRasterizer {
-    // public static void RasterizeTri(RWTexture2D<uint64_t> outVisBuffer, RasterTri tri) {
-    public static void RasterizeTri(RWTexture2D<uint> outDepthBuffer, RasterTri tri) {
+    // public static void RasterizeTri(RWTexture2D<uint> outDepthBuffer, RasterTri tri) {
+    public static void RasterizeTri(RWStructuredBuffer<uint64_t> outPacked64Buffer, RasterTri tri, uint2 screenSize) {
         float cY0 = tri.C0;
         float cY1 = tri.C1;
         float cY2 = tri.C2;
@@ -271,8 +302,9 @@ public struct EdgeFunction : IRasterizer {
         while (true) {
             int x = tri.MinPixel.x;
             if (min3(cY0, cY1, cY2) >= 0) {
-                // WritePixel(outVisBuffer, uint2(uint(x), uint(y)), tri, float3(cY0, cY1, cY2));
-                WritePixel(outDepthBuffer, uint2(uint(x), uint(y)), tri, float3(cY0, cY1, cY2));
+                // WritePixel(outDepthBuffer, uint2(uint(x), uint(y)), tri, float3(cY0, cY1, cY2));
+                uint index = uint(y) * screenSize.x + uint(x);
+                WritePixel(outPacked64Buffer, index, tri, float3(cY0, cY1, cY2));
             }
 
             if (x < tri.MaxPixel.x) {
@@ -283,8 +315,9 @@ public struct EdgeFunction : IRasterizer {
 
                 while (true) {
                     if (min3(cX0, cX1, cX2) >= 0) {
-                        // WritePixel(outVisBuffer, uint2(uint(x), uint(y)), tri, float3(cX0, cX1, cX2));
-                        WritePixel(outDepthBuffer, uint2(uint(x), uint(y)), tri, float3(cX0, cX1, cX2));
+                        // WritePixel(outDepthBuffer, uint2(uint(x), uint(y)), tri, float3(cX0, cX1, cX2));
+                        uint index = uint(y) * screenSize.x + uint(x);
+                        WritePixel(outPacked64Buffer, index, tri, float3(cX0, cX1, cX2));
                     }
 
                     if (x >= tri.MaxPixel.x) {

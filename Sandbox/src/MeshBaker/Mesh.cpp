@@ -1,13 +1,12 @@
 module;
-#include "iGeMacro.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
-module MeshFitting;
+module MeshBaker;
 import :Mesh;
 
-namespace MeshFitting
+namespace MeshBaker
 {
 
 Mesh LoadObjFile(std::string const& path) {
@@ -21,7 +20,7 @@ Mesh LoadObjFile(std::string const& path) {
     // check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
     {
-        IGE_ERROR("Assimp Error: {}", importer.GetErrorString());
+        throw std::runtime_error(std::format("Assimp Error: {}", importer.GetErrorString()));
     }
 
     // assuming the file has only one grid
@@ -41,13 +40,13 @@ Mesh LoadObjFile(std::string const& path) {
         } else {
             vertex.TexCoord = {0.0f, 0.0f};
         }
-        if (aiMesh->HasTangentsAndBitangents()) {
-            vertex.Tangent = {aiMesh->mTangents[v].x, aiMesh->mTangents[v].y, aiMesh->mTangents[v].z};
-            vertex.BiTangent = {aiMesh->mBitangents[v].x, aiMesh->mBitangents[v].y, aiMesh->mBitangents[v].z};
-        } else {
-            vertex.Tangent = {1.0f, 0.0f, 0.0f};
-            vertex.BiTangent = {0.0f, 1.0f, 0.0f};
-        }
+        //if (aiMesh->HasTangentsAndBitangents()) {
+        //    vertex.Tangent = {aiMesh->mTangents[v].x, aiMesh->mTangents[v].y, aiMesh->mTangents[v].z};
+        //    vertex.BiTangent = {aiMesh->mBitangents[v].x, aiMesh->mBitangents[v].y, aiMesh->mBitangents[v].z};
+        //} else {
+        //    vertex.Tangent = {1.0f, 0.0f, 0.0f};
+        //    vertex.BiTangent = {0.0f, 1.0f, 0.0f};
+        //}
 
         vertices.push_back(vertex);
     }
@@ -67,4 +66,4 @@ Mesh LoadObjFile(std::string const& path) {
     return mesh;
 }
 
-} // namespace MeshFitting
+} // namespace MeshBaker

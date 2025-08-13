@@ -44,3 +44,8 @@ if (NOT TARGET stb_image)
     include(stb_image.cmake)
     set_target_properties(stb_image PROPERTIES FOLDER ${third_party_folder}/stb_image)
 endif ()
+
+if (NOT TARGET tinyexr)
+    include(tinyexr.cmake)
+    set_target_properties(tinyexr PROPERTIES FOLDER ${third_party_folder}/tinyexr)
+endif ()

@@ -39,6 +39,8 @@ static GLenum iGeImageFormatToGLInternalFormat(ImageFormat format) {
             return GL_R32UI;
         case ImageFormat::R32F:
             return GL_R32F;
+        case ImageFormat::RG32F:
+            return GL_RG32F;
     }
 
     IGE_CORE_ASSERT(false);
@@ -52,6 +54,8 @@ static GLenum iGeImageFormatToGLType(ImageFormat format) {
         case ImageFormat::R32UI:
             return GL_UNSIGNED_BYTE;
         case ImageFormat::R32F:
+            return GL_FLOAT;
+        case ImageFormat::RG32F:
             return GL_FLOAT;
     }
 

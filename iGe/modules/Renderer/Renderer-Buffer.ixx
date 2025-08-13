@@ -92,7 +92,7 @@ export class IGE_API Buffer {
 public:
     virtual ~Buffer() = default;
 
-    virtual void Bind(uint32_t bindingPoint, BufferType type) = 0;
+    virtual void Bind(uint32_t bindingPoint, BufferType type = BufferType::Uniform) = 0;
     virtual void Unbind() const = 0;
 
     virtual void SetData(const void* data, uint32_t size, uint32_t offset = 0) = 0;

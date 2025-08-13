@@ -10,8 +10,17 @@ struct VertexOutput {
 
 [[gl::binding(0)]]
 cbuffer SceneData {
+    float4x4 u_View;
+    float4x4 u_Projection;
     float4x4 u_ProjectionView;
     float4x4 u_Transform;
+};
+
+[[gl::binding(1)]]
+cbuffer PerFrameData {
+    float3 u_ViewPos;
+    float _padding_u_ViewPos;
+    float4x4 u_Normal;
 };
 
 [shader("vertex")]

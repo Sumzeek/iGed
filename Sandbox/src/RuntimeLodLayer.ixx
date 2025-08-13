@@ -3,7 +3,7 @@ module;
 
 export module iGed.RuntimeLodLayer;
 import iGe;
-import MeshFitting;
+import MeshBaker;
 
 export class RuntimeLodLayer : public iGe::Layer {
 public:
@@ -24,42 +24,48 @@ private:
     void ModelRotation();
     void ViewTranslation();
 
-    void Tessllation();
-    void SoftwareRasterization();
-
     iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
     iGe::ShaderLibrary<iGe::ComputeShader> m_ComputeShaderLibrary;
 
-    // Tesslation
-    struct TessData {
-        glm::uvec2 ScreenSize;
-        std::uint32_t TriSize;
-        std::uint32_t _padding_TriSize;
-    };
-    iGe::Scope<TessData> m_TessData;
-    iGe::Ref<iGe::Buffer> m_TessDataUniform;
-
-    iGe::Ref<iGe::Texture2D> m_DepthBuffer;
-
-    // Model lod
     struct PerFrameData {
         glm::vec3 ViewPos;
-        float DisplaceMapScale;
+        float _padding_ViewPos;
         glm::mat4 NormalMatrix;
     };
     iGe::Scope<PerFrameData> m_PerFrameData;
     iGe::Ref<iGe::Buffer> m_PerFrameDataUniform;
 
-    MeshFitting::Mesh m_Model;
+    // Empty VAO
+    iGe::Ref<iGe::VertexArray> m_EmptyVertexArray;
+
+    // Model
+    MeshBaker::Mesh m_Model;
+    iGe::Ref<iGe::VertexArray> m_ModelVertexArray;
+
+    // Software Tessellation
+    struct TessellatorData {
+        glm::uvec2 ScreenSize;
+        std::uint32_t TriSize;
+        float DisplaceMapScale;
+    };
+    iGe::Scope<TessellatorData> m_TessellatorData;
+    iGe::Ref<iGe::Buffer> m_TessellatorDataUniform;
+    static constexpr std::uint32_t kMaxLodLevel = 4;
     iGe::Ref<iGe::Buffer> m_VertexBuffer;
     iGe::Ref<iGe::Buffer> m_IndexBuffer;
-    iGe::Ref<iGe::Buffer> m_TessFactorBuffer;
     iGe::Ref<iGe::Buffer> m_CounterBuffer;
-    iGe::Ref<iGe::VertexArray> m_ModelVertexArray;
-    iGe::Ref<iGe::Texture2D> m_ModelNormalMap;
+    iGe::Ref<iGe::Buffer> m_SubBufferIn;
+    iGe::Ref<iGe::Buffer> m_SubBufferCounter;
+    iGe::Ref<iGe::Buffer> m_SubBufferOut;
+
+    // Software Rasterization
+    iGe::Ref<iGe::Texture2D> m_DepthBuffer;
+    iGe::Ref<iGe::Buffer> m_Packed64Buffer;
+
+    //iGe::Ref<iGe::Buffer> m_TessFactorBuffer;
     iGe::Ref<iGe::Texture2D> m_ModelDisplaceMap;
-    float m_DisplaceMapScale = 2.99f;
-    //float m_DisplaceMapScale = 0.07281857f;
+    float m_DisplaceMapScale = 1.0f;
+    uint32_t m_TargetTessFactor = 5;
 
     // Camera
     iGe::PerspectiveCamera m_Camera;

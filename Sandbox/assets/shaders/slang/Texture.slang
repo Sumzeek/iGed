@@ -10,6 +10,8 @@ struct VertexOutput {
 
 [[gl::binding(0)]]
 cbuffer SceneData {
+    float4x4 u_View;
+    float4x4 u_Projection;
     float4x4 u_ProjectionView;
     float4x4 u_Transform;
 };

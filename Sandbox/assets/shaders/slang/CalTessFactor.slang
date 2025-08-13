@@ -2,15 +2,24 @@ import TessUtils;
 
 [[gl::binding(0)]]
 cbuffer SceneData {
+    float4x4 u_View;
+    float4x4 u_Projection;
     float4x4 u_ProjectionView;
     float4x4 u_Transform;
 };
 
 [[gl::binding(1)]]
-cbuffer TessData {
+cbuffer PerFrameData {
+    float3 u_ViewPos;
+    float _padding_u_ViewPos;
+    float4x4 u_Normal;
+};
+
+[[gl::binding(2)]]
+cbuffer TessellatorData {
     uint2 u_ScreenSize;
     uint u_TriSize; // Number of coarse triangles
-    uint _padding_u_TriSize;
+    uint u_DisplaceMapScale;
 };
 
 [[gl::binding(10)]]

@@ -1,6 +1,11 @@
 # Set the application name
 set(TARGET_NAME "SandboxApp")
 
+# Find Optix and Cuda
+find_package(CUDAToolkit REQUIRED)
+set(OPTIX_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0")
+set(OPTIX_INCLUDE_DIR "${OPTIX_DIR}/include")
+
 # Add the app executable
 add_executable(${TARGET_NAME} src/SandboxApp.cpp)
 
@@ -17,9 +22,19 @@ target_sources(${TARGET_NAME} PUBLIC ${SOURCES})
 target_link_libraries(${TARGET_NAME} PRIVATE iGe)
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_SCAN_FOR_MODULES 1)
 
+# Add cuda support
+target_include_directories(${TARGET_NAME} PRIVATE
+        ${CUDAToolkit_INCLUDE_DIRS}
+        ${OPTIX_INCLUDE_DIR}
+)
+target_link_libraries(${TARGET_NAME} PRIVATE
+        CUDA::cudart
+        CUDA::cuda_driver
+)
+
 # Add third party denpendency
 add_subdirectory(3rdparty)
-target_link_libraries(${TARGET_NAME} PUBLIC assimp::assimp)
+target_link_libraries(${TARGET_NAME} PRIVATE assimp::assimp)
 
 # Compile shaders
 set(SHADER_COMPILE_TARGET "iGedShaderCompiler")

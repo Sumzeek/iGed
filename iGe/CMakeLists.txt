@@ -22,6 +22,7 @@ target_link_libraries(${TARGET_NAME} PUBLIC glad)
 target_link_libraries(${TARGET_NAME} PUBLIC imgui)
 target_link_libraries(${TARGET_NAME} PUBLIC glm::glm)
 target_link_libraries(${TARGET_NAME} PUBLIC stb_image)
+target_link_libraries(${TARGET_NAME} PUBLIC tinyexr)
 
 # Set export symbols for the library
 target_compile_definitions(${TARGET_NAME} PRIVATE IGE_EXPORT)

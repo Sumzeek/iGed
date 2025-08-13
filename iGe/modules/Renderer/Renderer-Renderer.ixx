@@ -22,11 +22,15 @@ public:
 
     static void Submit(const Ref<GraphicsShader>& shader, const Ref<VertexArray>& vertexArray,
                        const glm::mat4& transform = glm::mat4(1.0f), bool tessOption = false);
+    static void Dispatch(const Ref<ComputeShader>& shader, const glm::uvec3 groupSize,
+                         const glm::mat4& transform = glm::mat4(1.0f));
 
     static RendererAPI::API GetAPI();
 
 private:
     struct SceneData {
+        glm::mat4 ViewMatrix;
+        glm::mat4 ProjectionMatrix;
         glm::mat4 ViewProjectionMatrix;
     };
     static Scope<SceneData> s_SceneData;
