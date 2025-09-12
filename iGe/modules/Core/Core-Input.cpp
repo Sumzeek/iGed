@@ -1,6 +1,3 @@
-module;
-#include "iGeMacro.h"
-
 module iGe.Core;
 import :Input;
 import :WindowsInput;
@@ -12,6 +9,7 @@ namespace iGe
 /////////////////////////////////////////////////////////////////////////////
 #ifdef IGE_PLATFORM_WINDOWS
 Input* Input::s_Instance = new WindowsInput{};
+#else
+Input* Input::s_Instance = new WindowsInput{};
 #endif
-
 } // namespace iGe

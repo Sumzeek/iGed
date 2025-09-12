@@ -2,12 +2,10 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Renderer:GraphicsContext;
-
-import iGe.SmartPointer;
+import iGe.Common;
 
 namespace iGe
 {
-
 export class IGE_API GraphicsContext {
 public:
     virtual ~GraphicsContext() = default;
@@ -17,5 +15,4 @@ public:
 
     static Scope<GraphicsContext> Create(void* window);
 };
-
 } // namespace iGe

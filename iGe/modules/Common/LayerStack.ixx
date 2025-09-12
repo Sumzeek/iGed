@@ -2,36 +2,43 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.LayerStack;
-
-import std;
+import iGe.Types;
 import iGe.Layer;
 
 namespace iGe
 {
-
 export class IGE_API LayerStack {
 public:
-    LayerStack();
-    ~LayerStack();
+    LayerStack() {}
+    ~LayerStack() {
+        for (Layer* layer: m_Layers) { delete layer; }
+    }
 
-    void PushLayer(Layer* layer);
-    void PushOverlay(Layer* overlay);
-    void PopLayer(Layer* layer);
-    void PopOverlay(Layer* overlay);
+    void PushLayer(Layer* layer) {
+        m_Layers.emplace(m_Layers.begin() + m_LayerInsertIndex, layer);
+        m_LayerInsertIndex++;
+    }
 
-    std::vector<Layer*>::iterator begin();
-    std::vector<Layer*>::iterator end();
-    std::vector<Layer*>::reverse_iterator rbegin();
-    std::vector<Layer*>::reverse_iterator rend();
+    void PushOverlay(Layer* overlay) { m_Layers.emplace_back(overlay); }
 
-    std::vector<Layer*>::const_iterator begin() const;
-    std::vector<Layer*>::const_iterator end() const;
-    std::vector<Layer*>::const_reverse_iterator rbegin() const;
-    std::vector<Layer*>::const_reverse_iterator rend() const;
+    void PopLayer(Layer* layer) {
+        auto it = std::find(m_Layers.begin(), m_Layers.end(), layer);
+        if (it != m_Layers.end()) {
+            m_Layers.erase(it);
+            m_LayerInsertIndex--;
+        }
+    }
+
+    void PopOverlay(Layer* overlay) {
+        auto it = std::find(m_Layers.begin(), m_Layers.end(), overlay);
+        if (it != m_Layers.end()) { m_Layers.erase(it); }
+    }
+
+    auto layers() noexcept { return std::views::all(m_Layers); }
+    auto layers() const noexcept { return std::views::all(m_Layers); }
 
 private:
     std::vector<Layer*> m_Layers;
-    unsigned int m_LayerInsertIndex = 0;
+    uint32 m_LayerInsertIndex = 0;
 };
-
 } // namespace iGe

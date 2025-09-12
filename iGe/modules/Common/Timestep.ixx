@@ -2,21 +2,20 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Timestep;
+import iGe.Types;
 
 namespace iGe
 {
-
 export class IGE_API Timestep {
 public:
-    Timestep(float time = 0.0f);
+    Timestep(float32 time = 0.0f) : m_Time(time) {}
 
-    operator float() const;
+    operator float() const { return m_Time; }
 
-    float GetSeconds() const;
-    float GetMilliseconds() const;
+    inline float32 GetSeconds() const { return m_Time; }
+    inline float32 GetMilliseconds() const { return m_Time * 1000.0f; }
 
 private:
-    float m_Time;
+    float32 m_Time;
 };
-
 } // namespace iGe

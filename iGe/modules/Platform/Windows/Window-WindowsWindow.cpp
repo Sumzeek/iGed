@@ -1,24 +1,19 @@
 module;
-#include "iGeMacro.h"
-
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 module iGe.Window;
 import :WindowsWindow;
 
-import iGe.Event;
-
 namespace iGe
 {
 /////////////////////////////////////////////////////////////////////////////
 // WindowsWindow ////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-
 static bool s_GLFWInitialized = false;
 
 static void GLFWErrorCallback(int error_code, const char* description) {
-    IGE_CORE_ERROR("GLFW Error ({0}): {1}", error_code, description);
+    Internal::LogError("GLFW Error ({0}): {1}", error_code, description);
 }
 
 iGeKey GlfwKeyToiGeKey(int keycode);
@@ -32,12 +27,6 @@ void WindowsWindow::OnUpdate() {
     m_Context->SwapBuffers();
 }
 
-unsigned int WindowsWindow::GetWidth() const { return m_Data.Width; }
-
-unsigned int WindowsWindow::GetHeight() const { return m_Data.Height; }
-
-void WindowsWindow::SetEventCallback(const EventCallbackFn& callback) { m_Data.EventCallback = callback; }
-
 void WindowsWindow::SetVSync(bool enable) {
     if (enable) {
         glfwSwapInterval(1);
@@ -47,21 +36,17 @@ void WindowsWindow::SetVSync(bool enable) {
     m_Data.VSync = enable;
 }
 
-bool WindowsWindow::IsVSync() const { return m_Data.VSync; }
-
-void* WindowsWindow::GetNativeWindow() const { return m_Window; }
-
 void WindowsWindow::Init(const iGe::WindowProps& props) {
     m_Data.Title = props.Title;
     m_Data.Width = props.Width;
     m_Data.Height = props.Height;
 
-    IGE_CORE_INFO("Createing window {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
+    Internal::LogInfo("Createing window {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
 
     if (!s_GLFWInitialized) {
         // TODO: glfwTerminate on system shutdown
         int success = glfwInit();
-        IGE_CORE_ASSERT(success, "Could not initialize GLFW!");
+        Internal::Assert(success, "Could not initialize GLFW!");
         glfwSetErrorCallback(GLFWErrorCallback);
 
         s_GLFWInitialized = true;
@@ -81,7 +66,7 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
         data->Width = width;
         data->Height = height;
 
-        WindowResizeEvent event{static_cast<unsigned int>(width), static_cast<unsigned int>(height)};
+        WindowResizeEvent event{static_cast<uint32>(width), static_cast<uint32>(height)};
         data->EventCallback(event);
     });
 
@@ -385,9 +370,8 @@ iGeKey GlfwKeyToiGeKey(int keycode) {
             return iGeKey::GraveAccent;
 
         default:
-            IGE_CORE_WARN("Keycode {} in GLFW is not mapped in iGeKey!", keycode);
+            Internal::LogWarn("Keycode {} in GLFW is not mapped in iGeKey!", keycode);
             return iGeKey::None; // Return None for any unrecognized keys
     }
 }
-
 } // namespace iGe

@@ -1,19 +1,13 @@
 module;
-#include "iGeMacro.h"
-
 #include <glad/gl.h>
 
 module iGe.Renderer;
 import :OpenGLShader;
 
-import iGe.Log;
-
 namespace iGe
 {
-
 namespace Utils
 {
-
 static GLenum ShaderTypeFromStage(const ShaderStage stage) {
     if (stage == ShaderStage::Vertex) { return GL_VERTEX_SHADER; }
     if (stage == ShaderStage::TessellationControl) { return GL_TESS_CONTROL_SHADER; }
@@ -22,10 +16,9 @@ static GLenum ShaderTypeFromStage(const ShaderStage stage) {
     if (stage == ShaderStage::Fragment) { return GL_FRAGMENT_SHADER; }
     if (stage == ShaderStage::Compute) { return GL_COMPUTE_SHADER; }
 
-    IGE_CORE_ASSERT(false, "Unknown shader type!");
+    Internal::Assert(false, "Unknown shader type!");
     return 0;
 }
-
 } // namespace Utils
 
 /////////////////////////////////////////////////////////////////////////////
@@ -69,21 +62,21 @@ std::string OpenGLShader::ReadFile(const std::filesystem::path& filepath) {
     // Check if file exists
     std::error_code ec;
     if (!std::filesystem::exists(filepath, ec)) {
-        IGE_CORE_ERROR("File does not exist: '{0}' (error: {1})", filepath.string(), ec.message());
+        Internal::LogError("File does not exist: '{0}' (error: {1})", filepath.string(), ec.message());
         return {};
     }
 
     // Get the file size
     auto fileSize = std::filesystem::file_size(filepath, ec);
     if (ec) {
-        IGE_CORE_ERROR("Could not get file size: '{0}' (error: {1})", filepath.string(), ec.message());
+        Internal::LogError("Could not get file size: '{0}' (error: {1})", filepath.string(), ec.message());
         return {};
     }
 
     // Read file content
     std::ifstream file(filepath, std::ios::binary);
     if (!file) {
-        IGE_CORE_ERROR("Could not open file: '{0}'", filepath.string());
+        Internal::LogError("Could not open file: '{0}'", filepath.string());
         return {};
     }
 
@@ -92,7 +85,7 @@ std::string OpenGLShader::ReadFile(const std::filesystem::path& filepath) {
     file.read(content.data(), fileSize);
 
     if (!file) {
-        IGE_CORE_ERROR("Could not read file: '{0}'", filepath.string());
+        Internal::LogError("Could not read file: '{0}'", filepath.string());
         return {};
     }
 
@@ -130,8 +123,8 @@ void OpenGLShader::Compile(std::unordered_map<ShaderStage, std::string> shaderSo
             for (auto& [_, id]: m_Shaders) { glDeleteShader(id); }
 
             m_Shaders.clear();
-            IGE_CORE_ERROR("{0}", infoLog.data());
-            IGE_CORE_ASSERT(false, "Fragment shader compilation failure!");
+            Internal::LogError("{0}", infoLog.data());
+            Internal::Assert(false, "Fragment shader compilation failure!");
             return;
         }
 
@@ -166,7 +159,7 @@ void OpenGLShader::CreateProgram() {
         // The maxLength includes the NULL character
         std::vector<GLchar> infoLog(maxLength);
         glGetProgramInfoLog(program, maxLength, &maxLength, infoLog.data());
-        IGE_CORE_ERROR("Shader linking failed ({0}):\n{1}", m_Name, infoLog.data());
+        Internal::LogError("Shader linking failed ({0}):\n{1}", m_Name, infoLog.data());
 
         // We don't need the program anymore
         glDeleteProgram(program);
@@ -183,5 +176,4 @@ void OpenGLShader::CreateProgram() {
 
     m_RendererID = program;
 }
-
 } // namespace iGe

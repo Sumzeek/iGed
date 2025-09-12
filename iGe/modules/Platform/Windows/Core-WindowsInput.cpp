@@ -1,13 +1,10 @@
 module;
-#include "iGeMacro.h"
-
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 module iGe.Core;
 import :WindowsInput;
-
-import std;
+import iGe.Common;
 
 namespace iGe
 {
@@ -240,7 +237,7 @@ static int iGeKeyToGlfwKey(iGeKey keycode) {
             return GLFW_KEY_GRAVE_ACCENT;
 
         default:
-            IGE_CORE_WARN("iGeKey {} is not mapped in GLFW!", keycode);
+            Internal::LogWarn("iGeKey {} is not mapped in GLFW!", keycode);
             return -1; // Return invalid GLFW key
     }
 }
@@ -260,11 +257,11 @@ bool WindowsInput::IsMouseButtonPressedImpl(iGeKey button) {
     return state == GLFW_PRESS;
 }
 
-std::pair<float, float> WindowsInput::GetMousePositionImpl() {
+std::pair<float32, float32> WindowsInput::GetMousePositionImpl() {
     auto window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
-    return {(float) xpos, (float) ypos};
+    return {static_cast<float32>(xpos), static_cast<float32>(ypos)};
 }
 
 float WindowsInput::GetMouseXImpl() {
@@ -278,5 +275,4 @@ float WindowsInput::GetMouseYImpl() {
     auto [x, y] = GetMousePosition();
     return y;
 }
-
 } // namespace iGe

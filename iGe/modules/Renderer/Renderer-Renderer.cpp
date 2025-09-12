@@ -1,11 +1,6 @@
-module;
-#include "iGeMacro.h"
-
 module iGe.Renderer;
 import :Renderer;
 import :RenderCommand;
-
-import iGe.Log;
 
 namespace iGe
 {
@@ -24,7 +19,7 @@ void Renderer::Init() {
 
 void Renderer::Shutdown() {}
 
-void Renderer::OnWindowResize(uint32_t width, uint32_t height) { RenderCommand::SetViewport(0, 0, width, height); }
+void Renderer::OnWindowResize(uint32 width, uint32 height) { RenderCommand::SetViewport(0, 0, width, height); }
 
 void Renderer::BeginScene(OrthographicCamera& camera) {
     s_SceneData->ViewProjectionMatrix = camera.GetViewProjectionMatrix();
@@ -42,7 +37,4 @@ void Renderer::Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexA
     vertexArray->Bind();
     RenderCommand::DrawIndexed(vertexArray);
 }
-
-RendererAPI::API Renderer::GetAPI() { return RendererAPI::GetAPI(); }
-
 } // namespace iGe

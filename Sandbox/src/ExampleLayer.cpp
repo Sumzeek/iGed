@@ -1,6 +1,4 @@
 module;
-#include "iGeMacro.h"
-
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 
@@ -16,15 +14,15 @@ ExampleLayer::ExampleLayer() : Layer{"Example"}, m_Camera{-1.6f, 1.6f, -0.9f, 0.
     {
         m_VertexArray = iGe::VertexArray::Create();
 
-        float vertices[3 * 3 * 2] = {-0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.5f, -0.5f, 0.0f,
-                                     0.0f,  1.0f,  0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f,  1.0f};
+        float32 vertices[3 * 3 * 2] = {-0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.5f, -0.5f, 0.0f,
+                                       0.0f,  1.0f,  0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f,  1.0f};
         auto vertexBuffer = iGe::VertexBuffer::Create(vertices, sizeof(vertices));
         iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
                                     {iGe::ShaderDataType::Float3, "a_Color"}};
         vertexBuffer->SetLayout(layout);
         m_VertexArray->AddVertexBuffer(vertexBuffer);
 
-        uint32_t indices[3] = {0, 1, 2};
+        uint32 indices[3] = {0, 1, 2};
         auto indexBuffer = iGe::IndexBuffer::Create(indices, 3);
         m_VertexArray->SetIndexBuffer(indexBuffer);
 
@@ -35,7 +33,7 @@ ExampleLayer::ExampleLayer() : Layer{"Example"}, m_Camera{-1.6f, 1.6f, -0.9f, 0.
     {
         m_SquareVertexArray = iGe::VertexArray::Create();
 
-        float vertices[4 * 5] = {
+        float32 vertices[4 * 5] = {
                 -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, -0.5f, 0.5f,  0.0f, 0.0f, 1.0f,
                 0.5f,  0.5f,  0.0f, 1.0f, 1.0f, 0.5f,  -0.5f, 0.0f, 1.0f, 0.0f,
         };
@@ -45,7 +43,7 @@ ExampleLayer::ExampleLayer() : Layer{"Example"}, m_Camera{-1.6f, 1.6f, -0.9f, 0.
         vertexBuffer->SetLayout(layout);
         m_SquareVertexArray->AddVertexBuffer(vertexBuffer);
 
-        uint32_t indices[6] = {0, 1, 2, 2, 3, 0};
+        uint32 indices[6] = {0, 1, 2, 2, 3, 0};
         auto indexBuffer = iGe::IndexBuffer::Create(indices, 6);
         m_SquareVertexArray->SetIndexBuffer(indexBuffer);
 
@@ -87,7 +85,7 @@ void ExampleLayer::OnUpdate(iGe::Timestep ts) {
 
     static auto startTime = std::chrono::high_resolution_clock::now();
     auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+    float32 time = std::chrono::duration<float32, std::chrono::seconds::period>(currentTime - startTime).count();
     glm::mat4 model = glm::gtc::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
     iGe::Renderer::BeginScene(m_Camera);

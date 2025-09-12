@@ -23,15 +23,19 @@ target_link_libraries(${TARGET_NAME} PUBLIC imgui)
 target_link_libraries(${TARGET_NAME} PUBLIC glm::glm)
 target_link_libraries(${TARGET_NAME} PUBLIC stb_image)
 
-# Set export symbols for the library
-target_compile_definitions(${TARGET_NAME} PRIVATE IGE_EXPORT)
-
 # set platform symbol
 if (WIN32)
     target_compile_definitions(${TARGET_NAME} PUBLIC IGE_PLATFORM_WINDOWS)
+elseif (APPLE)
+    target_compile_definitions(${TARGET_NAME} PUBLIC IGE_PLATFORM_MACOS)
+elseif (UNIX)
+    target_compile_definitions(${TARGET_NAME} PUBLIC IGE_PLATFORM_LINUX)
 else ()
-    message(FATAL_ERROR "Unknown Platform: iGe only supports Windows!")
+    message(FATAL_ERROR "Unknown Platform: iGe does not support this platform yet!")
 endif ()
+
+# Set export symbols for the library
+target_compile_definitions(${TARGET_NAME} PRIVATE IGE_EXPORT)
 
 # Add IGE_DEBUG in Debug mode
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -39,6 +43,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif ()
 
 # Set include directories
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules) # Use for iGeMacro.h
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Set output directories for the library

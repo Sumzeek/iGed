@@ -2,13 +2,10 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Renderer:Buffer;
-
-import std;
-import iGe.SmartPointer;
+import iGe.Common;
 
 namespace iGe
 {
-
 export enum class ShaderDataType : int {
     None = 0,
     Float,
@@ -27,15 +24,14 @@ export enum class ShaderDataType : int {
 export struct IGE_API BufferElement {
     std::string Name;
     ShaderDataType Type;
-    std::uint32_t Size;
-    size_t Offset;
+    uint32 Size;
+    uint64 Offset;
     bool Normalized;
 
     BufferElement() = default;
 
     BufferElement(ShaderDataType type, const std::string& name, bool normalized = false);
-
-    std::uint32_t GetComponentCount() const;
+    uint32 GetComponentCount() const;
 };
 
 export class IGE_API BufferLayout {
@@ -43,7 +39,7 @@ public:
     BufferLayout();
     BufferLayout(std::initializer_list<BufferElement> elements);
 
-    std::uint32_t GetStride() const;
+    uint32 GetStride() const;
     const std::vector<BufferElement>& GetElements() const;
 
     std::vector<BufferElement>::iterator begin();
@@ -55,7 +51,7 @@ private:
     void CalculateOffsetsAndStride();
 
     std::vector<BufferElement> m_Elements;
-    std::uint32_t m_Stride = 0;
+    uint32 m_Stride = 0;
 };
 
 export class IGE_API VertexBuffer {
@@ -65,13 +61,11 @@ public:
     virtual void Bind() const = 0;
     virtual void Unbind() const = 0;
 
-    //virtual void SetData(const void* data, uint32_t size) = 0;
-
     virtual void SetLayout(const BufferLayout& layout) = 0;
     virtual const BufferLayout& GetLayout() const = 0;
 
-    //static Ref<VertexBuffer> Create(std::uint32_t size);
-    static Ref<VertexBuffer> Create(float* vertices, std::uint32_t size);
+    //static Ref<VertexBuffer> Create(uint32 size);
+    static Ref<VertexBuffer> Create(float32* vertices, uint32 size);
 };
 
 // Currently IGE only supports 32-bit index buffers
@@ -82,21 +76,20 @@ public:
     virtual void Bind() const = 0;
     virtual void Unbind() const = 0;
 
-    virtual std::uint32_t GetCount() const = 0;
+    virtual uint32 GetCount() const = 0;
 
-    static Ref<IndexBuffer> Create(std::uint32_t* indices, std::uint32_t count);
+    static Ref<IndexBuffer> Create(uint32* indices, uint32 count);
 };
 
 export class IGE_API UniformBuffer {
 public:
     virtual ~UniformBuffer() = default;
 
-    virtual void Bind(uint32_t bindingPoint) const = 0;
+    virtual void Bind(uint32 bindingPoint) const = 0;
     virtual void Unbind() const = 0;
 
-    virtual void SetData(const void* data, uint32_t size, uint32_t offset = 0) = 0;
+    virtual void SetData(const void* data, uint32 size, uint32 offset = 0) = 0;
 
-    static Ref<UniformBuffer> Create(const void* data, uint32_t size);
+    static Ref<UniformBuffer> Create(const void* data, uint32 size);
 };
-
 } // namespace iGe

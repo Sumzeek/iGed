@@ -2,10 +2,9 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Event:KeyCodes;
+import :Event;
 
-import std;
-
-export enum class iGeKey : int {
+export enum class iGeKey : int32 {
     None = -1,
 
     // Mouse Buttons
@@ -129,7 +128,7 @@ export enum class iGeKey : int {
     GraveAccent,  // ` (Grave Accent / Tilde)
 };
 
-export enum class iGeMouseButton : int { Left = 0, Right, Middle, Button4, Button5 };
+export enum class iGeMouseButton : int32 { Left = 0, Right, Middle, Button4, Button5 };
 
 export template<>
 struct std::formatter<iGeKey> {

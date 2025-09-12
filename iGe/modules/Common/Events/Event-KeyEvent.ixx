@@ -5,36 +5,34 @@ export module iGe.Event:KeyEvent;
 import :Event;
 import :KeyCodes;
 
-import std;
-
 namespace iGe
 {
-
 class IGE_API KeyEvent : public Event {
 public:
-    inline iGeKey GetKeyCode() const;
+    inline iGeKey GetKeyCode() const { return m_KeyCode; }
 
-    //EVENT_CLASS_CATEGORY(EventCategoryInput | EventCategoryKeyboard)
-    virtual int GetCategoryFlags() const override;
+    inline virtual uint32 GetCategoryFlags() const override { return EventCategoryInput | EventCategoryKeyboard; }
 
 protected:
-    KeyEvent(iGeKey keycode);
+    KeyEvent(iGeKey keycode) : m_KeyCode{keycode} {}
 
     iGeKey m_KeyCode;
 };
 
 export class IGE_API KeyPressedEvent : public KeyEvent {
 public:
-    KeyPressedEvent(iGeKey keycode, int repeatCount);
+    KeyPressedEvent(iGeKey keycode, int repeatCount) : KeyEvent{keycode}, m_RepeatCount{repeatCount} {}
 
-    inline int GetRepeatCount() const;
+    inline int32 GetRepeatCount() const { return m_RepeatCount; }
 
-    std::string ToString() const override;
+    inline std::string ToString() const override {
+        return std::format("KeyPressedEvent: {0} ({1})", m_KeyCode, m_RepeatCount);
+    }
 
     //EVENT_CLASS_TYPE(KeyPressed)
-    static EventType GetStaticType();
-    virtual EventType GetEventType() const override;
-    virtual const char* GetName() const override;
+    inline static EventType GetStaticType() { return EventType::KeyPressed; }
+    inline virtual EventType GetEventType() const override { return GetStaticType(); }
+    inline virtual const char* GetName() const override { return "KeyPressed"; }
 
 private:
     int m_RepeatCount;
@@ -42,34 +40,30 @@ private:
 
 export class IGE_API KeyReleasedEvent : public KeyEvent {
 public:
-    KeyReleasedEvent(iGeKey keycode);
+    KeyReleasedEvent(iGeKey keycode) : KeyEvent{keycode} {}
 
-    std::string ToString() const override;
-
-    //EVENT_CLASS_TYPE(KeyReleased)
-    static EventType GetStaticType();
-    virtual EventType GetEventType() const override;
-    virtual const char* GetName() const override;
+    inline std::string ToString() const override { return std::format("KeyReleasedEvent: {0}", m_KeyCode); }
+    inline static EventType GetStaticType() { return EventType::KeyReleased; }
+    inline virtual EventType GetEventType() const override { return GetStaticType(); }
+    inline virtual const char* GetName() const override { return "KeyReleased"; }
 };
 
 export class IGE_API KeyTypedEvent : public Event {
 public:
-    KeyTypedEvent(unsigned int codepoint);
+    KeyTypedEvent(uint32 codepoint) : m_CodePoint{codepoint} {}
 
-    inline unsigned int GetCodePoint() const;
+    inline uint32 GetCodePoint() const { return m_CodePoint; }
 
-    std::string ToString() const override;
+    inline std::string ToString() const override {
+        return std::format("KeyTypedEvent: '{}'", std::string(1, static_cast<char32_t>(m_CodePoint)));
+    }
 
-    //EVENT_CLASS_TYPE(KeyReleased)
-    static EventType GetStaticType();
-    virtual EventType GetEventType() const override;
-    virtual const char* GetName() const override;
-
-    //EVENT_CLASS_CATEGORY(EventCategoryInput | EventCategoryKeyboard)
-    virtual int GetCategoryFlags() const override;
+    inline static EventType GetStaticType() { return EventType::KeyTyped; }
+    inline virtual EventType GetEventType() const override { return GetStaticType(); }
+    inline virtual const char* GetName() const override { return "KeyTyped"; }
+    inline virtual uint32 GetCategoryFlags() const override { return EventCategoryInput | EventCategoryKeyboard; }
 
 private:
-    unsigned int m_CodePoint; // Unicode Point
+    uint32 m_CodePoint; // Unicode Point
 };
-
 } // namespace iGe

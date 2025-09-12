@@ -6,16 +6,11 @@ module;
 
 export module iGe.Window:WindowsWindow;
 import :Window;
-
-import std;
-import iGe.Event;
-import iGe.Log;
+import iGe.Common;
 import iGe.Renderer;
-import iGe.SmartPointer;
 
 namespace iGe
 {
-
 export class IGE_API WindowsWindow : public Window {
 public:
     WindowsWindow(const WindowProps& props);
@@ -23,15 +18,15 @@ public:
 
     void OnUpdate() override;
 
-    virtual unsigned int GetWidth() const override;
-    virtual unsigned int GetHeight() const override;
+    inline virtual uint32 GetWidth() const override { return m_Data.Width; }
+    inline virtual uint32 GetHeight() const override { return m_Data.Height; }
 
     // Window attributes
-    virtual void SetEventCallback(const EventCallbackFn& callback) override;
+    inline virtual void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
     virtual void SetVSync(bool enable) override;
-    virtual bool IsVSync() const override;
+    inline virtual bool IsVSync() const override { return m_Data.VSync; }
 
-    virtual void* GetNativeWindow() const override;
+    inline virtual void* GetNativeWindow() const override { return m_Window; }
 
 private:
     virtual void Init(const WindowProps& props);
@@ -39,8 +34,8 @@ private:
 
     struct WindowData {
         std::string Title;
-        unsigned int Width;
-        unsigned int Height;
+        uint32 Width;
+        uint32 Height;
         bool VSync;
 
         EventCallbackFn EventCallback;
@@ -50,5 +45,4 @@ private:
     Scope<GraphicsContext> m_Context;
     WindowData m_Data;
 };
-
 } // namespace iGe

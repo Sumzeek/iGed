@@ -1,5 +1,4 @@
 module;
-#include "iGeMacro.h"
 #include <glad/gl.h>
 #include <stb_image.h>
 
@@ -7,14 +6,10 @@ module iGe.Renderer;
 import :Texture;
 import :OpenGLTexture;
 
-import iGe.Log;
-
 namespace iGe
 {
-
 namespace Utils
 {
-
 static GLenum iGeImageFormatToGLDataFormat(ImageFormat format) {
     switch (format) {
         case ImageFormat::RGB8:
@@ -23,7 +18,7 @@ static GLenum iGeImageFormatToGLDataFormat(ImageFormat format) {
             return GL_RGBA;
     }
 
-    IGE_CORE_ASSERT(false);
+    Internal::Assert(false);
     return 0;
 }
 
@@ -35,10 +30,9 @@ static GLenum iGeImageFormatToGLInternalFormat(ImageFormat format) {
             return GL_RGBA8;
     }
 
-    IGE_CORE_ASSERT(false);
+    Internal::Assert(false);
     return 0;
 }
-
 } // namespace Utils
 
 /////////////////////////////////////////////////////////////////////////////
@@ -86,7 +80,7 @@ OpenGLTexture2D::OpenGLTexture2D(const std::string& path) : m_Path(path) {
         m_InternalFormat = internalFormat;
         m_DataFormat = dataFormat;
 
-        IGE_CORE_ASSERT(internalFormat & dataFormat, "Format not supported!");
+        Internal::Assert(internalFormat & dataFormat, "Format not supported!");
 
         glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
         glTextureStorage2D(m_RendererID, 1, internalFormat, m_Width, m_Height);
@@ -101,7 +95,7 @@ OpenGLTexture2D::OpenGLTexture2D(const std::string& path) : m_Path(path) {
 
         stbi_image_free(data);
     } else {
-        IGE_CORE_WARN("Failed to load image from path: {0}", path);
+        Internal::LogWarn("Failed to load image from path: {0}", path);
     }
 }
 
@@ -109,24 +103,23 @@ OpenGLTexture2D::~OpenGLTexture2D() { glDeleteTextures(1, &m_RendererID); }
 
 const TextureSpecification& OpenGLTexture2D::GetSpecification() const { return m_Specification; }
 
-uint32_t OpenGLTexture2D::GetWidth() const { return m_Width; }
+uint32 OpenGLTexture2D::GetWidth() const { return m_Width; }
 
-uint32_t OpenGLTexture2D::GetHeight() const { return m_Height; }
+uint32 OpenGLTexture2D::GetHeight() const { return m_Height; }
 
-uint32_t OpenGLTexture2D::GetRendererID() const { return m_RendererID; }
+uint32 OpenGLTexture2D::GetRendererID() const { return m_RendererID; }
 
 const std::string& OpenGLTexture2D::GetPath() const { return m_Path; }
 
-void OpenGLTexture2D::SetData(void* data, uint32_t size) {
-    uint32_t bpp = m_DataFormat == GL_RGBA ? 4 : 3;
-    IGE_CORE_ASSERT(size == m_Width * m_Height * bpp, "Data must be entire texture!");
+void OpenGLTexture2D::SetData(void* data, uint32 size) {
+    uint32 bpp = m_DataFormat == GL_RGBA ? 4 : 3;
+    Internal::Assert(size == m_Width * m_Height * bpp, "Data must be entire texture!");
     glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, m_DataFormat, GL_UNSIGNED_BYTE, data);
 }
 
-void OpenGLTexture2D::Bind(uint32_t slot) const { glBindTextureUnit(slot, m_RendererID); }
+void OpenGLTexture2D::Bind(uint32 slot) const { glBindTextureUnit(slot, m_RendererID); }
 
 bool OpenGLTexture2D::IsLoaded() const { return m_IsLoaded; }
 
 bool OpenGLTexture2D::operator==(const Texture& other) const { return m_RendererID == other.GetRendererID(); }
-
 } // namespace iGe

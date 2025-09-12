@@ -1,7 +1,5 @@
 #pragma once
 
-#include "iGeMacro.h"
-
 import std;
 import iGe;
 

@@ -1,14 +1,5 @@
-module;
-#include "iGeMacro.h"
-
 module iGe.Core;
 import :Application;
-
-import std;
-import iGe.Layer;
-import iGe.Log;
-import iGe.Event;
-import iGe.Timestep;
 import iGe.Renderer;
 
 namespace iGe
@@ -16,15 +7,14 @@ namespace iGe
 /////////////////////////////////////////////////////////////////////////////
 // Application //////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-
 Application* Application::s_Instance = nullptr;
 
 Application::Application(const ApplicationSpecification& specification) : m_Specification{specification} {
-    IGE_CORE_ASSERT(!s_Instance, "Application already exists!");
+    Internal::Assert(!s_Instance, "Application already exists!");
     s_Instance = this;
 
     m_Window = std::unique_ptr<Window>(Window::Create());
-    m_Window->SetEventCallback(IGE_BIND_EVENT_FN(Application::OnEvent));
+    m_Window->SetEventCallback(std::bind(&Application::OnEvent, this, std::placeholders::_1));
 
     Renderer::Init();
 
@@ -38,15 +28,15 @@ void Application::Run() {
     while (m_Running) {
         static auto startTime = std::chrono::high_resolution_clock::now();
         auto currentTime = std::chrono::high_resolution_clock::now();
-        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+        float32 time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
         Timestep timestep{time - m_LastTime};
         m_LastTime = time;
 
-        for (Layer* layer: m_LayerStack) { layer->OnUpdate(timestep); }
+        for (Layer* layer: m_LayerStack.layers()) { layer->OnUpdate(timestep); }
 
         m_ImGuiLayer->Begin();
-        for (Layer* layer: m_LayerStack) { layer->OnImGuiRender(); }
+        for (Layer* layer: m_LayerStack.layers()) { layer->OnImGuiRender(); }
         m_ImGuiLayer->End();
 
         m_Window->OnUpdate();
@@ -55,11 +45,11 @@ void Application::Run() {
 
 void Application::OnEvent(Event& e) {
     EventDispatcher dispatcher(e);
-    dispatcher.Dispatch<WindowCloseEvent>(IGE_BIND_EVENT_FN(Application::OnWindowClose));
+    dispatcher.Dispatch<WindowCloseEvent>(std::bind(&Application::OnWindowClose, this, std::placeholders::_1));
 
-    for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it) {
-        if (e.m_Handled) { break; }
-        (*it)->OnEvent(e);
+    for (Layer* layer: m_LayerStack.layers() | std::views::reverse) {
+        if (e.m_Handled) break;
+        layer->OnEvent(e);
     }
 }
 
@@ -77,11 +67,4 @@ void Application::PushOverlay(Layer* layer) {
     m_LayerStack.PushOverlay(layer);
     layer->OnAttach();
 }
-
-Window& Application::GetWindow() { return *m_Window; }
-
-Application& Application::Get() { return *s_Instance; }
-
-const ApplicationSpecification& Application::GetSpecification() const { return m_Specification; }
-
 } // namespace iGe

@@ -9,7 +9,6 @@ import :GraphicsContext;
 
 namespace iGe
 {
-
 export class IGE_API OpenGLContext : public GraphicsContext {
 public:
     OpenGLContext(GLFWwindow* windowHandle);
@@ -20,5 +19,4 @@ public:
 private:
     GLFWwindow* m_WindowHandle;
 };
-
 } // namespace iGe

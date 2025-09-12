@@ -3,12 +3,10 @@ module;
 
 export module iGe.Renderer:VertexArray;
 import :Buffer;
-
-import iGe.SmartPointer;
+import iGe.Common;
 
 namespace iGe
 {
-
 export class IGE_API VertexArray {
 public:
     virtual ~VertexArray() = default;
@@ -24,5 +22,4 @@ public:
 
     static Ref<VertexArray> Create();
 };
-
 } // namespace iGe

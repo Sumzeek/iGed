@@ -2,26 +2,19 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Core:Application;
-
-import std;
-import iGe.Layer;
-import iGe.Log;
-import iGe.LayerStack;
-import iGe.Event;
+import iGe.Common;
 import iGe.Window;
-import iGe.SmartPointer;
 
 int main(int argc, char** argv);
 
 namespace iGe
 {
-
 export struct ApplicationCommandLineArgs {
-    int Count = 0;
+    int32 Count = 0;
     char** Args = nullptr;
 
-    const char* operator[](int index) const {
-        IGE_CORE_ASSERT(index < Count);
+    const char* operator[](int32 index) const {
+        Internal::Assert(index < Count);
         return Args[index];
     }
 };
@@ -46,9 +39,9 @@ public:
     void PushLayer(Layer* layer);
     void PushOverlay(Layer* layer);
 
-    inline Window& GetWindow();
-    static inline Application& Get();
-    const ApplicationSpecification& GetSpecification() const;
+    inline Window& GetWindow() { return *m_Window; }
+    inline static Application& Get() { return *s_Instance; }
+    inline const ApplicationSpecification& GetSpecification() const { return m_Specification; }
 
 private:
     static Application* s_Instance;
@@ -58,11 +51,10 @@ private:
     ImGuiLayer* m_ImGuiLayer;
     bool m_Running = true;
     LayerStack m_LayerStack;
-    float m_LastTime = 0.0f;
+    float32 m_LastTime = 0.0f;
 };
 
 // ----------------- Application::Implementation -----------------
 // To be defined in CLIENT
 export IGE_API Application* CreateApplication(ApplicationCommandLineArgs args);
-
 } // namespace iGe

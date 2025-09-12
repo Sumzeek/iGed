@@ -5,61 +5,53 @@ export module iGe.Event:MouseEvent;
 import :Event;
 import :KeyCodes;
 
-import std;
-
 namespace iGe
 {
-
 export class IGE_API MouseMoveEvent : public Event {
 public:
-    MouseMoveEvent(float x, float y);
+    MouseMoveEvent(float32 x, float32 y) : m_MouseX{x}, m_MouseY{y} {}
 
-    inline float GetX() const;
-    inline float GetY() const;
+    inline float32 GetX() const { return m_MouseX; }
+    inline float32 GetY() const { return m_MouseY; }
 
-    std::string ToString() const override;
+    inline std::string ToString() const override { return std::format("MouseMoveEvent: {0}, {1}", m_MouseX, m_MouseY); }
 
-    //EVENT_CLASS_TYPE(MouseMoved)
-    static EventType GetStaticType();
-    virtual EventType GetEventType() const override;
-    virtual const char* GetName() const override;
-
-    //EVENT_CLASS_CATEGORY(EventCategoryInput | EventCategoryMouse)
-    virtual int GetCategoryFlags() const override;
+    inline static EventType GetStaticType() { return EventType::MouseMoved; }
+    inline virtual EventType GetEventType() const override { return GetStaticType(); }
+    inline virtual const char* GetName() const override { return "MouseMoved"; }
+    inline virtual uint32 GetCategoryFlags() const override { return EventCategoryInput | EventCategoryMouse; }
 
 private:
-    float m_MouseX, m_MouseY;
+    float32 m_MouseX, m_MouseY;
 };
 
 export class IGE_API MouseScrolledEvent : public Event {
 public:
-    MouseScrolledEvent(float xOffset, float yOffset);
+    MouseScrolledEvent(float32 xOffset, float32 yOffset) : m_XOffset{xOffset}, m_YOffset{yOffset} {}
 
-    inline float GetXOffset() const;
-    inline float GetYOffset() const;
+    inline float32 GetXOffset() const { return m_XOffset; }
+    inline float32 GetYOffset() const { return m_YOffset; }
 
-    std::string ToString() const override;
+    inline std::string ToString() const override {
+        return std::format("MouseScrolledEvent: {0}, {1}", m_XOffset, m_YOffset);
+    }
 
-    //EVENT_CLASS_TYPE(MouseScrolled)
-    static EventType GetStaticType();
-    virtual EventType GetEventType() const override;
-    virtual const char* GetName() const override;
-
-    //EVENT_CLASS_CATEGORY(EventCategoryInput | EventCategoryMouse)
-    virtual int GetCategoryFlags() const override;
+    inline static EventType GetStaticType() { return EventType::MouseScrolled; }
+    inline virtual EventType GetEventType() const override { return GetStaticType(); }
+    inline virtual const char* GetName() const override { return "MouseScrolled"; }
+    inline virtual uint32 GetCategoryFlags() const override { return EventCategoryInput | EventCategoryMouse; }
 
 private:
-    float m_XOffset, m_YOffset;
+    float32 m_XOffset, m_YOffset;
 };
 
 class IGE_API MouseButtonEvent : public Event {
 public:
-    MouseButtonEvent(iGeKey button);
+    MouseButtonEvent(iGeKey button) : m_Button{button} {}
 
-    inline iGeKey GetMouseButton() const;
+    inline iGeKey GetMouseButton() const { return m_Button; }
 
-    //EVENT_CLASS_CATEGORY(EventCategoryInput | EventCategoryMouse)
-    virtual int GetCategoryFlags() const override;
+    inline virtual uint32 GetCategoryFlags() const override { return EventCategoryInput | EventCategoryMouseButton; }
 
 protected:
     iGeKey m_Button;
@@ -67,26 +59,23 @@ protected:
 
 export class IGE_API MouseButtonPressedEvent : public MouseButtonEvent {
 public:
-    MouseButtonPressedEvent(iGeKey button);
+    MouseButtonPressedEvent(iGeKey button) : MouseButtonEvent{button} {}
 
-    std::string ToString() const override;
+    inline std::string ToString() const override { return std::format("MousePressedEvent: {0}", m_Button); }
 
-    //EVENT_CLASS_TYPE(MouseButtonPressed)
-    static EventType GetStaticType();
-    virtual EventType GetEventType() const override;
-    virtual const char* GetName() const override;
+    inline static EventType GetStaticType() { return EventType::MouseButtonPressed; }
+    inline virtual EventType GetEventType() const override { return GetStaticType(); }
+    inline virtual const char* GetName() const override { return "MouseButtonPressed"; }
 };
 
 export class IGE_API MouseButtonReleasedEvent : public MouseButtonEvent {
 public:
-    MouseButtonReleasedEvent(iGeKey button);
+    MouseButtonReleasedEvent(iGeKey button) : MouseButtonEvent{button} {}
 
-    std::string ToString() const override;
+    inline std::string ToString() const override { return std::format("MouseReleasedEvent: {0}", m_Button); }
 
-    //EVENT_CLASS_TYPE(MouseButtonReleased)
-    static EventType GetStaticType();
-    virtual EventType GetEventType() const override;
-    virtual const char* GetName() const override;
+    static EventType GetStaticType() { return EventType::MouseButtonReleased; }
+    virtual EventType GetEventType() const override { return GetStaticType(); }
+    virtual const char* GetName() const override { return "MouseButtonReleased"; }
 };
-
 } // namespace iGe

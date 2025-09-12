@@ -3,15 +3,11 @@ module;
 #include <nlohmann/json.hpp>
 
 export module iGe.Renderer:Shader;
-
-import std;
+import iGe.Common;
 import glm;
-import iGe.Log;
-import iGe.SmartPointer;
 
 namespace iGe
 {
-
 export enum class ShaderStage : int {
     None = 0,
     Vertex,
@@ -54,5 +50,4 @@ public:
 private:
     std::unordered_map<std::string, Ref<Shader>> m_Shaders;
 };
-
 } // namespace iGe

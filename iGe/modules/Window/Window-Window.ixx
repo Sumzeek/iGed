@@ -2,20 +2,16 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Window:Window;
-
-import std;
-import iGe.Event;
-import iGe.SmartPointer;
+import iGe.Common;
 
 namespace iGe
 {
-
 export struct WindowProps {
     std::string Title;
-    unsigned int Width;
-    unsigned int Height;
+    uint32 Width;
+    uint32 Height;
 
-    WindowProps(const std::string& title = "iGame Game Engine", unsigned int width = 1280, unsigned int height = 720)
+    WindowProps(const std::string& title = "iGame Game Engine", uint32 width = 1280, uint32 height = 720)
         : Title(title), Width(width), Height(height) {}
 };
 
@@ -28,8 +24,8 @@ public:
 
     virtual void OnUpdate() = 0;
 
-    virtual unsigned int GetWidth() const = 0;
-    virtual unsigned int GetHeight() const = 0;
+    virtual uint32 GetWidth() const = 0;
+    virtual uint32 GetHeight() const = 0;
 
     // Window attributes
     virtual void SetEventCallback(const EventCallbackFn& callback) = 0;
@@ -40,5 +36,4 @@ public:
 
     static Scope<Window> Create(const WindowProps& props = WindowProps());
 };
-
 } // namespace iGe

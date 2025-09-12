@@ -1,6 +1,4 @@
 module;
-#include "iGeMacro.h"
-
 #include <glad/gl.h>
 
 module iGe.Renderer;
@@ -36,7 +34,7 @@ static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type) {
             return GL_BOOL;
     }
 
-    IGE_CORE_ASSERT(false, "Unkonw ShaderDataType!");
+    Internal::Assert(false, "Unkonw ShaderDataType!");
     return 0;
 }
 
@@ -52,7 +50,7 @@ void OpenGLVertexArray::Bind() const { glBindVertexArray(m_RendererID); }
 void OpenGLVertexArray::Unbind() const { glBindVertexArray(0); }
 
 void OpenGLVertexArray::AddVertexBuffer(const Ref<VertexBuffer>& vertexBuffer) {
-    IGE_CORE_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
+    Internal::Assert(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
 
     glBindVertexArray(m_RendererID);
     vertexBuffer->Bind();
@@ -97,7 +95,7 @@ void OpenGLVertexArray::AddVertexBuffer(const Ref<VertexBuffer>& vertexBuffer) {
                 break;
             }
             default:
-                IGE_CORE_ASSERT(false, "Unknown ShaderDataType!");
+                Internal::Assert(false, "Unknown ShaderDataType!");
         }
     }
 
@@ -110,9 +108,4 @@ void OpenGLVertexArray::SetIndexBuffer(const Ref<IndexBuffer>& indexBuffer) {
 
     m_IndexBuffer = indexBuffer;
 }
-
-const std::vector<Ref<VertexBuffer>>& OpenGLVertexArray::GetVertexBuffers() const { return m_VertexBuffers; }
-
-const Ref<IndexBuffer>& OpenGLVertexArray::GetIndexBuffer() const { return m_IndexBuffer; }
-
 } // namespace iGe

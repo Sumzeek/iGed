@@ -1,6 +1,4 @@
 module;
-#include "iGeMacro.h"
-
 // TEMPORARY
 #include <glad/gl.h>
 #define GLFW_INCLUDE_NONE
@@ -11,8 +9,6 @@ module;
 
 module iGe.Core;
 import :ImGuiLayer;
-
-import std;
 
 namespace iGe
 {
@@ -245,7 +241,7 @@ static ImGuiKey iGeKeyToImGuiKey(iGeKey keycode) {
             return ImGuiKey_GraveAccent;
 
         default:
-            IGE_CORE_WARN("iGeKey {} is not mapped in ImGuiKey!", keycode);
+            Internal::LogWarn("iGeKey {} is not mapped in ImGuiKey!", keycode);
             return ImGuiKey_None; // Return None for any unrecognized keys
     }
 }
@@ -253,10 +249,6 @@ static ImGuiKey iGeKeyToImGuiKey(iGeKey keycode) {
 /////////////////////////////////////////////////////////////////////////////
 // ImGuiLayer ///////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-ImGuiLayer::ImGuiLayer() : Layer{"ImGuiLayer"} {}
-
-ImGuiLayer::~ImGuiLayer() {}
-
 void ImGuiLayer::OnAttach() {
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -291,8 +283,6 @@ void ImGuiLayer::OnDetach() {
     ImGui::DestroyContext();
 }
 
-//void ImGuiLayer::OnEvent(Event& e) {}
-
 void ImGuiLayer::Begin() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -302,7 +292,7 @@ void ImGuiLayer::Begin() {
 void ImGuiLayer::End() {
     ImGuiIO& io = ImGui::GetIO();
     Application& app = Application::Get();
-    io.DisplaySize = ImVec2{(float) app.GetWindow().GetWidth(), (float) app.GetWindow().GetHeight()};
+    io.DisplaySize = ImVec2{(float32) app.GetWindow().GetWidth(), (float32) app.GetWindow().GetHeight()};
 
     // Rendering
     ImGui::Render();
@@ -315,5 +305,4 @@ void ImGuiLayer::End() {
         glfwMakeContextCurrent(backup_current_context);
     }
 }
-
 } // namespace iGe

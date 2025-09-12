@@ -1,6 +1,3 @@
-module;
-#include "iGeMacro.h"
-
 export module iGed.ExampleLayer;
 
 import iGe;
@@ -25,7 +22,7 @@ private:
 
     iGe::OrthographicCamera m_Camera;
     glm::vec3 m_CameraPosition = glm::vec3{0.0f};
-    float m_CameraMoveSpeed = 1.0f;
-    float m_CameraRotation = 0.0f;
-    float m_CameraRotationSpeed = 90.0f;
+    float32 m_CameraMoveSpeed = 1.0f;
+    float32 m_CameraRotation = 0.0f;
+    float32 m_CameraRotationSpeed = 90.0f;
 };

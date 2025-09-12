@@ -5,12 +5,10 @@ module;
 
 export module iGe.Renderer:OpenGLTexture;
 import :Texture;
-
-import std;
+import iGe.Common;
 
 namespace iGe
 {
-
 export class IGE_API OpenGLTexture2D : public Texture2D {
 public:
     OpenGLTexture2D(const TextureSpecification& specification);
@@ -19,15 +17,15 @@ public:
 
     virtual const TextureSpecification& GetSpecification() const override;
 
-    virtual uint32_t GetWidth() const override;
-    virtual uint32_t GetHeight() const override;
-    virtual uint32_t GetRendererID() const override;
+    virtual uint32 GetWidth() const override;
+    virtual uint32 GetHeight() const override;
+    virtual uint32 GetRendererID() const override;
 
     virtual const std::string& GetPath() const override;
 
-    virtual void SetData(void* data, uint32_t size) override;
+    virtual void SetData(void* data, uint32 size) override;
 
-    virtual void Bind(uint32_t slot = 0) const override;
+    virtual void Bind(uint32 slot = 0) const override;
 
     virtual bool IsLoaded() const override;
 
@@ -38,9 +36,8 @@ private:
 
     std::string m_Path;
     bool m_IsLoaded = false;
-    uint32_t m_Width, m_Height;
-    uint32_t m_RendererID;
+    uint32 m_Width, m_Height;
+    uint32 m_RendererID;
     GLenum m_InternalFormat, m_DataFormat;
 };
-
 } // namespace iGe

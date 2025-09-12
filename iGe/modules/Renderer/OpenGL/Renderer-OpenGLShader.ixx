@@ -4,12 +4,10 @@ module;
 
 export module iGe.Renderer:OpenGLShader;
 import :Shader;
-
-import std;
+import iGe.Common;
 
 namespace iGe
 {
-
 export class IGE_API OpenGLShader : public Shader {
 public:
     OpenGLShader(const std::filesystem::path& filepath);
@@ -28,11 +26,10 @@ private:
     void CreateProgram();
 
     std::string m_Name;
-    std::uint32_t m_RendererID;
+    uint32 m_RendererID;
 
     std::filesystem::path m_FilePath;
     std::unordered_map<ShaderStage, std::string> m_SourceCodes;
     std::unordered_map<ShaderStage, GLuint> m_Shaders;
 };
-
 } // namespace iGe

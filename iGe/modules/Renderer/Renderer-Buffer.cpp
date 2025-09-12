@@ -1,17 +1,10 @@
-module;
-#include "iGeMacro.h"
-
 module iGe.Renderer;
 import :Buffer;
 import :OpenGLBuffer;
 
-import std;
-import iGe.Log;
-
 namespace iGe
 {
-
-static uint32_t ShaderDataTypeSize(ShaderDataType type) {
+static uint32 ShaderDataTypeSize(ShaderDataType type) {
     switch (type) {
         case ShaderDataType::Float:
             return 4;
@@ -37,7 +30,7 @@ static uint32_t ShaderDataTypeSize(ShaderDataType type) {
             return 1;
     }
 
-    IGE_CORE_ASSERT(false, "Unknown ShaderDataType!");
+    Internal::Assert(false, "Unknown ShaderDataType!");
     return 0;
 }
 
@@ -47,7 +40,7 @@ static uint32_t ShaderDataTypeSize(ShaderDataType type) {
 BufferElement::BufferElement(ShaderDataType type, const std::string& name, bool normalized)
     : Name{name}, Type{type}, Size{ShaderDataTypeSize(type)}, Offset{0}, Normalized{normalized} {}
 
-uint32_t BufferElement::GetComponentCount() const {
+uint32 BufferElement::GetComponentCount() const {
     switch (Type) {
         case ShaderDataType::Float:
             return 1;
@@ -73,7 +66,7 @@ uint32_t BufferElement::GetComponentCount() const {
             return 1;
     }
 
-    IGE_CORE_ASSERT(false, "Unknown ShaderDataType!");
+    Internal::Assert(false, "Unknown ShaderDataType!");
     return 0;
 }
 
@@ -86,7 +79,7 @@ BufferLayout::BufferLayout(std::initializer_list<BufferElement> elements) : m_El
     CalculateOffsetsAndStride();
 }
 
-uint32_t BufferLayout::GetStride() const { return m_Stride; }
+uint32 BufferLayout::GetStride() const { return m_Stride; }
 
 const std::vector<BufferElement>& BufferLayout::GetElements() const { return m_Elements; }
 
@@ -108,58 +101,57 @@ void BufferLayout::CalculateOffsetsAndStride() {
 /////////////////////////////////////////////////////////////////////////////
 // VertexBuffer /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-Ref<VertexBuffer> VertexBuffer::Create(float* vertices, uint32_t size) {
+Ref<VertexBuffer> VertexBuffer::Create(float32* vertices, uint32 size) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
-            IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
+            Internal::Assert(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLVertexBuffer>(vertices, size);
         case RendererAPI::API::Vulkan:
-            IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
+            Internal::Assert(false, "RendererAPI::Vulkan is currently not supported!");
             return nullptr;
     }
 
-    IGE_CORE_ASSERT(false, "Unknown RendererAPI!");
+    Internal::Assert(false, "Unknown RendererAPI!");
     return nullptr;
 }
 
 /////////////////////////////////////////////////////////////////////////////
 // IndexBuffer //////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-Ref<IndexBuffer> IndexBuffer::Create(uint32_t* indices, uint32_t count) {
+Ref<IndexBuffer> IndexBuffer::Create(uint32* indices, uint32 count) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
-            IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
+            Internal::Assert(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLIndexBuffer>(indices, count);
         case RendererAPI::API::Vulkan:
-            IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
+            Internal::Assert(false, "RendererAPI::Vulkan is currently not supported!");
             return nullptr;
     }
 
-    IGE_CORE_ASSERT(false, "Unknown RendererAPI!");
+    Internal::Assert(false, "Unknown RendererAPI!");
     return nullptr;
 }
 
 /////////////////////////////////////////////////////////////////////////////
 // UniformBuffer ////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-Ref<UniformBuffer> UniformBuffer::Create(const void* data, uint32_t size) {
+Ref<UniformBuffer> UniformBuffer::Create(const void* data, uint32 size) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
-            IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
+            Internal::Assert(false, "RendererAPI::None is currently not supported!");
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLUniformBuffer>(data, size);
         case RendererAPI::API::Vulkan:
-            IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
+            Internal::Assert(false, "RendererAPI::Vulkan is currently not supported!");
             return nullptr;
     }
 
-    IGE_CORE_ASSERT(false, "Unknown RendererAPI!");
+    Internal::Assert(false, "Unknown RendererAPI!");
     return nullptr;
 }
-
 } // namespace iGe
