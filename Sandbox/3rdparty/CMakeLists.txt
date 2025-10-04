@@ -9,3 +9,18 @@ if (NOT TARGET assimp)
     add_subdirectory(assimp)
     set_target_properties(assimp PROPERTIES FOLDER ${third_party_folder}/assimp)
 endif ()
+
+if (NOT TARGET meshoptimizer)
+    add_subdirectory(meshoptimizer)
+    set_target_properties(meshoptimizer PROPERTIES FOLDER ${third_party_folder}/meshoptimizer)
+endif ()
+
+#if (NOT TARGET xatlas)
+#    include(xatlas.cmake)
+#    set_target_properties(xatlas PROPERTIES FOLDER ${third_party_folder}/xatlas)
+#endif ()
+
+#if (NOT TARGET UVAtlas)
+#    add_subdirectory(uvatlas)
+#    set_target_properties(UVAtlas PROPERTIES FOLDER ${third_party_folder}/uvatlas)
+#endif ()

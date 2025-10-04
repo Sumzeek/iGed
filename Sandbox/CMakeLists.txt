@@ -35,6 +35,9 @@ target_link_libraries(${TARGET_NAME} PRIVATE
 # Add third party denpendency
 add_subdirectory(3rdparty)
 target_link_libraries(${TARGET_NAME} PRIVATE assimp::assimp)
+target_link_libraries(${TARGET_NAME} PRIVATE meshoptimizer)
+#target_link_libraries(${TARGET_NAME} PRIVATE xatlas)
+#target_link_libraries(${TARGET_NAME} PRIVATE UVAtlas)
 
 # Compile shaders
 set(SHADER_COMPILE_TARGET "iGedShaderCompiler")
@@ -91,8 +94,8 @@ file(MAKE_DIRECTORY "${ASSETS_OUTPUT_DIR}/models")
 
 set(COPIED_MODEL_FILES "")
 foreach (MODEL_FILE ${MODEL_FILES})
-    # Get relative path from MODELs directory
-    file(RELATIVE_PATH RELATIVE_PATH "${ASSETS_SOURCE_DIR}/MODELs" "${MODEL_FILE}")
+    # Get relative path from models directory
+    file(RELATIVE_PATH RELATIVE_PATH "${ASSETS_SOURCE_DIR}/models" "${MODEL_FILE}")
     # Create corresponding output path
     set(OUTPUT_FILE "${ASSETS_OUTPUT_DIR}/models/${RELATIVE_PATH}")
     list(APPEND COPIED_MODEL_FILES ${OUTPUT_FILE})
@@ -111,5 +114,37 @@ foreach (MODEL_FILE ${MODEL_FILES})
     )
 endforeach ()
 
-add_custom_target(CopyModelssTarget DEPENDS ${COPIED_MODEL_FILES})
-add_dependencies(${TARGET_NAME} CopyModelssTarget)
+add_custom_target(CopyModelsTarget DEPENDS ${COPIED_MODEL_FILES})
+add_dependencies(${TARGET_NAME} CopyModelsTarget)
+
+# Copy ptx files
+file(GLOB_RECURSE PTX_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/ptxs/*")
+SOURCE_GROUP("ptxs" FILES ${PTX_FILES})
+
+# Create output directory if it doesn't exist
+file(MAKE_DIRECTORY "${ASSETS_OUTPUT_DIR}/ptx")
+
+set(COPIED_PTX_FILES "")
+foreach (PTX_FILE ${PTX_FILES})
+    # Get relative path from ptxs directory
+    file(RELATIVE_PATH RELATIVE_PATH "${ASSETS_SOURCE_DIR}/ptxs" "${PTX_FILE}")
+    # Create corresponding output path
+    set(OUTPUT_FILE "${ASSETS_OUTPUT_DIR}/ptxs/${RELATIVE_PATH}")
+    list(APPEND COPIED_PTX_FILES ${OUTPUT_FILE})
+
+    # Get directory of output file
+    get_filename_component(OUTPUT_DIR "${OUTPUT_FILE}" DIRECTORY)
+
+    # Add custom command to copy individual file
+    add_custom_command(
+            OUTPUT "${OUTPUT_FILE}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PTX_FILE}" "${OUTPUT_FILE}"
+            DEPENDS "${PTX_FILE}"
+            COMMENT "Copying PTX: ${RELATIVE_PATH}"
+            VERBATIM
+    )
+endforeach ()
+
+add_custom_target(CopyPtxsTarget DEPENDS ${COPIED_PTX_FILES})
+add_dependencies(${TARGET_NAME} CopyPtxsTarget)

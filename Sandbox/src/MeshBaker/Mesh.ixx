@@ -16,6 +16,7 @@ export struct Vertex {
 };
 
 export struct Mesh {
+    std::string Name;
     std::vector<Vertex> Vertices;
     std::vector<std::uint32_t> Indices;
 
@@ -34,6 +35,7 @@ export struct Mesh {
     std::vector<uint32_t> GetIndexArray() const { return Indices; }
 };
 
-export Mesh LoadObjFile(std::string const& path);
+export Mesh LoadObjFile(const std::filesystem::path& filepath);
 
+export void ExportMeshAsOBJ(const Mesh& mesh);
 } // namespace MeshBaker

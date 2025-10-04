@@ -13,7 +13,7 @@ import glm;
 // RuntimeLodLayer //////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
 RuntimeLodLayer::RuntimeLodLayer()
-    : Layer{"RuntimeLod"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 1000.f}, m_CameraPosition{0.0f} {
+    : Layer{"RuntimeLod"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 10000.f}, m_CameraPosition{0.0f} {
     // Create empty VAO
     {
         m_EmptyVertexArray = iGe::VertexArray::Create();
@@ -24,9 +24,52 @@ RuntimeLodLayer::RuntimeLodLayer()
 
     // Load model
     {
+        // Test
+        {
+            m_SimModel = MeshBaker::LoadObjFile("assets/models/Cube - Copy.obj");
+            //m_SimModel = MeshBaker::LoadObjFile("assets/models/Bunny_Sim.obj");
+            //m_SimModel = MeshBaker::LoadObjFile("assets/models/Dark_Finger_Reef_Crab_Sim.obj");
+            {
+                auto vertices = m_SimModel.Vertices;
+                auto indices = m_SimModel.Indices;
+
+                m_SimModelVertexArray = iGe::VertexArray::Create();
+
+                auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+                                                              vertices.size() * sizeof(MeshBaker::Vertex));
+                iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
+                                            {iGe::ShaderDataType::Float3, "a_Normal"},
+                                            {iGe::ShaderDataType::Float2, "a_TexCoord"}};
+                vertexBuffer->SetLayout(layout);
+                m_SimModelVertexArray->AddVertexBuffer(vertexBuffer);
+
+                auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
+                m_SimModelVertexArray->SetIndexBuffer(indexBuffer);
+            }
+
+            m_OriModel = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
+            //m_OriModel = MeshBaker::LoadObjFile("assets/models/Bunny.obj");
+            //m_OriModel = MeshBaker::LoadObjFile("assets/models/Dark_Finger_Reef_Crab.obj");
+            {
+                auto vertices = m_OriModel.Vertices;
+                auto indices = m_OriModel.Indices;
+
+                m_OriModelVertexArray = iGe::VertexArray::Create();
+
+                auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+                                                              vertices.size() * sizeof(MeshBaker::Vertex));
+                iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
+                                            {iGe::ShaderDataType::Float3, "a_Normal"},
+                                            {iGe::ShaderDataType::Float2, "a_TexCoord"}};
+                vertexBuffer->SetLayout(layout);
+                m_OriModelVertexArray->AddVertexBuffer(vertexBuffer);
+
+                auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
+                m_OriModelVertexArray->SetIndexBuffer(indexBuffer);
+            }
+        }
+
         m_Model = MeshBaker::LoadObjFile("assets/models/Dark_Finger_Reef_Crab_Sim.obj");
-        //m_Model = MeshBaker::LoadObjFile("assets/models/Bunny_Sim.obj");
-        //m_Model = MeshBaker::LoadObjFile("assets/models/monsterfrog_subd.obj");
         auto vertices = m_Model.Vertices;
         auto indices = m_Model.Indices;
 
@@ -104,12 +147,11 @@ RuntimeLodLayer::RuntimeLodLayer()
     }
 
     // Model displace map
-    //auto mesh1 = MeshBaker::LoadObjFile("assets/models/Dark_Finger_Reef_Crab_Sim.obj");
-    //auto mesh2 = MeshBaker::LoadObjFile("assets/models/Dark_Finger_Reef_Crab.obj");
-    //MeshBaker::Bake(mesh1, mesh2, 512);
-
+    //MeshBaker::Bake(m_OriModel, 1000);
+    MeshBaker::Bake(m_SimModel, m_OriModel, 1000);
     int w, h;
-    std::vector<float> displace = MeshBaker::ReadExrFile("displacement.exr", w, h);
+    std::string name = m_OriModel.Name + "_displacement.exr";
+    std::vector<float> displace = MeshBaker::ReadExrFile("assets/textures/" + name, w, h);
 
     iGe::TextureSpecification displaceMapSpec;
     displaceMapSpec.Width = w;
@@ -122,8 +164,8 @@ RuntimeLodLayer::RuntimeLodLayer()
     //m_ModelDisplaceMap->Bind(3);
 
     // Set Model bbx
-    m_ModelCenter = m_Model.Center;
-    m_ModelRadius = m_Model.Radius;
+    m_ModelCenter = m_OriModel.Center;
+    m_ModelRadius = m_OriModel.Radius;
     m_CameraPosition = m_ModelCenter + glm::vec3{0.0f, 0.0f, 3 * m_ModelRadius};
 
     // Create camera data uniform
@@ -150,7 +192,7 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         }
     }
 
-    iGe::RenderCommand::SetClearColor(glm::vec4{0.5f, 0.5f, 0.5f, 1.0f});
+    iGe::RenderCommand::SetClearColor(glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
     iGe::RenderCommand::Clear();
 
     m_Camera.SetPosition(m_CameraPosition);
@@ -219,14 +261,20 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         {
             //iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_ModelVertexArray, m_ModelTransform);
 
-            m_TessellatorData->ScreenSize = glm::uvec2{width, height};
-            m_TessellatorData->TriSize = m_TargetTessFactor;
-            m_TessellatorData->DisplaceMapScale = m_DisplaceMapScale;
-            m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
-            m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
-            m_ModelDisplaceMap->Bind(3);
-            iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray, m_ModelTransform,
-                                  true);
+            bool useDynamicTess = iGe::Input::IsMouseButtonPressed(iGeKey::MouseLeft) ||
+                                  iGe::Input::IsMouseButtonPressed(iGeKey::MouseRight);
+            if (!useDynamicTess) {
+                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_OriModelVertexArray, m_ModelTransform);
+            } else {
+                m_TessellatorData->ScreenSize = glm::uvec2{width, height};
+                m_TessellatorData->TriSize = m_TargetTessFactor;
+                m_TessellatorData->DisplaceMapScale = m_DisplaceMapScale;
+                m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
+                m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
+                m_ModelDisplaceMap->Bind(3);
+                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_SimModelVertexArray,
+                                      m_ModelTransform, true);
+            }
 
             //m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
             //m_DepthBuffer->BindImage(5);

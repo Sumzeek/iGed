@@ -1,5 +1,7 @@
 module;
+#include <assimp/Exporter.hpp>
 #include <assimp/Importer.hpp>
+#include <assimp/mesh.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
@@ -9,14 +11,16 @@ import :Mesh;
 namespace MeshBaker
 {
 
-Mesh LoadObjFile(std::string const& path) {
+Mesh LoadObjFile(const std::filesystem::path& filepath) {
     Mesh mesh;
+    mesh.Name = filepath.stem().string();
 
     // read file via assimp
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
-                                                           aiProcess_GenBoundingBoxes | aiProcess_ForceGenNormals |
-                                                           aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
+    const aiScene* scene =
+            importer.ReadFile(filepath.string(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
+                                                         aiProcess_GenBoundingBoxes | aiProcess_ForceGenNormals |
+                                                         aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
     // check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
     {
@@ -66,4 +70,60 @@ Mesh LoadObjFile(std::string const& path) {
     return mesh;
 }
 
+static aiScene* ConvertMeshToAssimpScene(const Mesh& mesh) {
+    aiScene* scene = new aiScene();
+    scene->mRootNode = new aiNode();
+
+    aiMesh* ai_mesh = new aiMesh();
+    ai_mesh->mMaterialIndex = 0;
+    ai_mesh->mNumVertices = (unsigned int) mesh.Vertices.size();
+    ai_mesh->mVertices = new aiVector3D[ai_mesh->mNumVertices];
+    ai_mesh->mNormals = new aiVector3D[ai_mesh->mNumVertices];
+    ai_mesh->mTextureCoords[0] = new aiVector3D[ai_mesh->mNumVertices];
+
+    for (size_t i = 0; i < mesh.Vertices.size(); i++) {
+        const Vertex& v = mesh.Vertices[i];
+        ai_mesh->mVertices[i] = aiVector3D(v.Position.x, v.Position.y, v.Position.z);
+        ai_mesh->mNormals[i] = aiVector3D(v.Normal.x, v.Normal.y, v.Normal.z);
+        ai_mesh->mTextureCoords[0][i] = aiVector3D(v.TexCoord.x, v.TexCoord.y, 0.0f);
+    }
+
+    size_t faceCount = mesh.Indices.size() / 3;
+    ai_mesh->mNumFaces = (unsigned int) faceCount;
+    ai_mesh->mFaces = new aiFace[ai_mesh->mNumFaces];
+
+    for (size_t i = 0; i < faceCount; i++) {
+        aiFace& face = ai_mesh->mFaces[i];
+        face.mNumIndices = 3;
+        face.mIndices = new unsigned int[3];
+        face.mIndices[0] = mesh.Indices[i * 3 + 0];
+        face.mIndices[1] = mesh.Indices[i * 3 + 1];
+        face.mIndices[2] = mesh.Indices[i * 3 + 2];
+    }
+
+    scene->mNumMeshes = 1;
+    scene->mMeshes = new aiMesh*[1];
+    scene->mMeshes[0] = ai_mesh;
+
+    scene->mRootNode->mNumMeshes = 1;
+    scene->mRootNode->mMeshes = new unsigned int[1];
+    scene->mRootNode->mMeshes[0] = 0;
+
+    scene->mNumMaterials = 1;
+    scene->mMaterials = new aiMaterial*[1];
+    scene->mMaterials[0] = new aiMaterial();
+
+    return scene;
+}
+void ExportMeshAsOBJ(const Mesh& mesh) {
+    std::string filepath = "assets/models/" + mesh.Name + ".obj";
+
+    Assimp::Exporter exporter;
+    aiScene* scene = ConvertMeshToAssimpScene(mesh);
+
+    aiReturn ret = exporter.Export(scene, "obj", filepath);
+    if (ret != aiReturn_SUCCESS) { std::cerr << "Assimp export failed: " << exporter.GetErrorString() << std::endl; }
+
+    delete scene;
+}
 } // namespace MeshBaker

@@ -43,4 +43,7 @@ export std::vector<float> ReadExrFile(const std::string& filePath, int& width, i
 
 export void Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution = 512);
 
+export void Bake(const Mesh& mesh, int resolution = 512);
+
+Mesh SimplifyMesh(const Mesh& src, float reductionRatio = 0.01f, float errorThreshold = 1e-2);
 } // namespace MeshBaker

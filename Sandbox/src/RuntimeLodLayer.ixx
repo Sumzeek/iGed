@@ -38,6 +38,12 @@ private:
     // Empty VAO
     iGe::Ref<iGe::VertexArray> m_EmptyVertexArray;
 
+    // Test
+    MeshBaker::Mesh m_SimModel;
+    iGe::Ref<iGe::VertexArray> m_SimModelVertexArray;
+    MeshBaker::Mesh m_OriModel;
+    iGe::Ref<iGe::VertexArray> m_OriModelVertexArray;
+
     // Model
     MeshBaker::Mesh m_Model;
     iGe::Ref<iGe::VertexArray> m_ModelVertexArray;

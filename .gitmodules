@@ -14,3 +14,6 @@
 [submodule "Sandbox/3rdparty/assimp"]
 	path = Sandbox/3rdparty/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "Sandbox/3rdparty/meshoptimizer"]
+	path = Sandbox/3rdparty/meshoptimizer
+	url = https://github.com/zeux/meshoptimizer.git
