@@ -44,9 +44,9 @@ BakeData CPUBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) {
         glm::vec2 uv1 = mesh1.Vertices[i1].TexCoord;
         glm::vec2 uv2 = mesh1.Vertices[i2].TexCoord;
 
-        glm::vec2 pixel0 = uv0 * float(resolution - 1);
-        glm::vec2 pixel1 = uv1 * float(resolution - 1);
-        glm::vec2 pixel2 = uv2 * float(resolution - 1);
+        glm::vec2 pixel0 = uv0 /* float(resolution - 1)*/;
+        glm::vec2 pixel1 = uv1 /* float(resolution - 1)*/;
+        glm::vec2 pixel2 = uv2 /* float(resolution - 1)*/;
 
         int minX = std::max(0, int(std::floor(std::min({pixel0.x, pixel1.x, pixel2.x}))));
         int maxX = std::min(resolution - 1, int(std::ceil(std::max({pixel0.x, pixel1.x, pixel2.x}))));
@@ -59,7 +59,7 @@ BakeData CPUBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) {
 
                 // Compute barycentric
                 glm::vec3 bary = ComputeBarycentric(pixel0, pixel1, pixel2, p);
-                if (bary.x < 0 || bary.y < 0 || bary.z < 0) continue;
+                if (bary.x < -1e-5f || bary.y < -1e-5f || bary.z < -1e-5f) { continue; }
 
                 // Compute point and normal after interpolation
                 glm::vec3 posOnMesh1 = bary.x * p0 + bary.y * p1 + bary.z * p2;
@@ -91,14 +91,14 @@ uint32_t CPUBaker::IntersectAlongNormal(const Mesh& mesh, const glm::vec3& origi
         float t;
         if (RayTriangleIntersect(origin, normal, v0, v1, v2, t)) {
             if (std::abs(t) < std::abs(minT)) {
-                minT = t;
+                minT = std::abs(t);
                 triID = static_cast<uint32_t>(i / 3);
             }
         }
 
         if (RayTriangleIntersect(origin, -normal, v0, v1, v2, t)) {
             if (std::abs(t) < std::abs(minT)) {
-                minT = -t;
+                minT = -std::abs(t);
                 triID = static_cast<uint32_t>(i / 3);
             }
         }

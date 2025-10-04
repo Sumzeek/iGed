@@ -93,14 +93,14 @@ PatchConstantData computeTessFactors(InputPatch<VertexOutput, 3> input) {
     UnpackUintToRGBA8(packed, r, g, b, a);
 
     PatchConstantData pcd;
-    pcd.EdgeTessFactor[0] = u_TargetTessFactor;
-    pcd.EdgeTessFactor[1] = u_TargetTessFactor;
-    pcd.EdgeTessFactor[2] = u_TargetTessFactor;
-    pcd.InsideTessFactor[0] = u_TargetTessFactor;
-    // pcd.EdgeTessFactor[0] = r;
-    // pcd.EdgeTessFactor[1] = g;
-    // pcd.EdgeTessFactor[2] = b;
-    // pcd.InsideTessFactor[0] = a;
+    // pcd.EdgeTessFactor[0] = u_TargetTessFactor;
+    // pcd.EdgeTessFactor[1] = u_TargetTessFactor;
+    // pcd.EdgeTessFactor[2] = u_TargetTessFactor;
+    // pcd.InsideTessFactor[0] = u_TargetTessFactor;
+    pcd.EdgeTessFactor[0] = max(r, 1);
+    pcd.EdgeTessFactor[1] = max(g, 1);
+    pcd.EdgeTessFactor[2] = max(b, 1);
+    pcd.InsideTessFactor[0] = max(a, 1);
 
     return pcd;
 }
@@ -137,7 +137,22 @@ TessEvalOutput tesMain(
     TessEvalOutput out;
 
     // Displacement Mapping
-    float displacement = u_DisplaceMap.Sample(interpolatedTexCoord).r;
+    // Compute integer pixel coordinates and fractional offsets
+    int2 base = int2(floor(interpolatedTexCoord));
+    float2 f = frac(interpolatedTexCoord);
+
+    // Sample displacement values from the four neighboring texels
+    float s00 = u_DisplaceMap.Load(int3(base.x,     base.y,     0)).r;
+    float s10 = u_DisplaceMap.Load(int3(base.x + 1, base.y,     0)).r;
+    float s01 = u_DisplaceMap.Load(int3(base.x,     base.y + 1, 0)).r;
+    float s11 = u_DisplaceMap.Load(int3(base.x + 1, base.y + 1, 0)).r;
+
+    // Perform bilinear interpolation
+    float sx0 = lerp(s00, s10, f.x);
+    float sx1 = lerp(s01, s11, f.x);
+    float displacement = lerp(sx0, sx1, f.y);
+
+    // Offset the vertex along its normal by the displacement value
     float3 position = interpolatedPosition + displacement * interpolatedNormal * u_DisplaceMapScale;
 
     out.te_Position = mul(u_ProjectionView, mul(u_Transform, float4(position, 1.0f)));
