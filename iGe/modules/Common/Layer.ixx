@@ -10,7 +10,7 @@ namespace iGe
 {
 export class IGE_API Layer {
 public:
-    Layer(const std::string& name = "Layer") : m_DebugName(name) {}
+    Layer(const string& name = "Layer") : m_DebugName(name) {}
     virtual ~Layer() {}
 
     virtual void OnAttach() {}
@@ -19,9 +19,9 @@ public:
     virtual void OnImGuiRender() {}
     virtual void OnEvent(Event& event) {}
 
-    inline const std::string& GetName() const { return m_DebugName; }
+    const string& GetName() const { return m_DebugName; }
 
 protected:
-    std::string m_DebugName;
+    string m_DebugName;
 };
 } // namespace iGe

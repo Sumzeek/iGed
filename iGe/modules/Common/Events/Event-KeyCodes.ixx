@@ -134,7 +134,7 @@ export template<>
 struct std::formatter<iGeKey> {
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
     auto format(const iGeKey& key, format_context& ctx) const {
-        std::string keyName;
+        string keyName;
         switch (key) {
             // Mouse Buttons
             case iGeKey::MouseLeft:

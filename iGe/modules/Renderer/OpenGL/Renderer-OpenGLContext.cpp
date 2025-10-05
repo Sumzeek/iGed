@@ -16,7 +16,7 @@ OpenGLContext::OpenGLContext(GLFWwindow* windowHandle) : m_WindowHandle{windowHa
     Internal::Assert(windowHandle, "Window handle is nullptr!");
 }
 
-void OpenGLContext::Init() {
+void OpenGLContext::Init() const {
     glfwMakeContextCurrent(m_WindowHandle);
     int status = gladLoadGL((GLADloadfunc) glfwGetProcAddress);
     Internal::Assert(status, "Failed to initialize Glad!");
@@ -27,5 +27,5 @@ void OpenGLContext::Init() {
     Internal::LogInfo("    Version: {0}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 }
 
-void OpenGLContext::SwapBuffers() { glfwSwapBuffers(m_WindowHandle); }
+void OpenGLContext::SwapBuffers() const { glfwSwapBuffers(m_WindowHandle); }
 } // namespace iGe

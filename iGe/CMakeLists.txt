@@ -1,7 +1,7 @@
 set(TARGET_NAME "iGe")
 
 # Create a shared library (DLL)
-add_library(${TARGET_NAME} SHARED)
+add_library(${TARGET_NAME} STATIC)
 
 # Set source files (all .ixx files in the src directory)
 file(GLOB_RECURSE MODULE_SOURCES "modules/*.ixx")
@@ -33,9 +33,6 @@ elseif (UNIX)
 else ()
     message(FATAL_ERROR "Unknown Platform: iGe does not support this platform yet!")
 endif ()
-
-# Set export symbols for the library
-target_compile_definitions(${TARGET_NAME} PRIVATE IGE_EXPORT)
 
 # Add IGE_DEBUG in Debug mode
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")

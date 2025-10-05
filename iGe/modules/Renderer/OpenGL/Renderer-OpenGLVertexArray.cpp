@@ -56,7 +56,7 @@ void OpenGLVertexArray::AddVertexBuffer(const Ref<VertexBuffer>& vertexBuffer) {
     vertexBuffer->Bind();
 
     const auto& layout = vertexBuffer->GetLayout();
-    for (const auto& element: layout) {
+    for (const auto& element: layout.elements()) {
         switch (element.Type) {
             case ShaderDataType::Float:
             case ShaderDataType::Float2:

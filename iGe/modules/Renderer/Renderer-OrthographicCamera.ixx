@@ -13,15 +13,15 @@ public:
 
     void SetProjection(float32 left, float32 right, float32 bottom, float32 top);
 
-    inline const glm::vec3& GetPosition() const { return m_Position; }
+    const glm::vec3& GetPosition() const { return m_Position; }
     void SetPosition(const glm::vec3& position);
 
-    inline float32 GetRotation() const { return m_Rotation; }
+    float32 GetRotation() const { return m_Rotation; }
     void SetRotation(float32 rotation);
 
-    inline const glm::mat4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
-    inline const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
-    inline const glm::mat4& GetViewProjectionMatrix() const { return m_ViewProjectionMatrix; }
+    const glm::mat4& GetProjectionMatrix() const { return m_ProjectionMatrix; }
+    const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
+    const glm::mat4& GetViewProjectionMatrix() const { return m_ViewProjectionMatrix; }
 
 private:
     void RecalculateViewMatrix();

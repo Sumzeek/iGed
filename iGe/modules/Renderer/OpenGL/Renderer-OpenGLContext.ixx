@@ -13,8 +13,8 @@ export class IGE_API OpenGLContext : public GraphicsContext {
 public:
     OpenGLContext(GLFWwindow* windowHandle);
 
-    virtual void Init() override;
-    virtual void SwapBuffers() override;
+    virtual void Init() const override;
+    virtual void SwapBuffers() const override;
 
 private:
     GLFWwindow* m_WindowHandle;

@@ -43,7 +43,7 @@ public:
     OpenGLUniformBuffer(const void* data, uint32 size);
     virtual ~OpenGLUniformBuffer();
 
-    virtual void SetData(const void* data, uint32 size, uint32 offset = 0) override;
+    virtual void SetData(const void* data, uint32 size, uint32 offset = 0) const override;
 
     virtual void Bind(uint32 bindingPoint) const override;
     virtual void Unbind() const override;

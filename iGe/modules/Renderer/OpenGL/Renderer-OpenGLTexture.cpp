@@ -53,12 +53,12 @@ OpenGLTexture2D::OpenGLTexture2D(const TextureSpecification& specification)
     glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
 }
 
-OpenGLTexture2D::OpenGLTexture2D(const std::string& path) : m_Path(path) {
+OpenGLTexture2D::OpenGLTexture2D(const string& path) : m_Path(path) {
     int width, height, channels;
     stbi_set_flip_vertically_on_load(1);
     stbi_uc* data = nullptr;
     {
-        //IGE_PROFILE_SCOPE("stbi_load - OpenGLTexture2D::OpenGLTexture2D(const std::string&)");
+        //IGE_PROFILE_SCOPE("stbi_load - OpenGLTexture2D::OpenGLTexture2D(const string&)");
         data = stbi_load(path.c_str(), &width, &height, &channels, 0);
     }
 
@@ -109,7 +109,7 @@ uint32 OpenGLTexture2D::GetHeight() const { return m_Height; }
 
 uint32 OpenGLTexture2D::GetRendererID() const { return m_RendererID; }
 
-const std::string& OpenGLTexture2D::GetPath() const { return m_Path; }
+const string& OpenGLTexture2D::GetPath() const { return m_Path; }
 
 void OpenGLTexture2D::SetData(void* data, uint32 size) {
     uint32 bpp = m_DataFormat == GL_RGBA ? 4 : 3;

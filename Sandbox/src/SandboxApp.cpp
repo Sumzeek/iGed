@@ -5,7 +5,7 @@ import iGed.ExampleLayer;
 class Sandbox : public iGe::Application {
 public:
     Sandbox(iGe::ApplicationSpecification& specification) : iGe::Application{specification} {
-        PushLayer(new ExampleLayer{});
+        PushLayer(iGe::CreateRef<ExampleLayer>());
     }
     ~Sandbox() override {}
 };

@@ -18,22 +18,22 @@ public:
 
     void OnUpdate() override;
 
-    inline virtual uint32 GetWidth() const override { return m_Data.Width; }
-    inline virtual uint32 GetHeight() const override { return m_Data.Height; }
+    virtual uint32 GetWidth() const override { return m_Data.Width; }
+    virtual uint32 GetHeight() const override { return m_Data.Height; }
 
     // Window attributes
-    inline virtual void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
+    virtual void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
     virtual void SetVSync(bool enable) override;
-    inline virtual bool IsVSync() const override { return m_Data.VSync; }
+    virtual bool IsVSync() const override { return m_Data.VSync; }
 
-    inline virtual void* GetNativeWindow() const override { return m_Window; }
+    virtual void* GetNativeWindow() const override { return m_Window; }
 
 private:
     virtual void Init(const WindowProps& props);
     virtual void ShutDown();
 
     struct WindowData {
-        std::string Title;
+        string Title;
         uint32 Width;
         uint32 Height;
         bool VSync;

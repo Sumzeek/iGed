@@ -15,7 +15,6 @@ target_sources(${TARGET_NAME} PUBLIC ${SOURCES})
 
 # Link the iGe shared library
 target_link_libraries(${TARGET_NAME} PRIVATE iGe)
-set_property(TARGET ${TARGET_NAME} PROPERTY CXX_SCAN_FOR_MODULES 1)
 
 # Dynamic compile shaders
 set(SHADER_COMPILE_TARGET "iGedShaderCompiler")

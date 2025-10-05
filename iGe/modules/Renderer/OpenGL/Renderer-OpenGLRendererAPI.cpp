@@ -30,7 +30,7 @@ static void OpenGLMessageCallback(unsigned source, unsigned type, unsigned id, u
 /////////////////////////////////////////////////////////////////////////////
 // OpenGLRendererAPI ////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-void OpenGLRendererAPI::Init() {
+void OpenGLRendererAPI::Init() const {
 #ifdef IGE_DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -46,24 +46,26 @@ void OpenGLRendererAPI::Init() {
     glEnable(GL_LINE_SMOOTH);
 }
 
-void OpenGLRendererAPI::SetViewport(uint32 x, uint32 y, uint32 width, uint32 height) {
+void OpenGLRendererAPI::SetViewport(uint32 x, uint32 y, uint32 width, uint32 height) const {
     glViewport(x, y, width, height);
 }
 
-void OpenGLRendererAPI::SetClearColor(const glm::vec4& color) { glClearColor(color.r, color.g, color.b, color.a); }
+void OpenGLRendererAPI::SetClearColor(const glm::vec4& color) const {
+    glClearColor(color.r, color.g, color.b, color.a);
+}
 
-void OpenGLRendererAPI::Clear() { glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); }
+void OpenGLRendererAPI::Clear() const { glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); }
 
-void OpenGLRendererAPI::DrawIndexed(const Ref<VertexArray>& vertexArray, uint32 indexCount) {
+void OpenGLRendererAPI::DrawIndexed(const Ref<VertexArray>& vertexArray, uint32 indexCount) const {
     vertexArray->Bind();
     uint32 count = indexCount ? indexCount : vertexArray->GetIndexBuffer()->GetCount();
     glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, nullptr);
 }
 
-void OpenGLRendererAPI::DrawLines(const Ref<VertexArray>& vertexArray, uint32 vertexCount) {
+void OpenGLRendererAPI::DrawLines(const Ref<VertexArray>& vertexArray, uint32 vertexCount) const {
     vertexArray->Bind();
     glDrawArrays(GL_LINES, 0, vertexCount);
 }
 
-void OpenGLRendererAPI::SetLineWidth(float width) { glLineWidth(width); }
+void OpenGLRendererAPI::SetLineWidth(float32 width) const { glLineWidth(width); }
 } // namespace iGe

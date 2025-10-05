@@ -10,6 +10,7 @@ namespace iGe
 #ifdef IGE_PLATFORM_WINDOWS
 Input* Input::s_Instance = new WindowsInput{};
 #else
-Input* Input::s_Instance = new WindowsInput{};
+Internal::Assert(false, "Unknown platform!");
+return nullptr;
 #endif
 } // namespace iGe

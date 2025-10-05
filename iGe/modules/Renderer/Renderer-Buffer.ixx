@@ -22,7 +22,7 @@ export enum class ShaderDataType : int {
 };
 
 export struct IGE_API BufferElement {
-    std::string Name;
+    string Name;
     ShaderDataType Type;
     uint32 Size;
     uint64 Offset;
@@ -30,7 +30,7 @@ export struct IGE_API BufferElement {
 
     BufferElement() = default;
 
-    BufferElement(ShaderDataType type, const std::string& name, bool normalized = false);
+    BufferElement(ShaderDataType type, const string& name, bool normalized = false);
     uint32 GetComponentCount() const;
 };
 
@@ -42,10 +42,8 @@ public:
     uint32 GetStride() const;
     const std::vector<BufferElement>& GetElements() const;
 
-    std::vector<BufferElement>::iterator begin();
-    std::vector<BufferElement>::iterator end();
-    std::vector<BufferElement>::const_iterator begin() const;
-    std::vector<BufferElement>::const_iterator end() const;
+    auto elements() noexcept { return std::views::all(m_Elements); }
+    auto elements() const noexcept { return std::views::all(m_Elements); }
 
 private:
     void CalculateOffsetsAndStride();
@@ -88,7 +86,7 @@ public:
     virtual void Bind(uint32 bindingPoint) const = 0;
     virtual void Unbind() const = 0;
 
-    virtual void SetData(const void* data, uint32 size, uint32 offset = 0) = 0;
+    virtual void SetData(const void* data, uint32 size, uint32 offset = 0) const = 0;
 
     static Ref<UniformBuffer> Create(const void* data, uint32 size);
 };

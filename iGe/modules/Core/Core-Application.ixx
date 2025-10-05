@@ -20,8 +20,8 @@ export struct ApplicationCommandLineArgs {
 };
 
 export struct ApplicationSpecification {
-    std::string Name = "iGe Application";
-    std::string WorkingDirectory;
+    string Name = "iGe Application";
+    string WorkingDirectory;
     ApplicationCommandLineArgs CommandLineArgs;
 };
 
@@ -36,19 +36,18 @@ public:
     void OnEvent(Event& e);
     bool OnWindowClose(Event& e);
 
-    void PushLayer(Layer* layer);
-    void PushOverlay(Layer* layer);
+    void PushLayer(Ref<Layer> layer);
+    void PushOverlay(Ref<Layer> layer);
 
-    inline Window& GetWindow() { return *m_Window; }
-    inline static Application& Get() { return *s_Instance; }
-    inline const ApplicationSpecification& GetSpecification() const { return m_Specification; }
+    static Application& Get() { return *s_Instance; }
+    Window& GetWindow() const { return *m_Window; }
+    const ApplicationSpecification& GetSpecification() const { return m_Specification; }
 
 private:
     static Application* s_Instance;
 
     ApplicationSpecification m_Specification;
-    std::unique_ptr<Window> m_Window;
-    ImGuiLayer* m_ImGuiLayer;
+    Scope<Window> m_Window;
     bool m_Running = true;
     LayerStack m_LayerStack;
     float32 m_LastTime = 0.0f;

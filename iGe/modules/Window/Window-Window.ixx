@@ -7,12 +7,11 @@ import iGe.Common;
 namespace iGe
 {
 export struct WindowProps {
-    std::string Title;
+    string Title;
     uint32 Width;
     uint32 Height;
 
-    WindowProps(const std::string& title = "iGame Game Engine", uint32 width = 1280, uint32 height = 720)
-        : Title(title), Width(width), Height(height) {}
+    WindowProps(const string& title = "iGame Game Engine", uint32 width = 1280, uint32 height = 720);
 };
 
 using EventCallbackFn = std::function<void(Event&)>;

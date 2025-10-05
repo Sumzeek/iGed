@@ -12,8 +12,8 @@ public:
 
     operator float() const { return m_Time; }
 
-    inline float32 GetSeconds() const { return m_Time; }
-    inline float32 GetMilliseconds() const { return m_Time * 1000.0f; }
+    float32 GetSeconds() const { return m_Time; }
+    float32 GetMilliseconds() const { return m_Time * 1000.0f; }
 
 private:
     float32 m_Time;

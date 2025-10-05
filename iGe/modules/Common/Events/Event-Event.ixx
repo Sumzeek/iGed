@@ -43,9 +43,9 @@ public:
     virtual EventType GetEventType() const = 0;
     virtual const char* GetName() const = 0;
     virtual uint32 GetCategoryFlags() const = 0;
-    inline virtual std::string ToString() const { return GetName(); }
+    virtual string ToString() const { return GetName(); }
 
-    inline bool IsInCategory(EventCategory category) { return GetCategoryFlags() & category; }
+    bool IsInCategory(EventCategory category) { return GetCategoryFlags() & category; }
 };
 
 export class IGE_API EventDispatcher {
@@ -67,8 +67,7 @@ private:
 
 // ---------------------------------- Other::Implementation ----------------------------------
 export std::ostream& operator<<(std::ostream& os, const Event& e) { return os << e.ToString(); }
-export std::string format_as(const Event& e) { return e.ToString(); }
-
+export string format_as(const Event& e) { return e.ToString(); }
 } // namespace iGe
 
 template<>

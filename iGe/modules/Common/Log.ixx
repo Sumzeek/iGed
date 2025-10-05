@@ -19,8 +19,8 @@ public:
         m_ClientLogger->set_level(spdlog::level::trace);
     }
 
-    inline static Ref<spdlog::logger>& GetCoreLogger() { return m_CoreLogger; }
-    inline static Ref<spdlog::logger>& GetClientLogger() { return m_ClientLogger; }
+    static Ref<spdlog::logger>& GetCoreLogger() { return m_CoreLogger; }
+    static Ref<spdlog::logger>& GetClientLogger() { return m_ClientLogger; }
 
 private:
     Log() {}

@@ -25,7 +25,7 @@ public:
     virtual uint32 GetHeight() const = 0;
     virtual uint32 GetRendererID() const = 0;
 
-    virtual const std::string& GetPath() const = 0;
+    virtual const string& GetPath() const = 0;
 
     virtual void SetData(void* data, uint32 size) = 0;
 
@@ -39,6 +39,6 @@ public:
 export class IGE_API Texture2D : public Texture {
 public:
     static Ref<Texture2D> Create(const TextureSpecification& specification);
-    static Ref<Texture2D> Create(const std::string& path);
+    static Ref<Texture2D> Create(const string& path);
 };
 } // namespace iGe

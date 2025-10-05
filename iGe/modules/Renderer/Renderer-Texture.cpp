@@ -24,7 +24,7 @@ Ref<Texture2D> Texture2D::Create(const TextureSpecification& specification) {
     return nullptr;
 }
 
-Ref<Texture2D> Texture2D::Create(const std::string& path) {
+Ref<Texture2D> Texture2D::Create(const string& path) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
             Internal::Assert(false, "RendererAPI::None is currently not supported!");

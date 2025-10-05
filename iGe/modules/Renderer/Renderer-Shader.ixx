@@ -18,7 +18,7 @@ export enum class ShaderStage : int {
     Compute,
 };
 
-ShaderStage ShaderStageFromString(const std::string& stageStr);
+ShaderStage ShaderStageFromString(const string& stageStr);
 
 std::unordered_map<ShaderStage, std::filesystem::path> ParseShaderEntryMap(const std::filesystem::path& jsonFilePath);
 
@@ -27,9 +27,9 @@ public:
     virtual ~Shader() = default;
 
     static Ref<Shader> Create(const std::filesystem::path& filepath);
-    static Ref<Shader> Create(const std::string& name, const std::filesystem::path& filepath);
+    static Ref<Shader> Create(const string& name, const std::filesystem::path& filepath);
 
-    virtual const std::string& GetName() const = 0;
+    virtual const string& GetName() const = 0;
 
     virtual void Bind() const = 0;
     virtual void Unbind() const = 0;
@@ -37,17 +37,17 @@ public:
 
 export class IGE_API ShaderLibrary {
 public:
-    void Add(const std::string& name, const Ref<Shader>& shader);
+    void Add(const string& name, const Ref<Shader>& shader);
     void Add(const Ref<Shader>& shader);
 
     Ref<Shader> Load(const std::filesystem::path& filepath);
-    Ref<Shader> Load(const std::string& name, const std::filesystem::path& filepath);
+    Ref<Shader> Load(const string& name, const std::filesystem::path& filepath);
 
-    Ref<Shader> Get(const std::string& name);
+    Ref<Shader> Get(const string& name);
 
-    bool Exists(const std::string& name) const;
+    bool Exists(const string& name) const;
 
 private:
-    std::unordered_map<std::string, Ref<Shader>> m_Shaders;
+    std::unordered_map<string, Ref<Shader>> m_Shaders;
 };
 } // namespace iGe

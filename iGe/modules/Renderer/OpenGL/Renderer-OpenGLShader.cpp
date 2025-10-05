@@ -37,7 +37,7 @@ OpenGLShader::OpenGLShader(const std::filesystem::path& filepath) : m_FilePath(f
     m_Name = filepath.stem().string();
 }
 
-OpenGLShader::OpenGLShader(const std::string& name, const std::filesystem::path& filepath)
+OpenGLShader::OpenGLShader(const string& name, const std::filesystem::path& filepath)
     : m_Name(name), m_FilePath(filepath) {
     auto shaderMap = ParseShaderEntryMap(filepath);
     for (const auto& shaderPair: shaderMap) {
@@ -56,9 +56,9 @@ void OpenGLShader::Bind() const { glUseProgram(m_RendererID); }
 
 void OpenGLShader::Unbind() const { glUseProgram(0); }
 
-const std::string& OpenGLShader::GetName() const { return m_Name; }
+const string& OpenGLShader::GetName() const { return m_Name; }
 
-std::string OpenGLShader::ReadFile(const std::filesystem::path& filepath) {
+string OpenGLShader::ReadFile(const std::filesystem::path& filepath) {
     // Check if file exists
     std::error_code ec;
     if (!std::filesystem::exists(filepath, ec)) {
@@ -80,7 +80,7 @@ std::string OpenGLShader::ReadFile(const std::filesystem::path& filepath) {
         return {};
     }
 
-    std::string content;
+    string content;
     content.resize(fileSize);
     file.read(content.data(), fileSize);
 
@@ -92,7 +92,7 @@ std::string OpenGLShader::ReadFile(const std::filesystem::path& filepath) {
     return content;
 }
 
-void OpenGLShader::Compile(std::unordered_map<ShaderStage, std::string> shaderSources) {
+void OpenGLShader::Compile(std::unordered_map<ShaderStage, string> shaderSources) {
     m_Shaders.clear();
     for (auto&& [stage, source]: shaderSources) {
         // Create an empty fragment shader handle
@@ -100,7 +100,7 @@ void OpenGLShader::Compile(std::unordered_map<ShaderStage, std::string> shaderSo
         GLuint shaderID = glCreateShader(type);
 
         // Send the fragment shader source code to GL
-        // Note that std::string's .c_str is NULL character terminated.
+        // Note that string's .c_str is NULL character terminated.
         const GLchar* sourceCStr = (const GLchar*) source.c_str();
         glShaderSource(shaderID, 1, &sourceCStr, 0);
 

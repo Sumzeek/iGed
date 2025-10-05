@@ -50,7 +50,7 @@ export inline void Assert(bool condition, const std::source_location& loc = std:
 }
 
 export template<typename... Args>
-inline void Assert(bool condition, std::string msg, const std::source_location& loc = std::source_location::current()) {
+inline void Assert(bool condition, string msg, const std::source_location& loc = std::source_location::current()) {
 #ifdef IGE_ENABLE_ASSERTS
     if (condition) { return; }
     LogError("Assertion failed: {}, at {}:{}", msg, loc.file_name(), loc.line());
@@ -91,7 +91,7 @@ export inline void Assert(bool condition, const std::source_location& loc = std:
 }
 
 export template<typename... Args>
-inline void Assert(bool condition, std::string msg, const std::source_location& loc = std::source_location::current()) {
+inline void Assert(bool condition, string msg, const std::source_location& loc = std::source_location::current()) {
 #ifdef IGE_ENABLE_ASSERTS
     if (condition) { return; }
     LogError("Assertion failed: {}, at {}:{}", msg, loc.file_name(), loc.line());

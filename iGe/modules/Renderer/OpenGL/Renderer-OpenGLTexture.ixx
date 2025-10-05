@@ -12,7 +12,7 @@ namespace iGe
 export class IGE_API OpenGLTexture2D : public Texture2D {
 public:
     OpenGLTexture2D(const TextureSpecification& specification);
-    OpenGLTexture2D(const std::string& path);
+    OpenGLTexture2D(const string& path);
     virtual ~OpenGLTexture2D();
 
     virtual const TextureSpecification& GetSpecification() const override;
@@ -21,7 +21,7 @@ public:
     virtual uint32 GetHeight() const override;
     virtual uint32 GetRendererID() const override;
 
-    virtual const std::string& GetPath() const override;
+    virtual const string& GetPath() const override;
 
     virtual void SetData(void* data, uint32 size) override;
 
@@ -34,7 +34,7 @@ public:
 private:
     TextureSpecification m_Specification;
 
-    std::string m_Path;
+    string m_Path;
     bool m_IsLoaded = false;
     uint32 m_Width, m_Height;
     uint32 m_RendererID;

@@ -8,7 +8,7 @@ import :OpenGLShader;
 
 namespace iGe
 {
-ShaderStage ShaderStageFromString(const std::string& stageStr) {
+ShaderStage ShaderStageFromString(const string& stageStr) {
     if (stageStr == "vertex") { return ShaderStage::Vertex; }
     if (stageStr == "tesscontrol" || stageStr == "hull") { return ShaderStage::TessellationControl; }
     if (stageStr == "tesseval" || stageStr == "domain") { return ShaderStage::TessellationEvaluation; }
@@ -35,7 +35,7 @@ std::unordered_map<ShaderStage, std::filesystem::path> ParseShaderEntryMap(const
 
     for (auto it = jsonData.begin(); it != jsonData.end(); ++it) {
         ShaderStage stage = ShaderStageFromString(it.key());
-        std::filesystem::path relativePath = it.value().get<std::string>();
+        std::filesystem::path relativePath = it.value().get<string>();
         result[stage] = parentDir / relativePath;
     }
 
@@ -61,7 +61,7 @@ Ref<Shader> Shader::Create(const std::filesystem::path& filepath) {
     return nullptr;
 }
 
-Ref<Shader> Shader::Create(const std::string& name, const std::filesystem::path& filepath) {
+Ref<Shader> Shader::Create(const string& name, const std::filesystem::path& filepath) {
     switch (Renderer::GetAPI()) {
         case RendererAPI::API::None:
             Internal::Assert(false, "RendererAPI::None is currently not supported!");
@@ -80,7 +80,7 @@ Ref<Shader> Shader::Create(const std::string& name, const std::filesystem::path&
 /////////////////////////////////////////////////////////////////////////////
 // ShaderLibrary ////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
-void ShaderLibrary::Add(const std::string& name, const Ref<Shader>& shader) {
+void ShaderLibrary::Add(const string& name, const Ref<Shader>& shader) {
     Internal::Assert(!Exists(name), "Shader already exists!");
     m_Shaders[name] = shader;
 }
@@ -97,16 +97,16 @@ Ref<Shader> ShaderLibrary::Load(const std::filesystem::path& filepath) {
     return shader;
 }
 
-Ref<Shader> ShaderLibrary::Load(const std::string& name, const std::filesystem::path& filepath) {
+Ref<Shader> ShaderLibrary::Load(const string& name, const std::filesystem::path& filepath) {
     auto shader = Shader::Create(name, filepath);
     Add(name, shader);
     return shader;
 }
 
-Ref<Shader> ShaderLibrary::Get(const std::string& name) {
+Ref<Shader> ShaderLibrary::Get(const string& name) {
     Internal::Assert(Exists(name), "Shader not found!");
     return m_Shaders[name];
 }
 
-bool ShaderLibrary::Exists(const std::string& name) const { return m_Shaders.find(name) != m_Shaders.end(); }
+bool ShaderLibrary::Exists(const string& name) const { return m_Shaders.find(name) != m_Shaders.end(); }
 } // namespace iGe
