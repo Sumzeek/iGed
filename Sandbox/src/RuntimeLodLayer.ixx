@@ -38,15 +38,12 @@ private:
     // Empty VAO
     iGe::Ref<iGe::VertexArray> m_EmptyVertexArray;
 
-    // Test
-    MeshBaker::Mesh m_SimModel;
-    iGe::Ref<iGe::VertexArray> m_SimModelVertexArray;
-    MeshBaker::Mesh m_OriModel;
-    iGe::Ref<iGe::VertexArray> m_OriModelVertexArray;
-
     // Model
     MeshBaker::Mesh m_Model;
     iGe::Ref<iGe::VertexArray> m_ModelVertexArray;
+    MeshBaker::Mesh m_BakedModel;
+    iGe::Ref<iGe::VertexArray> m_BakedModelVertexArray;
+    iGe::Ref<iGe::Texture2D> m_BakedModelDisplaceMap;
 
     // Software Tessellation
     struct TessellatorData {
@@ -67,11 +64,6 @@ private:
     // Software Rasterization
     iGe::Ref<iGe::Texture2D> m_DepthBuffer;
     iGe::Ref<iGe::Buffer> m_Packed64Buffer;
-
-    //iGe::Ref<iGe::Buffer> m_TessFactorBuffer;
-    iGe::Ref<iGe::Texture2D> m_ModelDisplaceMap;
-    float m_DisplaceMapScale = 1.0f;
-    uint32_t m_TargetTessFactor = 5;
 
     // Camera
     iGe::PerspectiveCamera m_Camera;

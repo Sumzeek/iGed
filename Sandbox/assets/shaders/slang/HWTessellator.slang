@@ -110,6 +110,7 @@ struct TessEvalOutput {
     float3 te_WorldPos  : POSITION;
     float3 te_Normal    : NORMAL;
     float2 te_TexCoord  : TEXCOORD;
+    float3 te_Color;
 };
 
 [shader("tesseval")]
@@ -140,6 +141,9 @@ TessEvalOutput tesMain(
     // Compute integer pixel coordinates and fractional offsets
     int2 base = int2(floor(interpolatedTexCoord));
     float2 f = frac(interpolatedTexCoord);
+    
+    bool bx5 = (base.x % 5 == 0) && (f.x == 0.0f);
+    bool by5 = (base.y % 5 == 0) && (f.y == 0.0f);
 
     // Sample displacement values from the four neighboring texels
     float s00 = u_DisplaceMap.Load(int3(base.x,     base.y,     0)).r;
@@ -147,18 +151,37 @@ TessEvalOutput tesMain(
     float s01 = u_DisplaceMap.Load(int3(base.x,     base.y + 1, 0)).r;
     float s11 = u_DisplaceMap.Load(int3(base.x + 1, base.y + 1, 0)).r;
 
+    //float displacement;
+    float3 color;
+    //if (bx5 && by5) {
+    //    displacement = s00;
+    //    color = float3(1.0f, 0.0f, 0.0f);
+    //} else if (bx5 && !by5) {
+    //    displacement = lerp(s00, s01, f.y);
+    //    color = float3(0.0f, 1.0f, 0.0f);
+    //} else if (!bx5 && by5) {
+    //    displacement = lerp(s00, s10, f.x);
+    //    color = float3(0.0f, 0.0f, 1.0f);
+    //} else {
+    //    float sx0 = lerp(s00, s10, f.x);
+    //    float sx1 = lerp(s01, s11, f.x);
+    //    displacement = lerp(sx0, sx1, f.y);
+    //    color = float3(1.0f, 1.0f, 1.0f);
+    //}
+
     // Perform bilinear interpolation
     float sx0 = lerp(s00, s10, f.x);
     float sx1 = lerp(s01, s11, f.x);
     float displacement = lerp(sx0, sx1, f.y);
 
     // Offset the vertex along its normal by the displacement value
-    float3 position = interpolatedPosition + displacement * interpolatedNormal * u_DisplaceMapScale;
+    float3 position = interpolatedPosition + displacement * interpolatedNormal;
 
     out.te_Position = mul(u_ProjectionView, mul(u_Transform, float4(position, 1.0f)));
     out.te_WorldPos = mul(u_Transform, float4(position, 1.0f)).xyz;
     out.te_Normal = interpolatedNormal;
     out.te_TexCoord = interpolatedTexCoord;
+    out.te_Color = color;
 
     return out;
 }
@@ -190,5 +213,6 @@ float4 fsMain(TessEvalOutput input) : SV_Target
     float3 lighting = BlinnPhong(u_ViewPos, input.te_WorldPos, normal, light);
     color += lighting * baseColor;
 
+    // return float4(input.te_Color, 1.0f);
     return float4(color, 1.0f);
 }

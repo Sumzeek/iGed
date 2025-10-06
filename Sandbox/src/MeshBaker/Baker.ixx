@@ -41,9 +41,6 @@ void SaveExrFile(const BakeData& bakeData, const std::vector<float>& pixels);
 
 export std::vector<float> ReadExrFile(const std::string& filePath, int& width, int& height);
 
-export void Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution = 512);
-
 export void Bake(const Mesh& mesh, int resolution = 512);
-
-Mesh SimplifyMesh(const Mesh& src, float reductionRatio = 0.01f, float errorThreshold = 1e-2);
+export void BakeTest(const Mesh& simMesh, const Mesh& oriMesh, int resolution = 512);
 } // namespace MeshBaker

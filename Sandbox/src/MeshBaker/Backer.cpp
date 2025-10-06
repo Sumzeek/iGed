@@ -1,14 +1,21 @@
 module;
-#include "meshoptimizer.h"
 #include "tinyexr/tinyexr.h"
-#include "xatlas.h"
 #include <cstdlib>
 #include <cstring>
+
+#include <algorithm>
+#include <cmath>
+#include <vcg/complex/algorithms/bitquad_creation.h>
+#include <vcg/complex/algorithms/clean.h>
+#include <vcg/complex/algorithms/local_optimization/tri_edge_collapse_quadric.h>
+#include <vcg/complex/complex.h>
+#include <vcg/space/point3.h>
 
 module MeshBaker;
 import :Baker;
 import :CPUBaker;
 import :OptixBaker;
+import :Mesh; // make Mesh type visible (Mesh partition)
 import std;
 
 namespace MeshBaker
@@ -71,196 +78,6 @@ glm::vec3 Baker::ComputeBarycentric(const glm::vec2& a, const glm::vec2& b, cons
     return glm::vec3(u, v, w);
 }
 
-void ApplySimplePadding(const BakeData& bakeData, std::vector<float>& displace, int n) {
-    uint32_t width_u = bakeData.Width;
-    uint32_t height_u = bakeData.Height;
-    int width = static_cast<int>(width_u);
-    int height = static_cast<int>(height_u);
-
-    std::vector<uint8_t> mask(width * height, 0);
-    for (int i = 0; i < width * height; ++i) {
-        if (bakeData.BakedIndices[i] != BakedInvalidData) mask[i] = 1;
-    }
-
-    const int dirs[4][2] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
-    for (int iter = 0; iter < n; ++iter) {
-        std::vector<float> newDisplace = displace;
-        std::vector<uint8_t> newMask = mask;
-
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                int idx = y * width + x;
-                if (mask[idx] == 1) continue;
-
-                float sum = 0.0f;
-                int count = 0;
-
-                for (int d = 0; d < 4; ++d) {
-                    int nx = x + dirs[d][0];
-                    int ny = y + dirs[d][1];
-
-                    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-
-                    int nidx = ny * width + nx;
-                    if (mask[nidx] == 1) {
-                        sum += displace[nidx];
-                        count++;
-                    }
-                }
-
-                if (count > 0) {
-                    newDisplace[idx] = sum / count;
-                    newMask[idx] = 1;
-                }
-            }
-        }
-
-        displace.swap(newDisplace);
-        mask.swap(newMask);
-    }
-}
-
-void ApplyTrianglePadding(const BakeData& bakeData, std::vector<float>& displace, int n) {
-    uint32_t width = bakeData.Width;
-    uint32_t height = bakeData.Height;
-
-    std::vector<uint8_t> mask(width * height, 0);
-    for (int i = 0; i < width * height; i++) {
-        if (bakeData.BakedIndices[i] != BakedInvalidData) mask[i] = 1;
-    }
-
-    for (int iter = 0; iter < n; iter++) {
-        std::vector<uint8_t> newMask = mask;
-        std::vector<float> newDisplace = displace;
-
-        for (int y = 0; y < (int) height; y++) {
-            for (int x = 0; x < (int) width; x++) {
-                int idx = y * width + x;
-                if (mask[idx] == 1) continue;
-
-                float value = 0.0f;
-                int count = 0;
-
-                //const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-                const int dirs[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
-                for (auto& d: dirs) {
-                    int nx = x + d[0];
-                    int ny = y + d[1];
-                    if (nx < 0 || ny < 0 || nx >= (int) width || ny >= (int) height) continue;
-
-                    int nidx = ny * width + nx;
-                    if (mask[nidx] == 1) {
-                        value += displace[nidx];
-                        count++;
-                    }
-                }
-
-                if (count > 0) {
-                    newDisplace[idx] = value / count;
-                    newMask[idx] = 1;
-                }
-            }
-        }
-
-        displace.swap(newDisplace);
-        mask.swap(newMask);
-    }
-}
-
-glm::vec2 ClosestPointOnSegment(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b) {
-    glm::vec2 ab = b - a;
-    float t = glm::dot(p - a, ab) / glm::dot(ab, ab);
-    t = glm::clamp(t, 0.0f, 1.0f);
-    return a + t * ab;
-}
-void ApplyTrianglePaddingStrict(const BakeData& bakeData, std::vector<float>& displace, int n) {
-    uint32_t width = bakeData.Width;
-    uint32_t height = bakeData.Height;
-
-    std::vector<uint8_t> mask(width * height, 0);
-    for (int i = 0; i < width * height; i++) {
-        if (bakeData.BakedIndices[i] != BakedInvalidData) mask[i] = 1;
-    }
-
-    struct BoundaryPixel {
-        int x, y;
-        uint32_t triId;
-    };
-    std::vector<BoundaryPixel> boundaries;
-
-    for (int y = 0; y < (int) height; y++) {
-        for (int x = 0; x < (int) width; x++) {
-            int idx = y * width + x;
-            if (mask[idx] == 0) continue;
-
-            bool isBoundary = false;
-            const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-            for (auto& d: dirs) {
-                int nx = x + d[0], ny = y + d[1];
-                if (nx < 0 || ny < 0 || nx >= (int) width || ny >= (int) height) continue;
-                int nidx = ny * width + nx;
-                if (mask[nidx] == 0) {
-                    isBoundary = true;
-                    break;
-                }
-            }
-            if (isBoundary) { boundaries.push_back({x, y, bakeData.BakedIndices[idx]}); }
-        }
-    }
-
-    for (int iter = 0; iter < n; iter++) {
-        std::vector<uint8_t> newMask = mask;
-        std::vector<float> newDisplace = displace;
-
-        for (int y = 0; y < (int) height; y++) {
-            for (int x = 0; x < (int) width; x++) {
-                int idx = y * width + x;
-                if (mask[idx] == 1) continue;
-
-                glm::vec2 p(x + 0.5f, y + 0.5f);
-
-                float bestDist2 = 1e9f;
-                float bestValue = 0.0f;
-
-                for (auto& bp: boundaries) {
-                    int bidx = bp.y * width + bp.x;
-
-                    uint32_t i0 = bakeData.Mesh2->Indices[bp.triId * 3 + 0];
-                    uint32_t i1 = bakeData.Mesh2->Indices[bp.triId * 3 + 1];
-                    uint32_t i2 = bakeData.Mesh2->Indices[bp.triId * 3 + 2];
-
-                    glm::vec2 uv0 = bakeData.Mesh2->Vertices[i0].TexCoord * glm::vec2(width, height);
-                    glm::vec2 uv1 = bakeData.Mesh2->Vertices[i1].TexCoord * glm::vec2(width, height);
-                    glm::vec2 uv2 = bakeData.Mesh2->Vertices[i2].TexCoord * glm::vec2(width, height);
-
-                    glm::vec2 c0 = ClosestPointOnSegment(p, uv0, uv1);
-                    glm::vec2 c1 = ClosestPointOnSegment(p, uv1, uv2);
-                    glm::vec2 c2 = ClosestPointOnSegment(p, uv2, uv0);
-
-                    float d0 = glm::length(p - c0);
-                    float d1 = glm::length(p - c1);
-                    float d2 = glm::length(p - c2);
-
-                    float d = std::min(d0, std::min(d1, d2));
-
-                    if (d < bestDist2) {
-                        bestDist2 = d;
-                        bestValue = displace[bidx];
-                    }
-                }
-
-                if (bestDist2 < 1e8f) {
-                    newDisplace[idx] = bestValue;
-                    newMask[idx] = 1;
-                }
-            }
-        }
-
-        displace.swap(newDisplace);
-        mask.swap(newMask);
-    }
-}
-
 void SaveExrFile(const BakeData& bakeData, const std::vector<float>& pixels) {
     const float* data = pixels.data();
 
@@ -291,7 +108,7 @@ void SaveExrFile(const BakeData& bakeData, const std::vector<float>& pixels) {
     header.requested_pixel_types[0] = TINYEXR_PIXELTYPE_FLOAT;
 
     const char* err = nullptr;
-    std::string filename = "assets/textures/" + bakeData.Mesh2->Name + "_displacement.exr";
+    std::string filename = "assets/textures/" + bakeData.Mesh1->Name + "_displacement.exr";
     int ret = SaveEXRImageToFile(&image, &header, filename.c_str(), &err);
     if (ret != TINYEXR_SUCCESS) {
         if (err) {
@@ -349,9 +166,327 @@ std::vector<float> ReadExrFile(const std::string& filename, int& width, int& hei
     return pixels;
 }
 
-void Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) {
+namespace
+{
+// We declare local VCG types (vertex/face/edge) and then compose a TriMesh alias `VcgMesh`.
+class LocalVertex;
+class LocalFace;
+class LocalEdge;
+
+class LocalVertex
+    : public vcg::Vertex<vcg::UsedTypes<vcg::Use<LocalVertex>::AsVertexType, vcg::Use<LocalEdge>::AsEdgeType,
+                                        vcg::Use<LocalFace>::AsFaceType>,
+                         vcg::vertex::VFAdj, vcg::vertex::Coord3f, vcg::vertex::Normal3f, vcg::vertex::TexCoord2f,
+                         vcg::vertex::Mark, vcg::vertex::Qualityf, vcg::vertex::BitFlags> {
+public:
+    // Provide quadric accessor required by TriEdgeCollapseQuadric
+    vcg::math::Quadric<double>& Qd() { return q; }
+
+private:
+    vcg::math::Quadric<double> q;
+};
+
+class LocalFace : public vcg::Face<vcg::UsedTypes<vcg::Use<LocalVertex>::AsVertexType, vcg::Use<LocalEdge>::AsEdgeType,
+                                                  vcg::Use<LocalFace>::AsFaceType>,
+                                   vcg::face::VertexRef, vcg::face::Normal3f, vcg::face::VFAdj, vcg::face::FFAdj,
+                                   vcg::face::Qualityf, vcg::face::BitFlags> {};
+
+class LocalEdge : public vcg::Edge<vcg::UsedTypes<vcg::Use<LocalVertex>::AsVertexType, vcg::Use<LocalEdge>::AsEdgeType,
+                                                  vcg::Use<LocalFace>::AsFaceType>> {};
+
+using VcgMesh = vcg::tri::TriMesh<std::vector<LocalVertex>, std::vector<LocalFace>, std::vector<LocalEdge>>;
+
+// Add a TriEdgeCollapseQuadric specialization for our local mesh types
+typedef vcg::tri::BasicVertexPair<LocalVertex> VertexPair;
+
+class MyTriEdgeCollapse : public vcg::tri::TriEdgeCollapseQuadric<VcgMesh, VertexPair, MyTriEdgeCollapse,
+                                                                  vcg::tri::QInfoStandard<LocalVertex>> {
+public:
+    typedef vcg::tri::TriEdgeCollapseQuadric<VcgMesh, VertexPair, MyTriEdgeCollapse,
+                                             vcg::tri::QInfoStandard<LocalVertex>>
+            TECQ;
+    inline MyTriEdgeCollapse(const VertexPair& p, int i, vcg::BaseParameterClass* pp) : TECQ(p, i, pp) {}
+};
+} // namespace
+
+// Convert from our mesh to vcg mesh
+static void MeshToVcgMesh(const Mesh& in, VcgMesh& out) {
+    out.Clear();
+
+    // Reserve vertices and faces
+    size_t vcount = in.Vertices.size();
+    size_t fcount = in.Indices.size() / 3;
+    out.vert.resize(vcount);
+    out.face.resize(fcount);
+
+    // Fill vertices
+    for (size_t i = 0; i < vcount; ++i) {
+        auto& v = out.vert[i];
+        const auto& src = in.Vertices[i];
+        v.P() = vcg::Point3f(src.Position.x, src.Position.y, src.Position.z);
+        v.N() = vcg::Point3f(src.Normal.x, src.Normal.y, src.Normal.z);
+        v.T().u() = src.TexCoord.x;
+        v.T().v() = src.TexCoord.y;
+    }
+
+    // Fill faces (assume indices are valid)
+    for (size_t fi = 0; fi < fcount; ++fi) {
+        auto& f = out.face[fi];
+        uint32_t i0 = in.Indices[fi * 3 + 0];
+        uint32_t i1 = in.Indices[fi * 3 + 1];
+        uint32_t i2 = in.Indices[fi * 3 + 2];
+        f.V(0) = &out.vert[i0];
+        f.V(1) = &out.vert[i1];
+        f.V(2) = &out.vert[i2];
+    }
+
+    out.vn = static_cast<int>(vcount);
+    out.fn = static_cast<int>(fcount);
+
+    // Update topology and normals
+    vcg::tri::UpdateTopology<VcgMesh>::VertexFace(out);
+    vcg::tri::UpdateTopology<VcgMesh>::FaceFace(out);
+    vcg::tri::UpdateNormal<VcgMesh>::PerFaceNormalized(out);
+    vcg::tri::UpdateNormal<VcgMesh>::PerVertexFromCurrentFaceNormal(out);
+    vcg::tri::UpdateBounding<VcgMesh>::Box(out);
+}
+
+// Convert back from vcg mesh to our mesh
+static void VcgMeshToMesh(const VcgMesh& in, Mesh& out) {
+    out.Vertices.clear();
+    out.Indices.clear();
+
+    // Map vertices
+    size_t vcount = in.vert.size();
+    out.Vertices.resize(vcount);
+    for (size_t i = 0; i < vcount; ++i) {
+        const auto& v = in.vert[i];
+        Vertex mv;
+        mv.Position = glm::vec3(v.P().X(), v.P().Y(), v.P().Z());
+        mv.Normal = glm::vec3(v.N().X(), v.N().Y(), v.N().Z());
+        mv.TexCoord = glm::vec2(v.T().u(), v.T().v());
+        out.Vertices[i] = mv;
+    }
+
+    // Faces -> indices
+    size_t fcount = in.face.size();
+    out.Indices.reserve(fcount * 3);
+    for (size_t fi = 0; fi < fcount; ++fi) {
+        const auto& f = in.face[fi];
+        if (!f.IsD()) {
+            auto* v0 = f.V(0);
+            auto* v1 = f.V(1);
+            auto* v2 = f.V(2);
+            ptrdiff_t idx0 = v0 - &in.vert[0];
+            ptrdiff_t idx1 = v1 - &in.vert[0];
+            ptrdiff_t idx2 = v2 - &in.vert[0];
+            out.Indices.push_back(static_cast<uint32_t>(idx0));
+            out.Indices.push_back(static_cast<uint32_t>(idx1));
+            out.Indices.push_back(static_cast<uint32_t>(idx2));
+        }
+    }
+
+    // Update bounds
+    vcg::tri::UpdateBounding<VcgMesh>::Box(const_cast<VcgMesh&>(in));
+    // compute center/radius
+    if (!in.vert.empty()) {
+        const auto& b = in.bbox;
+        out.Center = glm::vec3((b.min.X() + b.max.X()) * 0.5f, (b.min.Y() + b.max.Y()) * 0.5f,
+                               (b.min.Z() + b.max.Z()) * 0.5f);
+        float dx = b.max.X() - b.min.X();
+        float dy = b.max.Y() - b.min.Y();
+        float dz = b.max.Z() - b.min.Z();
+        out.Radius = 0.5f * std::sqrt(dx * dx + dy * dy + dz * dz);
+    } else {
+        out.Center = glm::vec3(0.0f);
+        out.Radius = 0.0f;
+    }
+}
+
+void Bake(const Mesh& mesh, int resolution) {
+    VcgMesh vm;
+    MeshToVcgMesh(mesh, vm);
+
+    // Simpilify mesh
+    float targetRatio = 0.1f;
+    {
+        // Prepare quadric decimation parameters
+        vcg::tri::TriEdgeCollapseQuadricParameter qparams;
+        // tweak a few sensible defaults for general meshes
+        qparams.QualityCheck = true;
+        qparams.NormalCheck = true;
+        qparams.OptimalPlacement = true; // use quadric optimal placement
+        qparams.ScaleIndependent = true; // make quadric scale independent
+
+        // compute current face count and decide target
+        size_t startFaces = vm.face.size();
+        size_t targetFaces = std::max<size_t>(4, static_cast<size_t>(startFaces * targetRatio));
+        // Initialize decimation session
+        vcg::LocalOptimization<VcgMesh> DeciSession(vm, &qparams);
+        DeciSession.Init<MyTriEdgeCollapse>();
+        // Set stopping criteria
+        DeciSession.SetTargetSimplices(static_cast<int>(targetFaces));
+
+        // Run optimization loop
+        while (DeciSession.DoOptimization() && vm.fn > targetFaces) {
+            // progress can be logged here if desired
+        }
+        vcg::tri::Clean<VcgMesh>::RemoveDegenerateFace(vm);
+        vcg::tri::Clean<VcgMesh>::RemoveDuplicateFace(vm);
+        vcg::tri::Clean<VcgMesh>::RemoveUnreferencedVertex(vm);
+        vcg::tri::Allocator<VcgMesh>::CompactEveryVector(vm); // preferred
+
+        // Rebuild topology, normals and bounding box
+        vcg::tri::UpdateTopology<VcgMesh>::VertexFace(vm);
+        vcg::tri::UpdateTopology<VcgMesh>::FaceFace(vm);
+        vcg::tri::UpdateNormal<VcgMesh>::PerFaceNormalized(vm);
+        vcg::tri::UpdateNormal<VcgMesh>::PerVertexFromCurrentFaceNormal(vm);
+        vcg::tri::UpdateBounding<VcgMesh>::Box(vm);
+    }
+
+    // Quad pairing
+    Mesh bakedMesh;
+    bakedMesh.Name = mesh.Name + "_baked";
+    {
+        // Use temp mesh to pair
+        if (vcg::tri::Clean<VcgMesh>::CountNonManifoldEdgeFF(vm) > 0) {
+            std::cerr << "Error: Mesh is not 2-manifold." << std::endl;
+            return;
+        }
+
+        // Prepare the mesh for quad pairing
+        vcg::tri::BitQuadCreation<VcgMesh>::MakeTriEvenBySplit(vm);
+
+        // Attempt to make pure quads by flipping edges
+        bool ret = vcg::tri::BitQuadCreation<VcgMesh>::MakePureByFlip(vm, 100);
+        if (!ret) {
+            std::cerr << "Warning: BitQuadCreation<MyMesh>::MakePureByFlip failed." << std::endl;
+            return;
+        }
+
+        // Collect pairs
+        std::vector<std::pair<int, int>> quadPairs;
+        std::vector<char> paired(vm.face.size(), 0);
+        for (auto fi = vm.face.begin(); fi != vm.face.end(); ++fi) {
+            if (fi->IsD()) { continue; }
+            if (!fi->IsAnyF()) { continue; }
+            int fauxIndex = -1;
+            for (int k = 0; k < 3; ++k) {
+                if (fi->IsF(k)) {
+                    fauxIndex = k;
+                    break;
+                }
+            }
+            if (fauxIndex < 0) { continue; }
+            auto* fb = fi->FFp(fauxIndex);
+            if (!fb) { continue; }
+            int idxA = vcg::tri::Index(vm, *fi);
+            int idxB = vcg::tri::Index(vm, *fb);
+            if (idxA < 0 || idxB < 0) { continue; }
+            if (idxA > idxB) std::swap(idxA, idxB);
+            if (!paired[idxA] && !paired[idxB]) {
+                paired[idxA] = paired[idxB] = 1;
+                quadPairs.emplace_back(idxA, idxB);
+                // std::cout << "Quad: tri " << idxA << " + tri " << idxB << std::endl;
+            }
+        }
+
+        // Now layout the quad pairs into the texture grid and write vertices + indices
+        const int numQuads = static_cast<int>(quadPairs.size());
+        if (numQuads > 0) {
+            int grid = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(numQuads))));
+            if (grid <= 0) { grid = 1; }
+
+            int cellSize = resolution / grid;
+            int startOffset = 5;
+            int step = cellSize + 10;
+
+            // For each quad, create four vertices with TexCoord set to pixel coordinates
+            // and a simple XY position (normalized) so the mesh is exportable as OBJ if needed.
+            for (int qi = 0; qi < numQuads; ++qi) {
+                const auto& pair = quadPairs[qi];
+                int idxA = pair.first;
+                int idxB = pair.second;
+
+                // Get the original triangle vertex indices
+                const auto& faceA = vm.face[idxA];
+                const auto& faceB = vm.face[idxB];
+
+                // Deduplicate to get 4 unique indices
+                std::array<uint32_t, 4> quadIndices;
+                {
+                    std::array<uint32_t, 3> triA;
+                    std::array<uint32_t, 3> triB;
+                    for (int k = 0; k < 3; ++k) { triA[k] = faceA.V(k) - &vm.vert[0]; }
+                    for (int k = 0; k < 3; ++k) { triB[k] = faceB.V(k) - &vm.vert[0]; }
+
+                    std::vector<uint32_t> shared, unique;
+                    for (auto v: triA) {
+                        if (std::find(triB.begin(), triB.end(), v) != triB.end()) {
+                            shared.push_back(v);
+                        } else {
+                            unique.push_back(v);
+                        }
+                    }
+
+                    for (auto v: triB) {
+                        if (std::find(triA.begin(), triA.end(), v) == triA.end()) { unique.push_back(v); }
+                    }
+
+                    if (shared.size() != 2 || unique.size() != 2) {
+                        std::cerr << "Error: Quad pairing did not yield 4 unique vertices." << std::endl;
+                        continue;
+                    }
+
+                    quadIndices[0] = unique[0];
+                    quadIndices[1] = shared[0];
+                    quadIndices[2] = shared[1];
+                    quadIndices[3] = unique[1];
+                }
+
+                // Calculate texture coordinate
+                std::array<glm::vec2, 4> texCoords;
+                {
+                    int row = qi / grid;
+                    int col = qi % grid;
+                    int x0 = startOffset + col * step;
+                    int y0 = startOffset + row * step;
+                    int x1 = x0 + cellSize;
+                    int y1 = y0 + cellSize;
+
+                    texCoords[0] = glm::vec2(static_cast<float>(x0), static_cast<float>(y0));
+                    texCoords[1] = glm::vec2(static_cast<float>(x0), static_cast<float>(y1));
+                    texCoords[2] = glm::vec2(static_cast<float>(x1), static_cast<float>(y0));
+                    texCoords[3] = glm::vec2(static_cast<float>(x1), static_cast<float>(y1));
+                }
+                size_t baseIndex = bakedMesh.Vertices.size();
+                for (int vi = 0; vi < 4; ++vi) {
+                    Vertex v;
+                    v.Position = glm::vec3(vm.vert[quadIndices[vi]].P().X(), vm.vert[quadIndices[vi]].P().Y(),
+                                           vm.vert[quadIndices[vi]].P().Z());
+                    v.Normal = glm::vec3(vm.vert[quadIndices[vi]].N().X(), vm.vert[quadIndices[vi]].N().Y(),
+                                         vm.vert[quadIndices[vi]].N().Z());
+                    v.TexCoord = texCoords[vi];
+                    bakedMesh.Vertices.push_back(v);
+                }
+
+                // Indices for two triangles (quad)
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 0));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 1));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 2));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 2));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 1));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 3));
+            }
+        }
+    }
+
+    // Save the baked mesh
+    ExportMeshAsOBJ(bakedMesh);
+
+    // Bake the original mesh onto the baked mesh
     auto baker = Baker::Create();
-    BakeData bakeData = baker->Bake(mesh1, mesh2, resolution);
+    BakeData bakeData = baker->Bake(bakedMesh, mesh, resolution);
 
     uint32_t width = bakeData.Width;
     uint32_t height = bakeData.Height;
@@ -382,288 +517,177 @@ void Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) {
     SaveExrFile(bakeData, displace);
 }
 
-using Edge = std::pair<uint32_t, uint32_t>;
-struct edge_hash {
-    std::size_t operator()(const Edge& e) const noexcept {
-        std::size_t h1 = std::hash<uint32_t>{}(e.first);
-        std::size_t h2 = std::hash<uint32_t>{}(e.second);
-        return h1 ^ (h2 << 1);
-    }
-};
-void Bake(const Mesh& mesh, int resolution) {
-    // Simplification mesh
-    Mesh simMesh = SimplifyMesh(mesh);
+void BakeTest(const Mesh& simMesh, const Mesh& oriMesh, int resolution) {
+    VcgMesh vm;
+    MeshToVcgMesh(simMesh, vm);
 
-    // Split to meshlet
-    Mesh uvMesh;
+    // Quad pairing
+    Mesh bakedMesh;
+    bakedMesh.Name = simMesh.Name + "_baked";
     {
-        uvMesh.Name = simMesh.Name + "_UV";
-        uvMesh.Center = simMesh.Center;
-        uvMesh.Radius = simMesh.Radius;
+        // Use temp mesh to pair
+        if (vcg::tri::Clean<VcgMesh>::CountNonManifoldEdgeFF(vm) > 0) {
+            std::cerr << "Error: Mesh is not 2-manifold." << std::endl;
+            return;
+        }
 
-        // Build clusters using meshlets
-        const size_t maxVerts = 64;
-        const size_t maxTris = 124;
-        const float coneWeight = 0.0f;
+        // Prepare the mesh for quad pairing
+        vcg::tri::BitQuadCreation<VcgMesh>::MakeTriEvenBySplit(vm);
 
-        std::vector<glm::vec3> positions = simMesh.GetPositionArray();
-        const float* vertex_positions = reinterpret_cast<const float*>(positions.data());
-        size_t vertex_count = positions.size();
+        // Attempt to make pure quads by flipping edges
+        bool ret = vcg::tri::BitQuadCreation<VcgMesh>::MakePureByFlip(vm, 100);
+        if (!ret) {
+            std::cerr << "Warning: BitQuadCreation<MyMesh>::MakePureByFlip failed." << std::endl;
+            return;
+        }
 
-        std::vector<uint32_t> indices = simMesh.GetIndexArray();
-        size_t index_count = indices.size();
-
-        std::vector<uint32_t> optimized_indices(index_count);
-        meshopt_optimizeVertexCache(optimized_indices.data(), indices.data(), index_count, vertex_count);
-
-        size_t max_meshlets = meshopt_buildMeshletsBound(index_count, maxVerts, maxTris);
-
-        std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-        std::vector<uint32_t> meshletVertices(max_meshlets * maxVerts);
-        std::vector<unsigned char> meshletTriangles(max_meshlets * maxTris * 3);
-
-        size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshletVertices.data(), meshletTriangles.data(),
-                                                     optimized_indices.data(), index_count, vertex_positions,
-                                                     vertex_count, sizeof(float) * 3, maxVerts, maxTris, coneWeight);
-
-        // Create new mesh from meshlets
-        for (size_t i = 0; i < meshlet_count; ++i) {
-            const meshopt_Meshlet& meshlet = meshlets[i];
-
-            uint32_t offset = static_cast<uint32_t>(uvMesh.Vertices.size());
-            for (uint32_t j = 0; j < meshlet.vertex_count; ++j) {
-                uint32_t originalIndex = meshletVertices[meshlet.vertex_offset + j];
-                uvMesh.Vertices.push_back(simMesh.Vertices[originalIndex]);
-            }
-
-            for (uint32_t t = 0; t < meshlet.triangle_count; ++t) {
-                unsigned char* tri = &meshletTriangles[meshlet.triangle_offset + t * 3];
-                for (int k = 0; k < 3; ++k) {
-                    uint32_t originalIndex = offset + tri[k];
-                    uvMesh.Indices.push_back(originalIndex);
+        // Collect pairs
+        std::vector<std::pair<int, int>> quadPairs;
+        std::vector<char> paired(vm.face.size(), 0);
+        for (auto fi = vm.face.begin(); fi != vm.face.end(); ++fi) {
+            if (fi->IsD()) { continue; }
+            if (!fi->IsAnyF()) { continue; }
+            int fauxIndex = -1;
+            for (int k = 0; k < 3; ++k) {
+                if (fi->IsF(k)) {
+                    fauxIndex = k;
+                    break;
                 }
+            }
+            if (fauxIndex < 0) { continue; }
+            auto* fb = fi->FFp(fauxIndex);
+            if (!fb) { continue; }
+            int idxA = vcg::tri::Index(vm, *fi);
+            int idxB = vcg::tri::Index(vm, *fb);
+            if (idxA < 0 || idxB < 0) { continue; }
+            if (idxA > idxB) std::swap(idxA, idxB);
+            if (!paired[idxA] && !paired[idxB]) {
+                paired[idxA] = paired[idxB] = 1;
+                quadPairs.emplace_back(idxA, idxB);
+                // std::cout << "Quad: tri " << idxA << " + tri " << idxB << std::endl;
+            }
+        }
+
+        // Now layout the quad pairs into the texture grid and write vertices + indices
+        const int numQuads = static_cast<int>(quadPairs.size());
+        if (numQuads > 0) {
+            int grid = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(numQuads))));
+            if (grid <= 0) { grid = 1; }
+            int cellSize = resolution / grid;
+
+            // For each quad, create four vertices with TexCoord set to pixel coordinates
+            // and a simple XY position (normalized) so the mesh is exportable as OBJ if needed.
+            for (int qi = 0; qi < numQuads; ++qi) {
+                const auto& pair = quadPairs[qi];
+                int idxA = pair.first;
+                int idxB = pair.second;
+
+                // Get the original triangle vertex indices
+                const auto& faceA = vm.face[idxA];
+                const auto& faceB = vm.face[idxB];
+
+                // Deduplicate to get 4 unique indices
+                std::array<uint32_t, 4> quadIndices;
+                {
+                    std::array<uint32_t, 3> triA;
+                    std::array<uint32_t, 3> triB;
+                    for (int k = 0; k < 3; ++k) { triA[k] = faceA.V(k) - &vm.vert[0]; }
+                    for (int k = 0; k < 3; ++k) { triB[k] = faceB.V(k) - &vm.vert[0]; }
+
+                    std::vector<uint32_t> shared, unique;
+                    for (auto v: triA) {
+                        if (std::find(triB.begin(), triB.end(), v) != triB.end()) {
+                            shared.push_back(v);
+                        } else {
+                            unique.push_back(v);
+                        }
+                    }
+
+                    for (auto v: triB) {
+                        if (std::find(triA.begin(), triA.end(), v) == triA.end()) { unique.push_back(v); }
+                    }
+
+                    if (shared.size() != 2 || unique.size() != 2) {
+                        std::cerr << "Error: Quad pairing did not yield 4 unique vertices." << std::endl;
+                        continue;
+                    }
+
+                    quadIndices[0] = unique[0];
+                    quadIndices[1] = shared[0];
+                    quadIndices[2] = shared[1];
+                    quadIndices[3] = unique[1];
+                }
+
+                // Calculate texture coordinate
+                std::array<glm::vec2, 4> texCoords;
+                {
+                    int row = qi / grid;
+                    int col = qi % grid;
+                    int x0 = row * cellSize;
+                    int y0 = col * cellSize;
+                    int x1 = x0 + cellSize - 1;
+                    int y1 = y0 + cellSize - 1;
+
+                    texCoords[0] = glm::vec2(static_cast<float>(x0), static_cast<float>(y0));
+                    texCoords[1] = glm::vec2(static_cast<float>(x0), static_cast<float>(y1));
+                    texCoords[2] = glm::vec2(static_cast<float>(x1), static_cast<float>(y0));
+                    texCoords[3] = glm::vec2(static_cast<float>(x1), static_cast<float>(y1));
+                }
+                size_t baseIndex = bakedMesh.Vertices.size();
+                for (int vi = 0; vi < 4; ++vi) {
+                    Vertex v;
+                    v.Position = glm::vec3(vm.vert[quadIndices[vi]].P().X(), vm.vert[quadIndices[vi]].P().Y(),
+                                           vm.vert[quadIndices[vi]].P().Z());
+                    v.Normal = glm::vec3(vm.vert[quadIndices[vi]].N().X(), vm.vert[quadIndices[vi]].N().Y(),
+                                         vm.vert[quadIndices[vi]].N().Z());
+                    v.TexCoord = texCoords[vi];
+                    bakedMesh.Vertices.push_back(v);
+                }
+
+                // Indices for two triangles (quad)
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 0));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 1));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 2));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 2));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 1));
+                bakedMesh.Indices.push_back(static_cast<uint32_t>(baseIndex + 3));
             }
         }
     }
 
-    // Use xatlas to generate UV
-    xatlas::Atlas* atlas = xatlas::Create();
+    // Save the baked mesh
+    ExportMeshAsOBJ(bakedMesh);
+
+    // Bake the original mesh onto the baked mesh
+    auto baker = Baker::Create();
+    BakeData bakeData = baker->Bake(bakedMesh, oriMesh, resolution);
+
+    uint32_t width = bakeData.Width;
+    uint32_t height = bakeData.Height;
+
+    // Generate the data from BakeData
+    std::vector<float> displace(width * height, 0.0f);
     {
-        xatlas::MeshDecl meshDecl{};
-        meshDecl.vertexCount = static_cast<uint32_t>(uvMesh.Vertices.size());
-        meshDecl.vertexPositionData = uvMesh.Vertices.data();
-        meshDecl.vertexPositionStride = sizeof(Vertex);
-        meshDecl.vertexUvData = nullptr;
-        meshDecl.vertexUvStride = 0;
-
-        meshDecl.indexCount = static_cast<uint32_t>(uvMesh.Indices.size());
-        meshDecl.indexData = uvMesh.Indices.data();
-        meshDecl.indexFormat = xatlas::IndexFormat::UInt32;
-
-        meshDecl.faceCount = static_cast<uint32_t>(uvMesh.Indices.size() / 3);
-        meshDecl.epsilon = 1e-6f;
-
-        // Add mesh to xatlas
-        xatlas::AddMesh(atlas, meshDecl);
-
-        // Compute charts
-        xatlas::ChartOptions chartOptions{};
-        chartOptions.maxIterations = 8;
-        chartOptions.useInputMeshUvs = false;
-        xatlas::ComputeCharts(atlas, chartOptions);
-
-        // Pack charts
-        xatlas::PackOptions packOptions{};
-        packOptions.resolution = resolution;
-        packOptions.padding = 2;
-        packOptions.bilinear = true;
-        xatlas::PackCharts(atlas, packOptions);
-
-        // Draw uv to uvMesh
-        if (atlas->meshCount > 0) {
-            const xatlas::Mesh& outMesh = atlas->meshes[0];
-            for (uint32_t i = 0; i < outMesh.vertexCount; ++i) {
-                const xatlas::Vertex& v = outMesh.vertexArray[i];
-                if (v.atlasIndex >= 0) {
-                    uvMesh.Vertices[v.xref].TexCoord[0] = v.uv[0] / static_cast<float>(atlas->width);
-                    uvMesh.Vertices[v.xref].TexCoord[1] = v.uv[1] / static_cast<float>(atlas->height);
-                }
+        for (int i = 0; i < width * height; ++i) {
+            uint32_t triId = bakeData.BakedIndices[i];
+            if (triId == BakedInvalidData) {
+                displace[i] = 0.0f;
+                continue;
             }
+
+            uint32_t i0 = bakeData.Mesh2->Indices[triId * 3 + 0];
+            uint32_t i1 = bakeData.Mesh2->Indices[triId * 3 + 1];
+            uint32_t i2 = bakeData.Mesh2->Indices[triId * 3 + 2];
+
+            const glm::vec3& v0 = bakeData.Mesh2->Vertices[i0].Position;
+            const glm::vec3& v1 = bakeData.Mesh2->Vertices[i1].Position;
+            const glm::vec3& v2 = bakeData.Mesh2->Vertices[i2].Position;
+
+            Baker::RayTriangleIntersect(bakeData.Originals[i], bakeData.Directions[i], v0, v1, v2, displace[i]);
         }
     }
-    xatlas::Destroy(atlas);
 
-    //Mesh testMesh;
-    //testMesh.Name = "sss";
-    //
-    //xatlas::Atlas* atlas = xatlas::Create();
-    //{
-    //    testMesh.Vertices.push_back(Vertex{.Position = {-1.0f, -1.0f, 0.0f}});
-    //    testMesh.Vertices.push_back(Vertex{.Position = {-1.0f, 1.0f, 0.0f}});
-    //    testMesh.Vertices.push_back(Vertex{.Position = {1.0f, -1.0f, 0.0f}});
-    //    testMesh.Vertices.push_back(Vertex{.Position = {-1.0f, 1.0f, 0.0f}});
-    //    testMesh.Vertices.push_back(Vertex{.Position = {1.0f, -1.0f, 0.0f}});
-    //    testMesh.Vertices.push_back(Vertex{.Position = {1.0f, 1.0f, 0.0f}});
-    //
-    //    testMesh.Indices.push_back(0);
-    //    testMesh.Indices.push_back(1);
-    //    testMesh.Indices.push_back(2);
-    //    testMesh.Indices.push_back(3);
-    //    testMesh.Indices.push_back(4);
-    //    testMesh.Indices.push_back(5);
-    //
-    //    xatlas::MeshDecl meshDecl{};
-    //    //meshDecl.vertexCount = static_cast<uint32_t>(uvMesh.Vertices.size());
-    //    meshDecl.vertexCount = static_cast<uint32_t>(testMesh.Vertices.size());
-    //    //meshDecl.vertexPositionData = uvMesh.Vertices.data();
-    //    meshDecl.vertexPositionData = testMesh.Vertices.data();
-    //    meshDecl.vertexPositionStride = sizeof(Vertex);
-    //    meshDecl.vertexUvData = nullptr;
-    //    meshDecl.vertexUvStride = 0;
-    //
-    //    //meshDecl.indexCount = static_cast<uint32_t>(uvMesh.Indices.size());
-    //    meshDecl.indexCount = static_cast<uint32_t>(testMesh.Indices.size());
-    //    //meshDecl.indexData = uvMesh.Indices.data();
-    //    meshDecl.indexData = testMesh.Indices.data();
-    //    meshDecl.indexFormat = xatlas::IndexFormat::UInt32;
-    //
-    //    //meshDecl.faceCount = static_cast<uint32_t>(uvMesh.Indices.size() / 3);
-    //    meshDecl.faceCount = static_cast<uint32_t>(2);
-    //    meshDecl.epsilon = 1e-6f;
-    //
-    //    // Add mesh to xatlas
-    //    xatlas::AddMesh(atlas, meshDecl);
-    //
-    //    // Compute charts
-    //    xatlas::ChartOptions chartOptions{};
-    //    chartOptions.maxIterations = 8;
-    //    chartOptions.useInputMeshUvs = false;
-    //    xatlas::ComputeCharts(atlas, chartOptions);
-    //
-    //    // Pack charts
-    //    xatlas::PackOptions packOptions{};
-    //    packOptions.resolution = resolution;
-    //    packOptions.padding = 2;
-    //    packOptions.bilinear = true;
-    //    xatlas::PackCharts(atlas, packOptions);
-    //
-    //    // Draw uv to uvMesh
-    //    if (atlas->meshCount > 0) {
-    //        const xatlas::Mesh& outMesh = atlas->meshes[0];
-    //        for (uint32_t i = 0; i < outMesh.vertexCount; ++i) {
-    //            const xatlas::Vertex& v = outMesh.vertexArray[i];
-    //            if (v.atlasIndex >= 0) {
-    //                //uvMesh.Vertices[v.xref].TexCoord[0] = v.uv[0] / static_cast<float>(atlas->width);
-    //                //uvMesh.Vertices[v.xref].TexCoord[1] = v.uv[1] / static_cast<float>(atlas->height);
-    //                testMesh.Vertices[v.xref].TexCoord[0] = v.uv[0] / static_cast<float>(atlas->width);
-    //                testMesh.Vertices[v.xref].TexCoord[1] = v.uv[1] / static_cast<float>(atlas->height);
-    //            }
-    //        }
-    //    }
-    //}
-    //xatlas::Destroy(atlas);
-    //ExportMeshAsOBJ(testMesh);
-
-    //// Mark seams
-    //std::vector<Edge> seams;
-    //{
-    //    // Build clusters using meshlets
-    //    const size_t maxVerts = 64;
-    //    const size_t maxTris = 124;
-    //    const float coneWeight = 0.0f;
-    //
-    //    std::vector<glm::vec3> positions = simMesh.GetPositionArray();
-    //    const float* vertex_positions = reinterpret_cast<const float*>(positions.data());
-    //    size_t vertex_count = positions.size();
-    //
-    //    std::vector<uint32_t> indices = simMesh.GetIndexArray();
-    //    size_t index_count = indices.size();
-    //
-    //    std::vector<uint32_t> optimized_indices(index_count);
-    //    meshopt_optimizeVertexCache(optimized_indices.data(), indices.data(), index_count, vertex_count);
-    //
-    //    size_t max_meshlets = meshopt_buildMeshletsBound(index_count, maxVerts, maxTris);
-    //
-    //    std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-    //    std::vector<uint32_t> meshletVertices(max_meshlets * maxVerts);
-    //    std::vector<unsigned char> meshletTriangles(max_meshlets * maxTris * 3);
-    //
-    //    size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshletVertices.data(), meshletTriangles.data(),
-    //                                                 optimized_indices.data(), index_count, vertex_positions,
-    //                                                 vertex_count, sizeof(float) * 3, maxVerts, maxTris, coneWeight);
-    //
-    //    // Use edge map to find seams
-    //    auto make_edge = [](uint32_t a, uint32_t b) { return std::make_pair(std::min(a, b), std::max(a, b)); };
-    //
-    //    for (uint32_t m = 0; m < meshlet_count; ++m) {
-    //        const meshopt_Meshlet& meshlet = meshlets[m];
-    //
-    //        size_t tri_start = meshlet.triangle_offset;
-    //        size_t tri_end = tri_start + meshlet.triangle_count;
-    //
-    //        std::unordered_map<Edge, std::vector<uint32_t>, edge_hash> edgeToMeshlets;
-    //        for (size_t t = tri_start; t < tri_end; ++t) {
-    //            uint32_t i0 = meshletTriangles[t * 3 + 0];
-    //            uint32_t i1 = meshletTriangles[t * 3 + 1];
-    //            uint32_t i2 = meshletTriangles[t * 3 + 2];
-    //
-    //            edgeToMeshlets[make_edge(i0, i1)].push_back(m);
-    //            edgeToMeshlets[make_edge(i1, i2)].push_back(m);
-    //            edgeToMeshlets[make_edge(i2, i0)].push_back(m);
-    //        }
-    //
-    //        for (auto& [edge, meshletList]: edgeToMeshlets) {
-    //            std::sort(meshletList.begin(), meshletList.end());
-    //            meshletList.erase(std::unique(meshletList.begin(), meshletList.end()), meshletList.end());
-    //            if (meshletList.size() > 1) { seams.push_back(edge); }
-    //        }
-    //    }
-    //}
-
-    // Save the simplified mesh with UVs
-    ExportMeshAsOBJ(uvMesh);
-}
-
-Mesh SimplifyMesh(const Mesh& src, float reductionRatio, float errorThreshold) {
-    Mesh dst;
-    dst.Name = src.Name + "_Sim";
-
-    const auto& vertices = src.Vertices;
-    const auto& indices = src.Indices;
-
-    size_t indexCount = indices.size();
-    size_t vertexCount = vertices.size();
-
-    std::vector<uint32_t> newIndices(indexCount);
-
-    size_t targetIndexCount = size_t(indexCount * reductionRatio);
-
-    size_t resultCount =
-            meshopt_simplify(newIndices.data(), indices.data(), indices.size(), (const float*) vertices.data(),
-                             vertexCount, sizeof(Vertex), targetIndexCount, errorThreshold);
-
-    newIndices.resize(resultCount);
-
-    std::vector<uint32_t> remap(vertexCount);
-    size_t newVertexCount = meshopt_generateVertexRemap(remap.data(), newIndices.data(), newIndices.size(),
-                                                        vertices.data(), vertexCount, sizeof(Vertex));
-
-    std::vector<Vertex> newVertices(newVertexCount);
-    meshopt_remapVertexBuffer(newVertices.data(), vertices.data(), vertexCount, sizeof(Vertex), remap.data());
-    meshopt_remapIndexBuffer(newIndices.data(), newIndices.data(), newIndices.size(), remap.data());
-
-    dst.Vertices = std::move(newVertices);
-    dst.Indices = std::move(newIndices);
-
-    glm::vec3 center(0.0f);
-    for (auto& v: dst.Vertices) center += v.Position;
-    center /= (float) dst.Vertices.size();
-    dst.Center = center;
-
-    float radius = 0.0f;
-    for (auto& v: dst.Vertices) radius = std::max(radius, glm::length(v.Position - center));
-    dst.Radius = radius;
-
-    return dst;
+    // Save exr file for displacement map
+    SaveExrFile(bakeData, displace);
 }
 } // namespace MeshBaker

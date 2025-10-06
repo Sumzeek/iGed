@@ -15,6 +15,11 @@ if (NOT TARGET meshoptimizer)
     set_target_properties(meshoptimizer PROPERTIES FOLDER ${third_party_folder}/meshoptimizer)
 endif ()
 
+if (NOT TARGET vcglib)
+    add_subdirectory(vcglib)
+    set_target_properties(vcglib PROPERTIES FOLDER ${third_party_folder}/vcglib)
+endif ()
+
 #if (NOT TARGET xatlas)
 #    include(xatlas.cmake)
 #    set_target_properties(xatlas PROPERTIES FOLDER ${third_party_folder}/xatlas)

@@ -14,7 +14,7 @@ export struct WindowProps {
     unsigned int Width;
     unsigned int Height;
 
-    WindowProps(const std::string& title = "iGame Game Engine", unsigned int width = 1280, unsigned int height = 720)
+    inline WindowProps(const std::string& title = "iGame Game Engine", unsigned int width = 1280, unsigned int height = 720)
         : Title(title), Width(width), Height(height) {}
 };
 

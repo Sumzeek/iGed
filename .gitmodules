@@ -17,3 +17,6 @@
 [submodule "Sandbox/3rdparty/meshoptimizer"]
 	path = Sandbox/3rdparty/meshoptimizer
 	url = https://github.com/zeux/meshoptimizer.git
+[submodule "Sandbox/3rdparty/vcglib"]
+	path = Sandbox/3rdparty/vcglib
+	url = https://github.com/cnr-isti-vclab/vcglib.git

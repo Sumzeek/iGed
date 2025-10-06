@@ -74,10 +74,6 @@ void Application::PushOverlay(Layer* layer) {
     layer->OnAttach();
 }
 
-Window& Application::GetWindow() { return *m_Window; }
-
-Application& Application::Get() { return *s_Instance; }
-
 const ApplicationSpecification& Application::GetSpecification() const { return m_Specification; }
 
 } // namespace iGe

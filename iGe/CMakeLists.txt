@@ -1,7 +1,7 @@
 set(TARGET_NAME "iGe")
 
 # Create a shared library (DLL)
-add_library(${TARGET_NAME} SHARED)
+add_library(${TARGET_NAME} STATIC)
 
 # Set source files (all .ixx files in the src directory)
 file(GLOB_RECURSE MODULE_SOURCES "modules/*.ixx")

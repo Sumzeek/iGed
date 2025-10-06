@@ -36,6 +36,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE
 add_subdirectory(3rdparty)
 target_link_libraries(${TARGET_NAME} PRIVATE assimp::assimp)
 target_link_libraries(${TARGET_NAME} PRIVATE meshoptimizer)
+target_link_libraries(${TARGET_NAME} PRIVATE vcglib)
 #target_link_libraries(${TARGET_NAME} PRIVATE xatlas)
 #target_link_libraries(${TARGET_NAME} PRIVATE UVAtlas)
 

@@ -17,74 +17,69 @@ RuntimeLodLayer::RuntimeLodLayer()
     // Create empty VAO
     {
         m_EmptyVertexArray = iGe::VertexArray::Create();
-        std::vector<uint32_t> indices = {0, 1, 2};
+        std::vector<std::uint32_t> indices = {0, 1, 2};
         auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
         m_EmptyVertexArray->SetIndexBuffer(indexBuffer);
     }
 
     // Load model
     {
-        // Test
+        m_Model = MeshBaker::LoadObjFile("assets/models/armadillo.obj");
         {
-            m_SimModel = MeshBaker::LoadObjFile("assets/models/Cube - Copy.obj");
-            //m_SimModel = MeshBaker::LoadObjFile("assets/models/Bunny_Sim.obj");
-            //m_SimModel = MeshBaker::LoadObjFile("assets/models/Dark_Finger_Reef_Crab_Sim.obj");
-            {
-                auto vertices = m_SimModel.Vertices;
-                auto indices = m_SimModel.Indices;
+            auto vertices = m_Model.Vertices;
+            auto indices = m_Model.Indices;
+            m_ModelVertexArray = iGe::VertexArray::Create();
 
-                m_SimModelVertexArray = iGe::VertexArray::Create();
+            auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+                                                          vertices.size() * sizeof(MeshBaker::Vertex));
+            iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
+                                        {iGe::ShaderDataType::Float3, "a_Normal"},
+                                        {iGe::ShaderDataType::Float2, "a_TexCoord"}};
+            vertexBuffer->SetLayout(layout);
+            m_ModelVertexArray->AddVertexBuffer(vertexBuffer);
 
-                auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
-                                                              vertices.size() * sizeof(MeshBaker::Vertex));
-                iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
-                                            {iGe::ShaderDataType::Float3, "a_Normal"},
-                                            {iGe::ShaderDataType::Float2, "a_TexCoord"}};
-                vertexBuffer->SetLayout(layout);
-                m_SimModelVertexArray->AddVertexBuffer(vertexBuffer);
-
-                auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-                m_SimModelVertexArray->SetIndexBuffer(indexBuffer);
-            }
-
-            m_OriModel = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
-            //m_OriModel = MeshBaker::LoadObjFile("assets/models/Bunny.obj");
-            //m_OriModel = MeshBaker::LoadObjFile("assets/models/Dark_Finger_Reef_Crab.obj");
-            {
-                auto vertices = m_OriModel.Vertices;
-                auto indices = m_OriModel.Indices;
-
-                m_OriModelVertexArray = iGe::VertexArray::Create();
-
-                auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
-                                                              vertices.size() * sizeof(MeshBaker::Vertex));
-                iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
-                                            {iGe::ShaderDataType::Float3, "a_Normal"},
-                                            {iGe::ShaderDataType::Float2, "a_TexCoord"}};
-                vertexBuffer->SetLayout(layout);
-                m_OriModelVertexArray->AddVertexBuffer(vertexBuffer);
-
-                auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-                m_OriModelVertexArray->SetIndexBuffer(indexBuffer);
-            }
+            auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
+            m_ModelVertexArray->SetIndexBuffer(indexBuffer);
         }
 
-        m_Model = MeshBaker::LoadObjFile("assets/models/Dark_Finger_Reef_Crab_Sim.obj");
-        auto vertices = m_Model.Vertices;
-        auto indices = m_Model.Indices;
+        auto simMesh = MeshBaker::LoadObjFile("assets/models/" + m_Model.Name + "_simed.obj");
+        MeshBaker::BakeTest(simMesh, m_Model, 1000);
+        m_BakedModel = MeshBaker::LoadObjFile("assets/models/" + simMesh.Name + "_baked.obj");
 
-        m_ModelVertexArray = iGe::VertexArray::Create();
+        // MeshBaker::Bake(m_Model, 1000);
+        // m_BakedModel = MeshBaker::LoadObjFile("assets/models/" + m_Model.Name + "_baked.obj");
+        {
+            auto vertices = m_BakedModel.Vertices;
+            auto indices = m_BakedModel.Indices;
 
-        auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
-                                                      vertices.size() * sizeof(MeshBaker::Vertex));
-        iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
-                                    {iGe::ShaderDataType::Float3, "a_Normal"},
-                                    {iGe::ShaderDataType::Float2, "a_TexCoord"}};
-        vertexBuffer->SetLayout(layout);
-        m_ModelVertexArray->AddVertexBuffer(vertexBuffer);
+            m_BakedModelVertexArray = iGe::VertexArray::Create();
 
-        auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-        m_ModelVertexArray->SetIndexBuffer(indexBuffer);
+            auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+                                                          vertices.size() * sizeof(MeshBaker::Vertex));
+            iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
+                                        {iGe::ShaderDataType::Float3, "a_Normal"},
+                                        {iGe::ShaderDataType::Float2, "a_TexCoord"}};
+            vertexBuffer->SetLayout(layout);
+            m_BakedModelVertexArray->AddVertexBuffer(vertexBuffer);
+
+            auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
+            m_BakedModelVertexArray->SetIndexBuffer(indexBuffer);
+        }
+
+        // Model displace map
+        int w, h;
+        std::string name = m_BakedModel.Name + "_displacement.exr";
+        std::vector<float> displace = MeshBaker::ReadExrFile("assets/textures/" + name, w, h);
+
+        iGe::TextureSpecification displaceMapSpec;
+        displaceMapSpec.Width = w;
+        displaceMapSpec.Height = h;
+        displaceMapSpec.Format = iGe::ImageFormat::R32F;
+        displaceMapSpec.GenerateMips = false;
+
+        m_BakedModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
+        m_BakedModelDisplaceMap->SetData(displace.data(), displace.size() * sizeof(float));
+        m_BakedModelDisplaceMap->Bind(3);
     }
 
     // Software Tessellation
@@ -100,7 +95,7 @@ RuntimeLodLayer::RuntimeLodLayer()
         m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
 
         auto indices = m_Model.GetIndexArray();
-        m_IndexBuffer = iGe::Buffer::Create(indices.data(), indices.size() * sizeof(uint32_t));
+        m_IndexBuffer = iGe::Buffer::Create(indices.data(), indices.size() * sizeof(std::uint32_t));
         m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
 
         m_SubBufferIn = iGe::Buffer::Create(nullptr, indices.size() * std::pow(2, kMaxLodLevel) * sizeof(glm::uvec2));
@@ -146,26 +141,9 @@ RuntimeLodLayer::RuntimeLodLayer()
         m_Packed64Buffer = iGe::Buffer::Create(nullptr, width * height * sizeof(std::uint64_t));
     }
 
-    // Model displace map
-    //MeshBaker::Bake(m_OriModel, 1000);
-    MeshBaker::Bake(m_SimModel, m_OriModel, 1000);
-    int w, h;
-    std::string name = m_OriModel.Name + "_displacement.exr";
-    std::vector<float> displace = MeshBaker::ReadExrFile("assets/textures/" + name, w, h);
-
-    iGe::TextureSpecification displaceMapSpec;
-    displaceMapSpec.Width = w;
-    displaceMapSpec.Height = h;
-    displaceMapSpec.Format = iGe::ImageFormat::R32F;
-    displaceMapSpec.GenerateMips = false;
-
-    m_ModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
-    m_ModelDisplaceMap->SetData(displace.data(), displace.size() * sizeof(float));
-    //m_ModelDisplaceMap->Bind(3);
-
     // Set Model bbx
-    m_ModelCenter = m_OriModel.Center;
-    m_ModelRadius = m_OriModel.Radius;
+    m_ModelCenter = m_Model.Center;
+    m_ModelRadius = m_Model.Radius;
     m_CameraPosition = m_ModelCenter + glm::vec3{0.0f, 0.0f, 3 * m_ModelRadius};
 
     // Create camera data uniform
@@ -176,10 +154,10 @@ RuntimeLodLayer::RuntimeLodLayer()
     m_GraphicsShaderLibrary.Load("FullScreen", "assets/shaders/glsl/FullScreen.json");
     m_GraphicsShaderLibrary.Load("HWTessellator", "assets/shaders/glsl/HWTessellator.json");
 
-    m_ComputeShaderLibrary.Load("CalTessFactor", "assets/shaders/glsl/CalTessFactor.json");
-    m_ComputeShaderLibrary.Load("SWTessellator", "assets/shaders/glsl/SWTessellator.json");
-    m_ComputeShaderLibrary.Load("ClearDepth", "assets/shaders/glsl/ClearDepth.json");
-    m_ComputeShaderLibrary.Load("SWRasterizer", "assets/shaders/glsl/SWRasterizer.json");
+    // m_ComputeShaderLibrary.Load("CalTessFactor", "assets/shaders/glsl/CalTessFactor.json");
+    // m_ComputeShaderLibrary.Load("SWTessellator", "assets/shaders/glsl/SWTessellator.json");
+    // m_ComputeShaderLibrary.Load("ClearDepth", "assets/shaders/glsl/ClearDepth.json");
+    // m_ComputeShaderLibrary.Load("SWRasterizer", "assets/shaders/glsl/SWRasterizer.json");
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -264,15 +242,15 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
             bool useDynamicTess = iGe::Input::IsMouseButtonPressed(iGeKey::MouseLeft) ||
                                   iGe::Input::IsMouseButtonPressed(iGeKey::MouseRight);
             if (!useDynamicTess) {
-                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_OriModelVertexArray, m_ModelTransform);
+                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_ModelVertexArray, m_ModelTransform);
             } else {
-                m_TessellatorData->ScreenSize = glm::uvec2{width, height};
-                m_TessellatorData->TriSize = m_TargetTessFactor;
-                m_TessellatorData->DisplaceMapScale = m_DisplaceMapScale;
+                m_TessellatorData->ScreenSize = glm::uvec2{(std::uint32_t) width, (std::uint32_t) height};
+                m_TessellatorData->TriSize = 0 /*m_TargetTessFactor*/;
+                m_TessellatorData->DisplaceMapScale = 0 /*m_DisplaceMapScale*/;
                 m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
                 m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
-                m_ModelDisplaceMap->Bind(3);
-                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_SimModelVertexArray,
+                m_BakedModelDisplaceMap->Bind(3);
+                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_BakedModelVertexArray,
                                       m_ModelTransform, true);
             }
 
@@ -291,21 +269,21 @@ void RuntimeLodLayer::OnImGuiRender() {
     ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
     ImGui::Begin("Settings");
     {
-        if (ImGui::BeginTable("SettingsTable", 2, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Text("Displacement Scale");
-            ImGui::TableSetColumnIndex(1);
-            ImGui::SliderFloat("##DisplaceMapScale", &m_DisplaceMapScale, 0.0f, 10.0f);
-
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Text("Target Tess Factor");
-            ImGui::TableSetColumnIndex(1);
-            ImGui::SliderInt("##TessFactor", reinterpret_cast<int*>(&m_TargetTessFactor), 1, 64);
-
-            ImGui::EndTable();
-        }
+        // if (ImGui::BeginTable("SettingsTable", 2, ImGuiTableFlags_SizingStretchProp)) {
+        //     ImGui::TableNextRow();
+        //     ImGui::TableSetColumnIndex(0);
+        //     ImGui::Text("Displacement Scale");
+        //     ImGui::TableSetColumnIndex(1);
+        //     ImGui::SliderFloat("##DisplaceMapScale", &m_DisplaceMapScale, 0.0f, 10.0f);
+        //
+        //     ImGui::TableNextRow();
+        //     ImGui::TableSetColumnIndex(0);
+        //     ImGui::Text("Target Tess Factor");
+        //     ImGui::TableSetColumnIndex(1);
+        //     ImGui::SliderInt("##TessFactor", reinterpret_cast<int*>(&m_TargetTessFactor), 1, 64);
+        //
+        //     ImGui::EndTable();
+        // }
     }
     ImGui::End();
 
@@ -409,9 +387,9 @@ void RuntimeLodLayer::ModelRotation() {
         newPoint3D.x = newX;
         newPoint3D.y = newY;
         if (new_x2y2 < 0.5 * rsqr) {
-            newPoint3D.z = sqrt(rsqr - new_x2y2);
+            newPoint3D.z = std::sqrt(rsqr - new_x2y2);
         } else {
-            newPoint3D.z = 0.5 * rsqr / sqrt(new_x2y2);
+            newPoint3D.z = 0.5 * rsqr / std::sqrt(new_x2y2);
         }
     }
 

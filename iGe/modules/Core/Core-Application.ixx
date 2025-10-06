@@ -45,8 +45,8 @@ public:
     void PushLayer(Layer* layer);
     void PushOverlay(Layer* layer);
 
-    inline Window& GetWindow();
-    static inline Application& Get();
+    inline Window& GetWindow() { return *m_Window; }
+    static inline Application& Get(){ return *s_Instance; }
     const ApplicationSpecification& GetSpecification() const;
 
 private:

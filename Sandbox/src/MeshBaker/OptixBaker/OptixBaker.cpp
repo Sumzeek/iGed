@@ -65,10 +65,10 @@ BakeData OptixBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) 
         glm::vec2 pixel1 = uv1 /* * float(resolution - 1)*/;
         glm::vec2 pixel2 = uv2 /* * float(resolution - 1)*/;
 
-        int minX = std::max(0, int(std::floor(std::min({pixel0.x, pixel1.x, pixel2.x}))));
-        int maxX = std::min(resolution - 1, int(std::ceil(std::max({pixel0.x, pixel1.x, pixel2.x}))));
-        int minY = std::max(0, int(std::floor(std::min({pixel0.y, pixel1.y, pixel2.y}))));
-        int maxY = std::min(resolution - 1, int(std::ceil(std::max({pixel0.y, pixel1.y, pixel2.y}))));
+        int minX = std::max(0, int(std::min({pixel0.x, pixel1.x, pixel2.x})));
+        int maxX = std::min(resolution - 1, int(std::max({pixel0.x, pixel1.x, pixel2.x})));
+        int minY = std::max(0, int(std::min({pixel0.y, pixel1.y, pixel2.y})));
+        int maxY = std::min(resolution - 1, int(std::max({pixel0.y, pixel1.y, pixel2.y})));
 
         for (int y = minY; y <= maxY; ++y) {
             for (int x = minX; x <= maxX; ++x) {

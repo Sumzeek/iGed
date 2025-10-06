@@ -78,13 +78,13 @@ static aiScene* ConvertMeshToAssimpScene(const Mesh& mesh) {
     ai_mesh->mMaterialIndex = 0;
     ai_mesh->mNumVertices = (unsigned int) mesh.Vertices.size();
     ai_mesh->mVertices = new aiVector3D[ai_mesh->mNumVertices];
-    ai_mesh->mNormals = new aiVector3D[ai_mesh->mNumVertices];
+    // ai_mesh->mNormals = new aiVector3D[ai_mesh->mNumVertices];
     ai_mesh->mTextureCoords[0] = new aiVector3D[ai_mesh->mNumVertices];
 
     for (size_t i = 0; i < mesh.Vertices.size(); i++) {
         const Vertex& v = mesh.Vertices[i];
         ai_mesh->mVertices[i] = aiVector3D(v.Position.x, v.Position.y, v.Position.z);
-        ai_mesh->mNormals[i] = aiVector3D(v.Normal.x, v.Normal.y, v.Normal.z);
+        // ai_mesh->mNormals[i] = aiVector3D(v.Normal.x, v.Normal.y, v.Normal.z);
         ai_mesh->mTextureCoords[0][i] = aiVector3D(v.TexCoord.x, v.TexCoord.y, 0.0f);
     }
 
