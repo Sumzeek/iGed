@@ -23,6 +23,10 @@ static GLenum iGeImageFormatToGLDataFormat(ImageFormat format) {
             return GL_RED_INTEGER;
         case ImageFormat::R32F:
             return GL_RED;
+        case ImageFormat::RG32F:
+            return GL_RG;
+        case ImageFormat::RGB32F:
+            return GL_RGB;
     }
 
     IGE_CORE_ASSERT(false);
@@ -41,6 +45,8 @@ static GLenum iGeImageFormatToGLInternalFormat(ImageFormat format) {
             return GL_R32F;
         case ImageFormat::RG32F:
             return GL_RG32F;
+        case ImageFormat::RGB32F:
+            return GL_RGB32F;
     }
 
     IGE_CORE_ASSERT(false);
@@ -54,8 +60,9 @@ static GLenum iGeImageFormatToGLType(ImageFormat format) {
         case ImageFormat::R32UI:
             return GL_UNSIGNED_BYTE;
         case ImageFormat::R32F:
-            return GL_FLOAT;
         case ImageFormat::RG32F:
+        case ImageFormat::RGB32F:
+            return GL_FLOAT;
             return GL_FLOAT;
     }
 
@@ -153,6 +160,12 @@ void OpenGLTexture2D::SetData(void* data, uint32_t size) {
         case ImageFormat::R32UI:
         case ImageFormat::R32F:
             bpp = 4;
+            break;
+        case ImageFormat::RG32F:
+            bpp = 8;
+            break;
+        case ImageFormat::RGB32F:
+            bpp = 12;
             break;
         default:
             IGE_CORE_ASSERT(false, "Unsupported texture format in SetData()");

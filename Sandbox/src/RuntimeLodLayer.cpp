@@ -13,7 +13,7 @@ import glm;
 // RuntimeLodLayer //////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
 RuntimeLodLayer::RuntimeLodLayer()
-    : Layer{"RuntimeLod"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 10000.f}, m_CameraPosition{0.0f} {
+    : Layer{"RuntimeLod"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 1000.f}, m_CameraPosition{0.0f} {
     // Create empty VAO
     {
         m_EmptyVertexArray = iGe::VertexArray::Create();
@@ -24,7 +24,7 @@ RuntimeLodLayer::RuntimeLodLayer()
 
     // Load model
     {
-        m_Model = MeshBaker::LoadObjFile("assets/models/armadillo.obj");
+        m_Model = MeshBaker::LoadObjFile("assets/models/Bayon Lion.obj");
         {
             auto vertices = m_Model.Vertices;
             auto indices = m_Model.Indices;
@@ -43,15 +43,14 @@ RuntimeLodLayer::RuntimeLodLayer()
         }
 
         auto simMesh = MeshBaker::LoadObjFile("assets/models/" + m_Model.Name + "_simed.obj");
-        MeshBaker::BakeTest(simMesh, m_Model, 1000);
+        MeshBaker::BakeTest(simMesh, m_Model, 1024);
         m_BakedModel = MeshBaker::LoadObjFile("assets/models/" + simMesh.Name + "_baked.obj");
 
-        // MeshBaker::Bake(m_Model, 1000);
+        // MeshBaker::Bake(m_Model, 1024);
         // m_BakedModel = MeshBaker::LoadObjFile("assets/models/" + m_Model.Name + "_baked.obj");
         {
             auto vertices = m_BakedModel.Vertices;
             auto indices = m_BakedModel.Indices;
-
             m_BakedModelVertexArray = iGe::VertexArray::Create();
 
             auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
@@ -67,19 +66,40 @@ RuntimeLodLayer::RuntimeLodLayer()
         }
 
         // Model displace map
-        int w, h;
-        std::string name = m_BakedModel.Name + "_displacement.exr";
-        std::vector<float> displace = MeshBaker::ReadExrFile("assets/textures/" + name, w, h);
+        {
+            int w, h;
+            std::string name = m_BakedModel.Name + "_displacement.exr";
+            std::vector<float> displaces;
+            MeshBaker::ReadExrFile("assets/textures/" + name, w, h, displaces);
 
-        iGe::TextureSpecification displaceMapSpec;
-        displaceMapSpec.Width = w;
-        displaceMapSpec.Height = h;
-        displaceMapSpec.Format = iGe::ImageFormat::R32F;
-        displaceMapSpec.GenerateMips = false;
+            iGe::TextureSpecification displaceMapSpec;
+            displaceMapSpec.Width = w;
+            displaceMapSpec.Height = h;
+            displaceMapSpec.Format = iGe::ImageFormat::R32F;
+            displaceMapSpec.GenerateMips = false;
 
-        m_BakedModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
-        m_BakedModelDisplaceMap->SetData(displace.data(), displace.size() * sizeof(float));
-        m_BakedModelDisplaceMap->Bind(3);
+            m_BakedModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
+            m_BakedModelDisplaceMap->SetData(displaces.data(), displaces.size() * sizeof(float));
+            m_BakedModelDisplaceMap->Bind(3);
+        }
+
+        // Model normal map
+        {
+            int w, h;
+            std::string name = m_BakedModel.Name + "_normal.exr";
+            std::vector<glm::vec3> normals;
+            MeshBaker::ReadExrFile("assets/textures/" + name, w, h, normals);
+
+            iGe::TextureSpecification normalMapSpec;
+            normalMapSpec.Width = w;
+            normalMapSpec.Height = h;
+            normalMapSpec.Format = iGe::ImageFormat::RGB32F;
+            normalMapSpec.GenerateMips = false;
+
+            m_BakedModelNormalMap = iGe::Texture2D::Create(normalMapSpec);
+            m_BakedModelNormalMap->SetData(normals.data(), normals.size() * sizeof(glm::vec3));
+            m_BakedModelNormalMap->Bind(4);
+        }
     }
 
     // Software Tessellation
@@ -150,6 +170,7 @@ RuntimeLodLayer::RuntimeLodLayer()
     m_PerFrameData = iGe::CreateScope<PerFrameData>();
     m_PerFrameDataUniform = iGe::Buffer::Create(nullptr, sizeof(PerFrameData));
 
+    m_GraphicsShaderLibrary.Load("Test", "assets/shaders/glsl/Test.json");
     m_GraphicsShaderLibrary.Load("Lighting", "assets/shaders/glsl/Lighting.json");
     m_GraphicsShaderLibrary.Load("FullScreen", "assets/shaders/glsl/FullScreen.json");
     m_GraphicsShaderLibrary.Load("HWTessellator", "assets/shaders/glsl/HWTessellator.json");
@@ -170,7 +191,7 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         }
     }
 
-    iGe::RenderCommand::SetClearColor(glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
+    iGe::RenderCommand::SetClearColor(glm::vec4{225.0f / 255.0f, 245.0f / 255.0f, 220.0f / 255.0f, 1.0f});
     iGe::RenderCommand::Clear();
 
     m_Camera.SetPosition(m_CameraPosition);
@@ -237,30 +258,34 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
 
         // Draw model
         {
-            //iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_ModelVertexArray, m_ModelTransform);
-
-            bool useDynamicTess = iGe::Input::IsMouseButtonPressed(iGeKey::MouseLeft) ||
-                                  iGe::Input::IsMouseButtonPressed(iGeKey::MouseRight);
-            if (!useDynamicTess) {
+            if (m_OriginModelOption) {
                 iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_ModelVertexArray, m_ModelTransform);
             } else {
-                m_TessellatorData->ScreenSize = glm::uvec2{(std::uint32_t) width, (std::uint32_t) height};
-                m_TessellatorData->TriSize = 0 /*m_TargetTessFactor*/;
-                m_TessellatorData->DisplaceMapScale = 0 /*m_DisplaceMapScale*/;
-                m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
-                m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
-                m_BakedModelDisplaceMap->Bind(3);
-                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_BakedModelVertexArray,
-                                      m_ModelTransform, true);
+                bool useDynamicTess = iGe::Input::IsMouseButtonPressed(iGeKey::MouseLeft) ||
+                                      iGe::Input::IsMouseButtonPressed(iGeKey::MouseRight);
+                useDynamicTess = true;
+                if (!useDynamicTess) {
+                    iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_ModelVertexArray,
+                                          m_ModelTransform);
+                } else {
+                    m_TessellatorData->ScreenSize = glm::uvec2{(std::uint32_t) width, (std::uint32_t) height};
+                    m_TessellatorData->TriSize = m_TargetTessFactor;
+                    m_TessellatorData->LineOption = m_LineOption ? 1 : 0;
+                    m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
+                    m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
+                    m_BakedModelDisplaceMap->Bind(3);
+                    iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_BakedModelVertexArray,
+                                          m_ModelTransform, true);
+                }
             }
-
-            //m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
-            //m_DepthBuffer->BindImage(5);
-            //m_Packed64Buffer->Bind(6, iGe::BufferType::Storage);
-            //m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
-            //m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
-            //iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("FullScreen"), m_EmptyVertexArray, m_ModelTransform);
         }
+
+        //m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
+        //m_DepthBuffer->BindImage(5);
+        //m_Packed64Buffer->Bind(6, iGe::BufferType::Storage);
+        //m_VertexBuffer->Bind(10, iGe::BufferType::Storage);
+        //m_IndexBuffer->Bind(11, iGe::BufferType::Storage);
+        //iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("FullScreen"), m_EmptyVertexArray, m_ModelTransform);
     }
     iGe::Renderer::EndScene();
 }
@@ -269,21 +294,27 @@ void RuntimeLodLayer::OnImGuiRender() {
     ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
     ImGui::Begin("Settings");
     {
-        // if (ImGui::BeginTable("SettingsTable", 2, ImGuiTableFlags_SizingStretchProp)) {
-        //     ImGui::TableNextRow();
-        //     ImGui::TableSetColumnIndex(0);
-        //     ImGui::Text("Displacement Scale");
-        //     ImGui::TableSetColumnIndex(1);
-        //     ImGui::SliderFloat("##DisplaceMapScale", &m_DisplaceMapScale, 0.0f, 10.0f);
-        //
-        //     ImGui::TableNextRow();
-        //     ImGui::TableSetColumnIndex(0);
-        //     ImGui::Text("Target Tess Factor");
-        //     ImGui::TableSetColumnIndex(1);
-        //     ImGui::SliderInt("##TessFactor", reinterpret_cast<int*>(&m_TargetTessFactor), 1, 64);
-        //
-        //     ImGui::EndTable();
-        // }
+        if (ImGui::BeginTable("SettingsTable", 2, ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Target Tess Factor");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SliderInt("##TessFactor", reinterpret_cast<int*>(&m_TargetTessFactor), 1, 64);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Display Line");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Checkbox("##DisplayLine", &m_LineOption);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Display Origin Model");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Checkbox("##DisplayOriginModel", &m_OriginModelOption);
+
+            ImGui::EndTable();
+        }
     }
     ImGui::End();
 

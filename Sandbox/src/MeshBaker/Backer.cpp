@@ -33,28 +33,18 @@ std::shared_ptr<Baker> Baker::Create() {
     return nullptr;
 }
 
-bool Baker::RayTriangleIntersect(const glm::vec3& origin, const glm::vec3& dir, const glm::vec3& v0,
-                                 const glm::vec3& v1, const glm::vec3& v2, float& t) {
-    glm::vec3 o = origin - dir * 1e-6f; // Offset origin slightly along -normal to trigger hit when t=0
+void Baker::ClampBary(glm::vec3& bary) {
+    if (bary.x < 0.0f && bary.x > -BaryEps) { bary.x = 0.0f; }
+    if (bary.x > 1.0f && bary.x < 1.0f + BaryEps) { bary.x = 1.0f; }
 
-    //const float EPSILON = 1e-6f;
-    glm::vec3 edge1 = v1 - v0;
-    glm::vec3 edge2 = v2 - v0;
-    glm::vec3 h = glm::cross(dir, edge2);
-    float a = glm::dot(edge1, h);
-    if (std::abs(a) < 0.0f) { return false; }
+    if (bary.y < 0.0f && bary.y > -BaryEps) { bary.y = 0.0f; }
+    if (bary.y > 1.0f && bary.y < 1.0f + BaryEps) { bary.y = 1.0f; }
 
-    float f = 1.0f / a;
-    glm::vec3 s = o - v0;
-    float u = f * glm::dot(s, h);
-    if (u < 0.0f || u > 1.0f) { return false; }
+    if (bary.z < 0.0f && bary.z > -BaryEps) { bary.z = 0.0f; }
+    if (bary.z > 1.0f && bary.z < 1.0f + BaryEps) { bary.z = 1.0f; }
 
-    glm::vec3 q = glm::cross(s, edge1);
-    float v = f * glm::dot(dir, q);
-    if (v < 0.0f || u + v > 1.0f) { return false; }
-
-    t = f * glm::dot(edge2, q);
-    return t > 0.0f;
+    float sum = bary.x + bary.y + bary.z;
+    if (sum > 0.0f) { bary /= sum; }
 }
 
 glm::vec3 Baker::ComputeBarycentric(const glm::vec2& a, const glm::vec2& b, const glm::vec2& c, const glm::vec2& p) {
@@ -69,13 +59,66 @@ glm::vec3 Baker::ComputeBarycentric(const glm::vec2& a, const glm::vec2& b, cons
     float d21 = glm::dot(v2, v1);
 
     float denom = d00 * d11 - d01 * d01;
-    if (denom == 0.0f) { return glm::vec3{-1.0f, -1.0f, -1.0f}; }
+    if (denom == 0.0f) { return glm::vec3{0.0f, 0.0f, 0.0f}; }
 
     float v = (d11 * d20 - d01 * d21) / denom;
     float w = (d00 * d21 - d01 * d20) / denom;
     float u = 1.0f - v - w;
 
-    return glm::vec3(u, v, w);
+    glm::vec3 bary = glm::vec3{u, v, w};
+    ClampBary(bary);
+    return bary;
+}
+
+glm::vec3 Baker::ComputeBarycentric(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& p) {
+    glm::vec3 v0 = b - a;
+    glm::vec3 v1 = c - a;
+    glm::vec3 n = glm::cross(v0, v1);
+
+    float area2 = glm::length(n);
+    if (area2 == 0.0f) { return glm::vec3{0.0f, 0.0f, 0.0f}; }
+
+    glm::vec3 u_vec = glm::cross(b - p, c - p);
+    glm::vec3 v_vec = glm::cross(c - p, a - p);
+    glm::vec3 w_vec = glm::cross(a - p, b - p);
+
+    float u = glm::length(u_vec) / area2;
+    float v = glm::length(v_vec) / area2;
+    float w = glm::length(w_vec) / area2;
+
+    if (glm::dot(n, u_vec) < 0) { u = -u; }
+    if (glm::dot(n, v_vec) < 0) { v = -v; }
+    if (glm::dot(n, w_vec) < 0) { w = -w; }
+
+    glm::vec3 bary = glm::vec3{u, v, w};
+    ClampBary(bary);
+    return bary;
+}
+
+bool Baker::RayTriangleIntersect(const glm::vec3& origin, const glm::vec3& dir, const glm::vec3& v0,
+                                 const glm::vec3& v1, const glm::vec3& v2, float& t, glm::vec3& p) {
+    glm::vec3 d = glm::normalize(dir); // ensure unit direction
+
+    glm::vec3 e1 = v1 - v0;
+    glm::vec3 e2 = v2 - v0;
+    glm::vec3 h = glm::cross(d, e2);
+    float a = glm::dot(e1, h);
+    if (std::abs(a) < DetEps) { return false; }
+
+    float f = 1.0 / a;
+    glm::vec3 s = origin - v0;
+    float u = f * glm::dot(s, h);
+    if (u < -BaryEps || u > 1.0 + BaryEps) { return false; }
+
+    glm::vec3 q = glm::cross(s, e1);
+    float v = f * glm::dot(d, q);
+    if (v < -BaryEps || (u + v) > 1.0 + BaryEps) { return false; }
+
+    t = f * glm::dot(e2, q);
+    p = origin + d * t;
+    if (t < TMin) { return false; }
+
+    return true;
 }
 
 void SaveExrFile(const BakeData& bakeData, const std::vector<float>& pixels) {
@@ -126,7 +169,71 @@ void SaveExrFile(const BakeData& bakeData, const std::vector<float>& pixels) {
     free(header.requested_pixel_types);
 }
 
-std::vector<float> ReadExrFile(const std::string& filename, int& width, int& height) {
+void SaveExrFile(const BakeData& bakeData, const std::vector<glm::vec3>& pixels) {
+    std::vector<float> r(bakeData.Width * bakeData.Height);
+    std::vector<float> g(bakeData.Width * bakeData.Height);
+    std::vector<float> b(bakeData.Width * bakeData.Height);
+
+    for (size_t i = 0; i < pixels.size(); ++i) {
+        r[i] = pixels[i].r;
+        g[i] = pixels[i].g;
+        b[i] = pixels[i].b;
+    }
+
+    EXRHeader header;
+    InitEXRHeader(&header);
+
+    EXRImage image;
+    InitEXRImage(&image);
+
+    image.num_channels = 3;
+
+    // TinyEXR required B, G, R
+    float* image_ptr[3];
+    image_ptr[0] = b.data(); // B
+    image_ptr[1] = g.data(); // G
+    image_ptr[2] = r.data(); // R
+    image.images = (unsigned char**) image_ptr;
+
+    image.width = bakeData.Width;
+    image.height = bakeData.Height;
+
+    header.num_channels = 3;
+    header.channels = (EXRChannelInfo*) malloc(sizeof(EXRChannelInfo) * 3);
+    strncpy(header.channels[0].name, "B", 255);
+    header.channels[0].name[1] = '\0';
+    strncpy(header.channels[1].name, "G", 255);
+    header.channels[1].name[1] = '\0';
+    strncpy(header.channels[2].name, "R", 255);
+    header.channels[2].name[1] = '\0';
+
+    header.pixel_types = (int*) malloc(sizeof(int) * 3);
+    header.requested_pixel_types = (int*) malloc(sizeof(int) * 3);
+    for (int i = 0; i < 3; ++i) {
+        header.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT;
+        header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT;
+    }
+
+    const char* err = nullptr;
+    std::string filename = "assets/textures/" + bakeData.Mesh1->Name + "_normal.exr";
+    int ret = SaveEXRImageToFile(&image, &header, filename.c_str(), &err);
+    if (ret != TINYEXR_SUCCESS) {
+        if (err) {
+            std::cerr << "Save EXR error: " << err << "\n";
+            FreeEXRErrorMessage(err);
+        }
+        free(header.channels);
+        free(header.pixel_types);
+        free(header.requested_pixel_types);
+        return;
+    }
+
+    free(header.channels);
+    free(header.pixel_types);
+    free(header.requested_pixel_types);
+}
+
+void ReadExrFile(const std::string& filename, int& width, int& height, std::vector<float>& data) {
     EXRImage image;
     InitEXRImage(&image);
 
@@ -157,13 +264,98 @@ std::vector<float> ReadExrFile(const std::string& filename, int& width, int& hei
     height = image.height;
 
     float* channel_ptr = reinterpret_cast<float*>(image.images[0]);
-
-    std::vector<float> pixels(channel_ptr, channel_ptr + width * height);
+    data.assign(channel_ptr, channel_ptr + static_cast<size_t>(width) * static_cast<size_t>(height));
 
     FreeEXRImage(&image);
     FreeEXRHeader(&header);
+}
 
-    return pixels;
+void ReadExrFile(const std::string& filePath, int& width, int& height, std::vector<glm::vec3>& data) {
+    EXRImage image;
+    InitEXRImage(&image);
+
+    EXRHeader header;
+    InitEXRHeader(&header);
+
+    const char* err = nullptr;
+
+    EXRVersion version;
+    ParseEXRVersionFromFile(&version, filePath.c_str());
+
+    int ret = ParseEXRHeaderFromFile(&header, &version, filePath.c_str(), &err);
+    if (ret != TINYEXR_SUCCESS) {
+        std::cerr << "ParseEXRHeaderFromFile error: " << (err ? err : "unknown") << std::endl;
+        if (err) FreeEXRErrorMessage(err);
+        throw std::runtime_error("Failed to parse EXR header");
+    }
+
+    // Request float conversion for all channels
+    header.requested_pixel_types = (int*) malloc(sizeof(int) * header.num_channels);
+    for (int i = 0; i < header.num_channels; ++i) { header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT; }
+
+    ret = LoadEXRImageFromFile(&image, &header, filePath.c_str(), &err);
+    if (ret != TINYEXR_SUCCESS) {
+        std::cerr << "LoadEXRImageFromFile error: " << (err ? err : "unknown") << std::endl;
+        if (err) FreeEXRErrorMessage(err);
+        free(header.requested_pixel_types);
+        header.requested_pixel_types = nullptr;
+        FreeEXRHeader(&header);
+        throw std::runtime_error("Failed to load EXR image");
+    }
+
+    width = image.width;
+    height = image.height;
+
+    if (image.num_channels < 3) {
+        free(header.requested_pixel_types);
+        header.requested_pixel_types = nullptr;
+        FreeEXRImage(&image);
+        FreeEXRHeader(&header);
+        throw std::runtime_error("EXR does not contain at least 3 channels");
+    }
+
+    auto findChannel = [&](const char* name) -> int {
+        for (int i = 0; i < header.num_channels; ++i) {
+            if (std::strcmp(header.channels[i].name, name) == 0) return i;
+        }
+        return -1;
+    };
+
+    // Try common names. Your writer uses "B","G","R".
+    int rId = findChannel("R");
+    if (rId < 0) { rId = findChannel("Red"); }
+    int gId = findChannel("G");
+    if (gId < 0) { gId = findChannel("Green"); }
+    int bId = findChannel("B");
+    if (bId < 0) { bId = findChannel("Blue"); }
+
+    // If names not found but exactly 3 channels, assume B,G,R order as saved by your code.
+    if (rId < 0 || gId < 0 || bId < 0) {
+        if (image.num_channels == 3) {
+            bId = 0;
+            gId = 1;
+            rId = 2;
+        } else {
+            free(header.requested_pixel_types);
+            header.requested_pixel_types = nullptr;
+            FreeEXRImage(&image);
+            FreeEXRHeader(&header);
+            throw std::runtime_error("Could not locate R/G/B channels");
+        }
+    }
+
+    const float* r = reinterpret_cast<const float*>(image.images[rId]);
+    const float* g = reinterpret_cast<const float*>(image.images[gId]);
+    const float* b = reinterpret_cast<const float*>(image.images[bId]);
+
+    const size_t count = static_cast<size_t>(width) * static_cast<size_t>(height);
+    data.resize(count);
+    for (size_t i = 0; i < count; ++i) { data[i] = glm::vec3(r[i], g[i], b[i]); }
+
+    free(header.requested_pixel_types);
+    header.requested_pixel_types = nullptr;
+    FreeEXRImage(&image);
+    FreeEXRHeader(&header);
 }
 
 namespace
@@ -492,14 +684,12 @@ void Bake(const Mesh& mesh, int resolution) {
     uint32_t height = bakeData.Height;
 
     // Generate the data from BakeData
-    std::vector<float> displace(width * height, 0.0f);
+    std::vector<float> displaces(width * height, 0.0f);
+    std::vector<glm::vec3> normals(width * height, glm::vec3{0.0f, 0.0f, 0.0f});
     {
         for (int i = 0; i < width * height; ++i) {
             uint32_t triId = bakeData.BakedIndices[i];
-            if (triId == BakedInvalidData) {
-                displace[i] = 0.0f;
-                continue;
-            }
+            if (triId == BakedInvalidData) { continue; }
 
             uint32_t i0 = bakeData.Mesh2->Indices[triId * 3 + 0];
             uint32_t i1 = bakeData.Mesh2->Indices[triId * 3 + 1];
@@ -509,12 +699,31 @@ void Bake(const Mesh& mesh, int resolution) {
             const glm::vec3& v1 = bakeData.Mesh2->Vertices[i1].Position;
             const glm::vec3& v2 = bakeData.Mesh2->Vertices[i2].Position;
 
-            Baker::RayTriangleIntersect(bakeData.Originals[i], bakeData.Directions[i], v0, v1, v2, displace[i]);
+            const glm::vec3& n0 = bakeData.Mesh2->Vertices[i0].Normal;
+            const glm::vec3& n1 = bakeData.Mesh2->Vertices[i1].Normal;
+            const glm::vec3& n2 = bakeData.Mesh2->Vertices[i2].Normal;
+
+            glm::vec3 p;
+            if (Baker::RayTriangleIntersect(bakeData.Originals[i], bakeData.Directions[i], v0, v1, v2, displaces[i],
+                                            p)) {
+                glm::vec3 bary = Baker::ComputeBarycentric(v0, v1, v2, p);
+                normals[i] = glm::normalize(bary.x * n0 + bary.y * n1 + bary.z * n2);
+                if (bary.x < 0 || bary.y < 0 || bary.z < 0) {
+                    std::cout << std::format("Warning: Barycentric coord is negative.({})", i) << std::endl;
+                }
+            } else {
+                std::cout
+                        << std::format(
+                                   "Warning: CPU ray-triangle test missed intersection, but OptiX computed a hit.({})",
+                                   i)
+                        << std::endl;
+            }
         }
     }
 
     // Save exr file for displacement map
-    SaveExrFile(bakeData, displace);
+    SaveExrFile(bakeData, displaces);
+    SaveExrFile(bakeData, normals);
 }
 
 void BakeTest(const Mesh& simMesh, const Mesh& oriMesh, int resolution) {
@@ -591,31 +800,45 @@ void BakeTest(const Mesh& simMesh, const Mesh& oriMesh, int resolution) {
                 {
                     std::array<uint32_t, 3> triA;
                     std::array<uint32_t, 3> triB;
-                    for (int k = 0; k < 3; ++k) { triA[k] = faceA.V(k) - &vm.vert[0]; }
-                    for (int k = 0; k < 3; ++k) { triB[k] = faceB.V(k) - &vm.vert[0]; }
+                    for (int i = 0; i < 3; ++i) triA[i] = faceA.V(i) - &vm.vert[0];
+                    for (int i = 0; i < 3; ++i) triB[i] = faceB.V(i) - &vm.vert[0];
 
-                    std::vector<uint32_t> shared, unique;
-                    for (auto v: triA) {
-                        if (std::find(triB.begin(), triB.end(), v) != triB.end()) {
-                            shared.push_back(v);
-                        } else {
-                            unique.push_back(v);
+                    int uniqueA = -1;
+                    for (int i = 0; i < 3; ++i) {
+                        uint32_t a = triA[i];
+                        bool shared = false;
+                        for (int j = 0; j < 3; ++j) {
+                            if (a == triB[j]) {
+                                shared = true;
+                                break;
+                            }
+                        }
+                        if (!shared) {
+                            uniqueA = i;
+                            break;
                         }
                     }
 
-                    for (auto v: triB) {
-                        if (std::find(triA.begin(), triA.end(), v) == triA.end()) { unique.push_back(v); }
+                    uint32_t uniqueB = 0;
+                    for (int i = 0; i < 3; ++i) {
+                        uint32_t b = triB[i];
+                        bool shared = false;
+                        for (int j = 0; j < 3; ++j) {
+                            if (b == triA[j]) {
+                                shared = true;
+                                break;
+                            }
+                        }
+                        if (!shared) {
+                            uniqueB = b;
+                            break;
+                        }
                     }
 
-                    if (shared.size() != 2 || unique.size() != 2) {
-                        std::cerr << "Error: Quad pairing did not yield 4 unique vertices." << std::endl;
-                        continue;
-                    }
-
-                    quadIndices[0] = unique[0];
-                    quadIndices[1] = shared[0];
-                    quadIndices[2] = shared[1];
-                    quadIndices[3] = unique[1];
+                    quadIndices[0] = triA[uniqueA];
+                    quadIndices[1] = triA[(uniqueA + 1) % 3];
+                    quadIndices[2] = triA[(uniqueA + 2) % 3];
+                    quadIndices[3] = uniqueB;
                 }
 
                 // Calculate texture coordinate
@@ -633,13 +856,29 @@ void BakeTest(const Mesh& simMesh, const Mesh& oriMesh, int resolution) {
                     texCoords[2] = glm::vec2(static_cast<float>(x1), static_cast<float>(y0));
                     texCoords[3] = glm::vec2(static_cast<float>(x1), static_cast<float>(y1));
                 }
+
                 size_t baseIndex = bakedMesh.Vertices.size();
+
+                static std::vector<glm::vec3> pastelColors = {
+                        {0.984f, 0.705f, 0.682f}, // 柔粉 red-pink
+                        {0.702f, 0.871f, 0.702f}, // 淡绿 mint green
+                        {0.690f, 0.769f, 0.871f}, // 天蓝 sky blue
+                        {0.988f, 0.804f, 0.627f}, // 淡橙 peach
+                        {0.792f, 0.698f, 0.839f}, // 淡紫 lavender
+                        {0.894f, 0.769f, 0.769f}, // 粉灰 rose gray
+                        {0.851f, 0.851f, 0.702f}, // 淡黄 light khaki
+                        {0.800f, 0.922f, 0.773f}, // 浅青 minty blue-green
+                        {0.749f, 0.812f, 0.933f}, // 淡蓝 lilac-blue
+                        {0.988f, 0.894f, 0.710f}  // 奶油色 creamy beige
+                };
+
                 for (int vi = 0; vi < 4; ++vi) {
                     Vertex v;
                     v.Position = glm::vec3(vm.vert[quadIndices[vi]].P().X(), vm.vert[quadIndices[vi]].P().Y(),
                                            vm.vert[quadIndices[vi]].P().Z());
                     v.Normal = glm::vec3(vm.vert[quadIndices[vi]].N().X(), vm.vert[quadIndices[vi]].N().Y(),
                                          vm.vert[quadIndices[vi]].N().Z());
+                    // v.Normal = glm::vec3(pastelColors[qi % 10]);
                     v.TexCoord = texCoords[vi];
                     bakedMesh.Vertices.push_back(v);
                 }
@@ -666,14 +905,12 @@ void BakeTest(const Mesh& simMesh, const Mesh& oriMesh, int resolution) {
     uint32_t height = bakeData.Height;
 
     // Generate the data from BakeData
-    std::vector<float> displace(width * height, 0.0f);
+    std::vector<float> displaces(width * height, 0.0f);
+    std::vector<glm::vec3> normals(width * height, glm::vec3{0.0f, 0.0f, 0.0f});
     {
         for (int i = 0; i < width * height; ++i) {
             uint32_t triId = bakeData.BakedIndices[i];
-            if (triId == BakedInvalidData) {
-                displace[i] = 0.0f;
-                continue;
-            }
+            if (triId == BakedInvalidData) { continue; }
 
             uint32_t i0 = bakeData.Mesh2->Indices[triId * 3 + 0];
             uint32_t i1 = bakeData.Mesh2->Indices[triId * 3 + 1];
@@ -683,11 +920,44 @@ void BakeTest(const Mesh& simMesh, const Mesh& oriMesh, int resolution) {
             const glm::vec3& v1 = bakeData.Mesh2->Vertices[i1].Position;
             const glm::vec3& v2 = bakeData.Mesh2->Vertices[i2].Position;
 
-            Baker::RayTriangleIntersect(bakeData.Originals[i], bakeData.Directions[i], v0, v1, v2, displace[i]);
+            const glm::vec3& n0 = bakeData.Mesh2->Vertices[i0].Normal;
+            const glm::vec3& n1 = bakeData.Mesh2->Vertices[i1].Normal;
+            const glm::vec3& n2 = bakeData.Mesh2->Vertices[i2].Normal;
+
+            const glm::vec3& origin = bakeData.Originals[i];
+            const glm::vec3& dir = bakeData.Directions[i];
+
+            float t = 0.0f;
+            glm::vec3 p{0.0f, 0.0f, 0.0f};
+            glm::vec3 bary{0.0f, 0.0f, 0.0f};
+            {
+                const glm::vec3 e1 = v1 - v0;
+                const glm::vec3 e2 = v2 - v0;
+
+                const glm::vec3 pvec = glm::cross(dir, e2);
+                const float det = glm::dot(e1, pvec);
+                // Assumes det != 0 (triangle non-degenerate and ray not parallel to plane).
+                const float invDet = 1.0f / det;
+
+                const glm::vec3 tvec = origin - v0;
+                const float u = glm::dot(tvec, pvec) * invDet;
+
+                const glm::vec3 qvec = glm::cross(tvec, e1);
+                const float v = glm::dot(dir, qvec) * invDet;
+
+                t = glm::dot(e2, qvec) * invDet;
+                p = origin + dir * t;
+                bary = glm::vec3(1.0f - u - v, u, v);
+                Baker::ClampBary(bary);
+            }
+
+            displaces[i] = t;
+            normals[i] = glm::normalize(bary.x * n0 + bary.y * n1 + bary.z * n2);
         }
     }
 
     // Save exr file for displacement map
-    SaveExrFile(bakeData, displace);
+    SaveExrFile(bakeData, displaces);
+    SaveExrFile(bakeData, normals);
 }
 } // namespace MeshBaker

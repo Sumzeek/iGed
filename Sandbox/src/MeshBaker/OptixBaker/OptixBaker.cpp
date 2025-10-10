@@ -61,30 +61,35 @@ BakeData OptixBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) 
         glm::vec2 uv1 = mesh1.Vertices[i1].TexCoord;
         glm::vec2 uv2 = mesh1.Vertices[i2].TexCoord;
 
-        glm::vec2 pixel0 = uv0 /* * float(resolution - 1)*/;
-        glm::vec2 pixel1 = uv1 /* * float(resolution - 1)*/;
-        glm::vec2 pixel2 = uv2 /* * float(resolution - 1)*/;
+        glm::ivec2 pixel0 = uv0;
+        glm::ivec2 pixel1 = uv1;
+        glm::ivec2 pixel2 = uv2;
 
-        int minX = std::max(0, int(std::min({pixel0.x, pixel1.x, pixel2.x})));
-        int maxX = std::min(resolution - 1, int(std::max({pixel0.x, pixel1.x, pixel2.x})));
-        int minY = std::max(0, int(std::min({pixel0.y, pixel1.y, pixel2.y})));
-        int maxY = std::min(resolution - 1, int(std::max({pixel0.y, pixel1.y, pixel2.y})));
+        int minX = std::max(0, std::min({pixel0.x, pixel1.x, pixel2.x}));
+        int maxX = std::min(resolution - 1, std::max({pixel0.x, pixel1.x, pixel2.x}));
+        int minY = std::max(0, std::min({pixel0.y, pixel1.y, pixel2.y}));
+        int maxY = std::min(resolution - 1, std::max({pixel0.y, pixel1.y, pixel2.y}));
 
+        auto edgeFunc = [](const glm::ivec2& v0, const glm::ivec2& v1, const glm::ivec2& p) {
+            return (v1.x - v0.x) * (p.y - v0.y) - (v1.y - v0.y) * (p.x - v0.x);
+        };
         for (int y = minY; y <= maxY; ++y) {
             for (int x = minX; x <= maxX; ++x) {
-                glm::vec2 p = glm::vec2(x, y);
+                glm::ivec2 p = glm::uvec2(x, y);
 
-                // Compute barycentric
-                glm::vec3 bary = ComputeBarycentric(pixel0, pixel1, pixel2, p);
-                if (bary.x < -1e-5f || bary.y < -1e-5f || bary.z < -1e-5f) { continue; }
+                int e0 = edgeFunc(pixel0, pixel1, p);
+                int e1 = edgeFunc(pixel1, pixel2, p);
+                int e2 = edgeFunc(pixel2, pixel0, p);
 
-                // Compute point and normal after interpolation
+                if ((e0 < 0 || e1 < 0 || e2 < 0) && (e0 > 0 || e1 > 0 || e2 > 0)) { continue; }
+                int area = edgeFunc(pixel0, pixel1, pixel2);
+                glm::vec3 bary{float(e1) / float(area), float(e2) / float(area), float(e0) / float(area)};
+
                 glm::vec3 posOnMesh1 = bary.x * p0 + bary.y * p1 + bary.z * p2;
                 glm::vec3 norOnMesh1 = glm::normalize(bary.x * n0 + bary.y * n1 + bary.z * n2);
 
                 int idx = y * resolution + x;
-                bakeData.Originals[idx] =
-                        posOnMesh1 - norOnMesh1 * 1e-6f; // Offset origin slightly along -normal to trigger hit when t=0
+                bakeData.Originals[idx] = posOnMesh1;
                 bakeData.Directions[idx] = norOnMesh1;
             }
         }
@@ -178,7 +183,7 @@ BakeData OptixBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) 
         pipelineCompileOptions.pipelineLaunchParamsVariableName = "params";
 
         // load ptx file
-        std::string ptx = LoadPTX("assets/ptxs/kernel.ptx");
+        std::string ptx = LoadPTX("assets/ptxs/bakeKernel.ptx");
 
         OPTIX_CHECK(optixModuleCreate(context, &moduleCompileOptions, &pipelineCompileOptions, ptx.c_str(), ptx.size(),
                                       log, &logSize, &module));

@@ -23,11 +23,14 @@ cbuffer PerFrameData {
 cbuffer TessellatorData {
     uint2 u_ScreenSize;
     uint u_TargetTessFactor;
-    float u_DisplaceMapScale;
+    uint u_LineOption;
 };
 
 [[gl::binding(3)]]
 Sampler2D u_DisplaceMap;
+
+[[gl::binding(4)]]
+Sampler2D u_NormalMap;
 
 struct VertexInput {
     float3 a_Position  : POSITION;
@@ -97,10 +100,10 @@ PatchConstantData computeTessFactors(InputPatch<VertexOutput, 3> input) {
     // pcd.EdgeTessFactor[1] = u_TargetTessFactor;
     // pcd.EdgeTessFactor[2] = u_TargetTessFactor;
     // pcd.InsideTessFactor[0] = u_TargetTessFactor;
-    pcd.EdgeTessFactor[0] = max(r, 1);
-    pcd.EdgeTessFactor[1] = max(g, 1);
-    pcd.EdgeTessFactor[2] = max(b, 1);
-    pcd.InsideTessFactor[0] = max(a, 1);
+    pcd.EdgeTessFactor[0] = max(r / 32, 1);
+    pcd.EdgeTessFactor[1] = max(g / 32, 1);
+    pcd.EdgeTessFactor[2] = max(b / 32, 1);
+    pcd.InsideTessFactor[0] = max(a / 32, 1);
 
     return pcd;
 }
@@ -110,7 +113,6 @@ struct TessEvalOutput {
     float3 te_WorldPos  : POSITION;
     float3 te_Normal    : NORMAL;
     float2 te_TexCoord  : TEXCOORD;
-    float3 te_Color;
 };
 
 [shader("tesseval")]
@@ -141,33 +143,12 @@ TessEvalOutput tesMain(
     // Compute integer pixel coordinates and fractional offsets
     int2 base = int2(floor(interpolatedTexCoord));
     float2 f = frac(interpolatedTexCoord);
-    
-    bool bx5 = (base.x % 5 == 0) && (f.x == 0.0f);
-    bool by5 = (base.y % 5 == 0) && (f.y == 0.0f);
 
     // Sample displacement values from the four neighboring texels
-    float s00 = u_DisplaceMap.Load(int3(base.x,     base.y,     0)).r;
-    float s10 = u_DisplaceMap.Load(int3(base.x + 1, base.y,     0)).r;
-    float s01 = u_DisplaceMap.Load(int3(base.x,     base.y + 1, 0)).r;
-    float s11 = u_DisplaceMap.Load(int3(base.x + 1, base.y + 1, 0)).r;
-
-    //float displacement;
-    float3 color;
-    //if (bx5 && by5) {
-    //    displacement = s00;
-    //    color = float3(1.0f, 0.0f, 0.0f);
-    //} else if (bx5 && !by5) {
-    //    displacement = lerp(s00, s01, f.y);
-    //    color = float3(0.0f, 1.0f, 0.0f);
-    //} else if (!bx5 && by5) {
-    //    displacement = lerp(s00, s10, f.x);
-    //    color = float3(0.0f, 0.0f, 1.0f);
-    //} else {
-    //    float sx0 = lerp(s00, s10, f.x);
-    //    float sx1 = lerp(s01, s11, f.x);
-    //    displacement = lerp(sx0, sx1, f.y);
-    //    color = float3(1.0f, 1.0f, 1.0f);
-    //}
+    float s00 = u_DisplaceMap.Load(int3(base, 0)).r;
+    float s10 = u_DisplaceMap.Load(int3(base + int2(1, 0), 0)).r;
+    float s01 = u_DisplaceMap.Load(int3(base + int2(0, 1), 0)).r;
+    float s11 = u_DisplaceMap.Load(int3(base + int2(1, 1), 0)).r;
 
     // Perform bilinear interpolation
     float sx0 = lerp(s00, s10, f.x);
@@ -181,9 +162,40 @@ TessEvalOutput tesMain(
     out.te_WorldPos = mul(u_Transform, float4(position, 1.0f)).xyz;
     out.te_Normal = interpolatedNormal;
     out.te_TexCoord = interpolatedTexCoord;
-    out.te_Color = color;
 
     return out;
+}
+
+struct GeometryOutput {
+    float4 g_Position  : SV_Position;
+    float3 g_WorldPos  : POSITION;
+    float3 g_Normal    : NORMAL;
+    float2 g_TexCoord  : TEXCOORD;
+    float3 g_Barycentric : BARYCENTRIC;
+};
+
+[shader("geometry")]
+[maxvertexcount(3)]
+void gsMain(
+    triangle TessEvalOutput input[3],
+    inout TriangleStream<GeometryOutput> outputStream,
+    uint primitiveID : SV_PrimitiveID)
+{
+    float3 barycentrics[3] = {
+        float3(1.0f, 0.0f, 0.0f),
+        float3(0.0f, 1.0f, 0.0f),
+        float3(0.0f, 0.0f, 1.0f)
+    };
+
+    for (int i = 0; i < 3; ++i) {
+        GeometryOutput outputVertex;
+        outputVertex.g_Position = input[i].te_Position;
+        outputVertex.g_WorldPos = input[i].te_WorldPos;
+        outputVertex.g_Normal = input[i].te_Normal;
+        outputVertex.g_Barycentric = barycentrics[i];
+        outputVertex.g_TexCoord = input[i].te_TexCoord;
+        outputStream.Append(outputVertex);
+    }
 }
 
 static const float3 ambient = float3(0.4f, 0.4f, 0.4f);
@@ -193,15 +205,23 @@ static const Light light = {
 };
 
 [shader("fragment")]
-float4 fsMain(TessEvalOutput input) : SV_Target
+float4 fsMain(GeometryOutput input) : SV_Target
 {
     float3 baseColor = float3(1.0f, 1.0f, 1.0f);
     float3 color = float3(0.0f, 0.0f, 0.0f);
 
-    float3 fdx = ddx(input.te_WorldPos);
-    float3 fdy = ddy(input.te_WorldPos);
-    float3 normal = normalize(cross(fdx, fdy));
-    float3 viewPosition = mul(u_View, float4(input.te_WorldPos, 1.0f)).xyz;
+    // Sample normal values from the four neighboring texels
+    int2 base = int2(floor(input.g_TexCoord));
+    float2 f = frac(input.g_TexCoord);
+    float3 s00 = u_NormalMap.Load(int3(base, 0)).rgb;
+    float3 s10 = u_NormalMap.Load(int3(base + int2(1, 0), 0)).rgb;
+    float3 s01 = u_NormalMap.Load(int3(base + int2(0, 1), 0)).rgb;
+    float3 s11 = u_NormalMap.Load(int3(base + int2(1, 1), 0)).rgb;
+    float3 sx0 = lerp(s00, s10, f.x);
+    float3 sx1 = lerp(s01, s11, f.x);
+    float3 normal = mul(float3x3(u_Normal), lerp(sx0, sx1, f.y));
+
+    float3 viewPosition = mul(u_View, float4(input.g_WorldPos, 1.0f)).xyz;
     if (dot(normal, viewPosition) > 0.0f) {
         normal = -1.0f * normal;
     }
@@ -210,9 +230,16 @@ float4 fsMain(TessEvalOutput input) : SV_Target
     color += ambient * baseColor;
 
     // lighing
-    float3 lighting = BlinnPhong(u_ViewPos, input.te_WorldPos, normal, light);
+    float3 lighting = BlinnPhong(u_ViewPos, input.g_WorldPos, normal, light);
     color += lighting * baseColor;
 
-    // return float4(input.te_Color, 1.0f);
+    // line
+    const float edgeWidth = 1.5; // in pixels
+    float3 bc = input.g_Barycentric;
+    float3 w = fwidth(bc);
+    float3 a3 = smoothstep(0.0, w * edgeWidth, bc);
+    float edgeFactor = min(min(a3.x, a3.y), a3.z); // 0 at edge, 1 inside
+    if (u_LineOption) {  color = lerp(float3(0.0, 0.0, 0.0), color, edgeFactor); }
+
     return float4(color, 1.0f);
 }

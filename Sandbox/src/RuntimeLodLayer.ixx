@@ -44,12 +44,16 @@ private:
     MeshBaker::Mesh m_BakedModel;
     iGe::Ref<iGe::VertexArray> m_BakedModelVertexArray;
     iGe::Ref<iGe::Texture2D> m_BakedModelDisplaceMap;
+    iGe::Ref<iGe::Texture2D> m_BakedModelNormalMap;
+    std::uint32_t m_TargetTessFactor = 5;
+    bool m_LineOption = false;
+    bool m_OriginModelOption = false;
 
     // Software Tessellation
     struct TessellatorData {
         glm::uvec2 ScreenSize;
         std::uint32_t TriSize;
-        float DisplaceMapScale;
+        float LineOption;
     };
     iGe::Scope<TessellatorData> m_TessellatorData;
     iGe::Ref<iGe::Buffer> m_TessellatorDataUniform;
