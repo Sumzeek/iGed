@@ -732,7 +732,7 @@ void BakeTest(const Mesh& simMesh, const Mesh& oriMesh, int resolution) {
 
     // Quad pairing
     Mesh bakedMesh;
-    bakedMesh.Name = simMesh.Name + "_baked";
+    bakedMesh.Name = oriMesh.Name + "_baked";
     {
         // Use temp mesh to pair
         if (vcg::tri::Clean<VcgMesh>::CountNonManifoldEdgeFF(vm) > 0) {

@@ -11,14 +11,14 @@ import std;
 namespace MeshBaker
 {
 template<typename T>
-struct SbtRecord {
+struct __align__(OPTIX_SBT_RECORD_ALIGNMENT) SbtRecord {
     __align__(OPTIX_SBT_RECORD_ALIGNMENT) char header[OPTIX_SBT_RECORD_HEADER_SIZE];
     T data;
 };
 
-typedef SbtRecord<RayGenData> RayGenSbtRecord;
-typedef SbtRecord<ClosestHitData> HitSbtRecord;
-typedef SbtRecord<MissData> MissSbtRecord;
+using RayGenSbtRecord = SbtRecord<RayGenData>;
+using HitSbtRecord = SbtRecord<ClosestHitData>;
+using MissSbtRecord = SbtRecord<MissData>;
 
 static std::string LoadPTX(const char* filename) {
     std::ifstream file(filename);
@@ -89,7 +89,7 @@ BakeData OptixBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) 
                 glm::vec3 norOnMesh1 = glm::normalize(bary.x * n0 + bary.y * n1 + bary.z * n2);
 
                 int idx = y * resolution + x;
-                bakeData.Originals[idx] = posOnMesh1;
+                bakeData.Originals[idx] = posOnMesh1 - 1e-6f; // Add a small epsilon to origin
                 bakeData.Directions[idx] = norOnMesh1;
             }
         }
@@ -183,7 +183,7 @@ BakeData OptixBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) 
         pipelineCompileOptions.pipelineLaunchParamsVariableName = "params";
 
         // load ptx file
-        std::string ptx = LoadPTX("assets/ptxs/bakeKernel.ptx");
+        std::string ptx = LoadPTX("assets/ptxs/bakeKernel_75.ptx");
 
         OPTIX_CHECK(optixModuleCreate(context, &moduleCompileOptions, &pipelineCompileOptions, ptx.c_str(), ptx.size(),
                                       log, &logSize, &module));

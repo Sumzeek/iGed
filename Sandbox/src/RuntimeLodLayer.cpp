@@ -24,7 +24,30 @@ RuntimeLodLayer::RuntimeLodLayer()
 
     // Load model
     {
-        m_Model = MeshBaker::LoadObjFile("assets/models/Bayon Lion.obj");
+        // // Bake
+        // auto oriMesh = MeshBaker::LoadObjFile("assets/models/armadillo.obj");
+        // auto simMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_simed.obj");
+        // MeshBaker::BakeTest(simMesh, oriMesh, 1024);
+        //
+        // m_OriginModel = oriMesh;
+        // {
+        //     auto vertices = m_OriginModel.Vertices;
+        //     auto indices = m_OriginModel.Indices;
+        //     m_OriginModelVertexArray = iGe::VertexArray::Create();
+        //
+        //     auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+        //                                                   vertices.size() * sizeof(MeshBaker::Vertex));
+        //     iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
+        //                                 {iGe::ShaderDataType::Float3, "a_Normal"},
+        //                                 {iGe::ShaderDataType::Float2, "a_TexCoord"}};
+        //     vertexBuffer->SetLayout(layout);
+        //     m_OriginModelVertexArray->AddVertexBuffer(vertexBuffer);
+        //
+        //     auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
+        //     m_OriginModelVertexArray->SetIndexBuffer(indexBuffer);
+        // }
+
+        m_Model = MeshBaker::LoadObjFile("assets/models/lucy_baked.obj");
         {
             auto vertices = m_Model.Vertices;
             auto indices = m_Model.Indices;
@@ -42,33 +65,10 @@ RuntimeLodLayer::RuntimeLodLayer()
             m_ModelVertexArray->SetIndexBuffer(indexBuffer);
         }
 
-        auto simMesh = MeshBaker::LoadObjFile("assets/models/" + m_Model.Name + "_simed.obj");
-        MeshBaker::BakeTest(simMesh, m_Model, 1024);
-        m_BakedModel = MeshBaker::LoadObjFile("assets/models/" + simMesh.Name + "_baked.obj");
-
-        // MeshBaker::Bake(m_Model, 1024);
-        // m_BakedModel = MeshBaker::LoadObjFile("assets/models/" + m_Model.Name + "_baked.obj");
-        {
-            auto vertices = m_BakedModel.Vertices;
-            auto indices = m_BakedModel.Indices;
-            m_BakedModelVertexArray = iGe::VertexArray::Create();
-
-            auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
-                                                          vertices.size() * sizeof(MeshBaker::Vertex));
-            iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
-                                        {iGe::ShaderDataType::Float3, "a_Normal"},
-                                        {iGe::ShaderDataType::Float2, "a_TexCoord"}};
-            vertexBuffer->SetLayout(layout);
-            m_BakedModelVertexArray->AddVertexBuffer(vertexBuffer);
-
-            auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-            m_BakedModelVertexArray->SetIndexBuffer(indexBuffer);
-        }
-
         // Model displace map
         {
             int w, h;
-            std::string name = m_BakedModel.Name + "_displacement.exr";
+            std::string name = m_Model.Name + "_displacement.exr";
             std::vector<float> displaces;
             MeshBaker::ReadExrFile("assets/textures/" + name, w, h, displaces);
 
@@ -78,15 +78,15 @@ RuntimeLodLayer::RuntimeLodLayer()
             displaceMapSpec.Format = iGe::ImageFormat::R32F;
             displaceMapSpec.GenerateMips = false;
 
-            m_BakedModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
-            m_BakedModelDisplaceMap->SetData(displaces.data(), displaces.size() * sizeof(float));
-            m_BakedModelDisplaceMap->Bind(3);
+            m_ModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
+            m_ModelDisplaceMap->SetData(displaces.data(), displaces.size() * sizeof(float));
+            m_ModelDisplaceMap->Bind(3);
         }
 
         // Model normal map
         {
             int w, h;
-            std::string name = m_BakedModel.Name + "_normal.exr";
+            std::string name = m_Model.Name + "_normal.exr";
             std::vector<glm::vec3> normals;
             MeshBaker::ReadExrFile("assets/textures/" + name, w, h, normals);
 
@@ -96,9 +96,9 @@ RuntimeLodLayer::RuntimeLodLayer()
             normalMapSpec.Format = iGe::ImageFormat::RGB32F;
             normalMapSpec.GenerateMips = false;
 
-            m_BakedModelNormalMap = iGe::Texture2D::Create(normalMapSpec);
-            m_BakedModelNormalMap->SetData(normals.data(), normals.size() * sizeof(glm::vec3));
-            m_BakedModelNormalMap->Bind(4);
+            m_ModelNormalMap = iGe::Texture2D::Create(normalMapSpec);
+            m_ModelNormalMap->SetData(normals.data(), normals.size() * sizeof(glm::vec3));
+            m_ModelNormalMap->Bind(4);
         }
     }
 
@@ -197,7 +197,10 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
     m_Camera.SetPosition(m_CameraPosition);
     m_Camera.SetRotation(m_CameraRotation);
 
-    //m_ModelTransform = glm::gtc::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    // static auto startTime = std::chrono::high_resolution_clock::now();
+    // auto currentTime = std::chrono::high_resolution_clock::now();
+    // float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+    // m_ModelTransform = glm::gtc::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
     // Update perframe data
     m_PerFrameData->ViewPos = m_Camera.GetPosition();
@@ -210,7 +213,7 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
     {
         const float width = m_DepthBuffer->GetWidth();
         const float height = m_DepthBuffer->GetHeight();
-        uint32_t triSize = m_Model.GetIndexArray().size() / 3;
+        std::uint32_t triSize = m_Model.GetIndexArray().size() / 3;
 
         //// Use compute shader to tessellation
         //{
@@ -259,24 +262,18 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         // Draw model
         {
             if (m_OriginModelOption) {
-                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_ModelVertexArray, m_ModelTransform);
+                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_OriginModelVertexArray,
+                                      m_ModelTransform);
             } else {
-                bool useDynamicTess = iGe::Input::IsMouseButtonPressed(iGeKey::MouseLeft) ||
-                                      iGe::Input::IsMouseButtonPressed(iGeKey::MouseRight);
-                useDynamicTess = true;
-                if (!useDynamicTess) {
-                    iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_ModelVertexArray,
-                                          m_ModelTransform);
-                } else {
-                    m_TessellatorData->ScreenSize = glm::uvec2{(std::uint32_t) width, (std::uint32_t) height};
-                    m_TessellatorData->TriSize = m_TargetTessFactor;
-                    m_TessellatorData->LineOption = m_LineOption ? 1 : 0;
-                    m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
-                    m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
-                    m_BakedModelDisplaceMap->Bind(3);
-                    iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_BakedModelVertexArray,
-                                          m_ModelTransform, true);
-                }
+                m_TessellatorData->ScreenSize = glm::uvec2{(std::uint32_t) width, (std::uint32_t) height};
+                m_TessellatorData->TriSize = m_TargetTessFactor;
+                m_TessellatorData->LineOption = m_LineOption ? 1 : 0;
+                m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
+                m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
+                m_ModelDisplaceMap->Bind(3);
+                m_ModelNormalMap->Bind(4);
+                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray,
+                                      m_ModelTransform, true);
             }
         }
 

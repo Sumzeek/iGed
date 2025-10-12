@@ -3,7 +3,8 @@
 
 #include "myStruct.h"
 
-// Compile for use "nvcc -I"C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0/include" --ptx bakeKernel.cu -o bakeKernel.ptx
+// Compile for use "nvcc -I"C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0/include" --ptx bakeKernel.cu -o bakeKernel.ptx -arch=compute_75"
+// Compile for use "nvcc -I"C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0/include" --ptx bakeKernel.cu -o bakeKernel.ptx -arch=compute_86"
 
 __device__ float3 operator-(const float3& a) { return make_float3(-a.x, -a.y, -a.z); }
 
@@ -29,13 +30,13 @@ extern "C" __global__ void __raygen__rg() {
     Ray ray = params.Rays[idx];
 
     unsigned int p0_a, p1_a;
-    optixTrace(params.Handle, ray.Origin, ray.Direction, -1e-6f, 1e16f, 0.0f, OptixVisibilityMask(1), OPTIX_RAY_FLAG_NONE,
-               0, 1, 0, p0_a, p1_a); // Add a small epsilon to tmin
+    optixTrace(params.Handle, ray.Origin, ray.Direction, 0.0f, 1e16f, 0.0f, OptixVisibilityMask(1), OPTIX_RAY_FLAG_NONE,
+               0, 1, 0, p0_a, p1_a);
     float t_a = __uint_as_float(p0_a);
 
     unsigned int p0_b, p1_b;
-    optixTrace(params.Handle, ray.Origin, -ray.Direction, -1e-6f, 1e16f, 0.0f, OptixVisibilityMask(1),
-               OPTIX_RAY_FLAG_NONE, 0, 1, 0, p0_b, p1_b); // Add a small epsilon to tmin
+    optixTrace(params.Handle, ray.Origin, -ray.Direction, 0.0f, 1e16f, 0.0f, OptixVisibilityMask(1),
+               OPTIX_RAY_FLAG_NONE, 0, 1, 0, p0_b, p1_b);
     float t_b = __uint_as_float(p0_b);
 
     unsigned int result_id;

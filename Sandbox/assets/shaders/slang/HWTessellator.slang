@@ -100,10 +100,10 @@ PatchConstantData computeTessFactors(InputPatch<VertexOutput, 3> input) {
     // pcd.EdgeTessFactor[1] = u_TargetTessFactor;
     // pcd.EdgeTessFactor[2] = u_TargetTessFactor;
     // pcd.InsideTessFactor[0] = u_TargetTessFactor;
-    pcd.EdgeTessFactor[0] = max(r / 32, 1);
-    pcd.EdgeTessFactor[1] = max(g / 32, 1);
-    pcd.EdgeTessFactor[2] = max(b / 32, 1);
-    pcd.InsideTessFactor[0] = max(a / 32, 1);
+    pcd.EdgeTessFactor[0] = max(r / 2, 1);
+    pcd.EdgeTessFactor[1] = max(g / 2, 1);
+    pcd.EdgeTessFactor[2] = max(b / 2, 1);
+    pcd.InsideTessFactor[0] = max(a / 2, 1);
 
     return pcd;
 }
@@ -239,7 +239,7 @@ float4 fsMain(GeometryOutput input) : SV_Target
     float3 w = fwidth(bc);
     float3 a3 = smoothstep(0.0, w * edgeWidth, bc);
     float edgeFactor = min(min(a3.x, a3.y), a3.z); // 0 at edge, 1 inside
-    if (u_LineOption) {  color = lerp(float3(0.0, 0.0, 0.0), color, edgeFactor); }
+    if (u_LineOption == 1) {  color = lerp(float3(0.0, 0.0, 0.0), color, edgeFactor); }
 
     return float4(color, 1.0f);
 }

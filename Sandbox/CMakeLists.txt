@@ -123,7 +123,7 @@ file(GLOB_RECURSE PTX_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/ptxs/*")
 SOURCE_GROUP("ptxs" FILES ${PTX_FILES})
 
 # Create output directory if it doesn't exist
-file(MAKE_DIRECTORY "${ASSETS_OUTPUT_DIR}/ptx")
+file(MAKE_DIRECTORY "${ASSETS_OUTPUT_DIR}/ptxs")
 
 set(COPIED_PTX_FILES "")
 foreach (PTX_FILE ${PTX_FILES})
