@@ -8,6 +8,7 @@ struct VertexOutput {
     float4 v_Position   : SV_Position;
     float3 v_WorldPos   : POSITION;
     float3 v_Color      : COLOR;
+    float3 v_Curvature  : CURVATURE;
 };
 
 [[gl::binding(0)]]

@@ -36,12 +36,14 @@ struct VertexInput {
     float3 a_Position  : POSITION;
     float3 a_Normal    : NORMAL;
     float2 a_TexCoord  : TEXCOORD;
+    float a_Curvature  : CURVATURE;
 };
 
 struct VertexOutput {
     float3 v_Position  : POSITION;
     float3 v_Normal    : NORMAL;
     float2 v_TexCoord  : TEXCOORD;
+    float v_Curvature  : CURVATURE;
 };
 
 [shader("vertex")]
@@ -51,6 +53,7 @@ VertexOutput vsMain(VertexInput input, uint vertexID : SV_VertexID)
     out.v_Position  = input.a_Position;
     out.v_TexCoord  = input.a_TexCoord;
     out.v_Normal    = input.a_Normal;
+    out.v_Curvature = input.a_Curvature;
     return out;
 }
 
@@ -81,6 +84,8 @@ TessControlOutput tcsMain(InputPatch<VertexOutput, 3> input, uint i : SV_OutputC
     return out;
 }
 
+float sigmoid(float x) { return 1.0f / (1.0f + exp(-x)); }
+
 // Patch Constant Function
 PatchConstantData computeTessFactors(InputPatch<VertexOutput, 3> input) {
     float3 v[3]= float3[3](
@@ -95,15 +100,13 @@ PatchConstantData computeTessFactors(InputPatch<VertexOutput, 3> input) {
     uint r,g,b,a;
     UnpackUintToRGBA8(packed, r, g, b, a);
 
+    uint targetPixelSize = 8; // in pixels
+
     PatchConstantData pcd;
-    // pcd.EdgeTessFactor[0] = u_TargetTessFactor;
-    // pcd.EdgeTessFactor[1] = u_TargetTessFactor;
-    // pcd.EdgeTessFactor[2] = u_TargetTessFactor;
-    // pcd.InsideTessFactor[0] = u_TargetTessFactor;
-    pcd.EdgeTessFactor[0] = max(r / 2, 1);
-    pcd.EdgeTessFactor[1] = max(g / 2, 1);
-    pcd.EdgeTessFactor[2] = max(b / 2, 1);
-    pcd.InsideTessFactor[0] = max(a / 2, 1);
+    pcd.EdgeTessFactor[0] = max(max(input[0].v_Curvature, r / targetPixelSize), 1.0f);
+    pcd.EdgeTessFactor[1] = max(max(input[1].v_Curvature, g / targetPixelSize), 1.0f);
+    pcd.EdgeTessFactor[2] = max(max(input[2].v_Curvature, b / targetPixelSize), 1.0f);
+    pcd.InsideTessFactor[0] = max(a / targetPixelSize, 1);
 
     return pcd;
 }

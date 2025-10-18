@@ -70,6 +70,64 @@ Mesh LoadObjFile(const std::filesystem::path& filepath) {
     return mesh;
 }
 
+void FillCurvature(Mesh& mesh, int w, int h, const std::vector<float>& displacementValues) {
+    auto sampleEdgeCurvature = [&](const glm::vec2& tA, const glm::vec2& tB, const glm::vec3& pA,
+                                   const glm::vec3& pB) -> float {
+        std::vector<float> heights;
+        int xp = static_cast<int>(tB.x - tA.x);
+        int yp = static_cast<int>(tB.y - tA.y);
+
+        int ps = std::max(std::abs(xp), std::abs(yp));
+        int dx = xp / ps;
+        int dy = yp / ps;
+
+        for (int s = 0; s <= ps; ++s) {
+            int x = static_cast<int>(tA.x) + s * dx;
+            int y = static_cast<int>(tA.y) + s * dy;
+
+            x = std::clamp(x, 0, w - 1);
+            y = std::clamp(y, 0, h - 1);
+
+            heights.push_back(displacementValues[y * w + x]);
+        }
+
+        float curvature = 0.0f;
+        if (heights.size() < 3) { return 0.0f; }
+
+        float edgeLen = glm::length(pA - pB);
+        if (edgeLen < 1e-6f) { return 0.0f; }
+
+        float step = edgeLen / (heights.size() - 1);
+        for (int j = 1; j < (int) heights.size() - 1; ++j) {
+            float y_prev = heights[j - 1];
+            float y_curr = heights[j];
+            float y_next = heights[j + 1];
+
+            float yd = (y_next - y_prev) / (2 * step);
+            float ydd = (y_next - 2 * y_curr + y_prev) / (step * step);
+
+            float k = ydd / std::pow(1.0f + yd * yd, 1.5f);
+            curvature = std::max(curvature, std::abs(k));
+        }
+
+        return curvature;
+    };
+
+    for (int i = 0; i < mesh.Indices.size(); i += 3) {
+        auto& v0 = mesh.Vertices[mesh.Indices[i + 0]];
+        auto& v1 = mesh.Vertices[mesh.Indices[i + 1]];
+        auto& v2 = mesh.Vertices[mesh.Indices[i + 2]];
+
+        float k0 = sampleEdgeCurvature(v1.TexCoord, v2.TexCoord, v1.Position, v2.Position);
+        float k1 = sampleEdgeCurvature(v2.TexCoord, v0.TexCoord, v2.Position, v0.Position);
+        float k2 = sampleEdgeCurvature(v0.TexCoord, v1.TexCoord, v0.Position, v1.Position);
+
+        v0.Curvature = k0;
+        v1.Curvature = k1;
+        v2.Curvature = k2;
+    }
+}
+
 static aiScene* ConvertMeshToAssimpScene(const Mesh& mesh) {
     aiScene* scene = new aiScene();
     scene->mRootNode = new aiNode();

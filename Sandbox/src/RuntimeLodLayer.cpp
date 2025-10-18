@@ -25,11 +25,10 @@ RuntimeLodLayer::RuntimeLodLayer()
     // Load model
     {
         // // Bake
-        // auto oriMesh = MeshBaker::LoadObjFile("assets/models/armadillo.obj");
+        // auto oriMesh = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
         // auto simMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_simed.obj");
-        // MeshBaker::BakeTest(simMesh, oriMesh, 1024);
-        //
-        // m_OriginModel = oriMesh;
+        // MeshBaker::BakeTest(simMesh, oriMesh, 4096);
+        //  m_OriginModel = oriMesh;
         // {
         //     auto vertices = m_OriginModel.Vertices;
         //     auto indices = m_OriginModel.Indices;
@@ -39,7 +38,8 @@ RuntimeLodLayer::RuntimeLodLayer()
         //                                                   vertices.size() * sizeof(MeshBaker::Vertex));
         //     iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
         //                                 {iGe::ShaderDataType::Float3, "a_Normal"},
-        //                                 {iGe::ShaderDataType::Float2, "a_TexCoord"}};
+        //                                 {iGe::ShaderDataType::Float2, "a_TexCoord"},
+        //                                 {iGe::ShaderDataType::Float, "a_Curvature"}};
         //     vertexBuffer->SetLayout(layout);
         //     m_OriginModelVertexArray->AddVertexBuffer(vertexBuffer);
         //
@@ -47,58 +47,65 @@ RuntimeLodLayer::RuntimeLodLayer()
         //     m_OriginModelVertexArray->SetIndexBuffer(indexBuffer);
         // }
 
-        m_Model = MeshBaker::LoadObjFile("assets/models/lucy_baked.obj");
+        m_Model = MeshBaker::LoadObjFile("assets/models/Icosphere_baked.obj");
         {
-            auto vertices = m_Model.Vertices;
-            auto indices = m_Model.Indices;
-            m_ModelVertexArray = iGe::VertexArray::Create();
+            // Model displace map
+            {
+                int w, h;
+                std::vector<float> displaces;
+                std::string name = m_Model.Name + "_displacement.exr";
+                MeshBaker::ReadExrFile("assets/textures/" + name, w, h, displaces);
 
-            auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
-                                                          vertices.size() * sizeof(MeshBaker::Vertex));
-            iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
-                                        {iGe::ShaderDataType::Float3, "a_Normal"},
-                                        {iGe::ShaderDataType::Float2, "a_TexCoord"}};
-            vertexBuffer->SetLayout(layout);
-            m_ModelVertexArray->AddVertexBuffer(vertexBuffer);
+                iGe::TextureSpecification displaceMapSpec;
+                displaceMapSpec.Width = w;
+                displaceMapSpec.Height = h;
+                displaceMapSpec.Format = iGe::ImageFormat::R32F;
+                displaceMapSpec.GenerateMips = false;
 
-            auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-            m_ModelVertexArray->SetIndexBuffer(indexBuffer);
-        }
+                m_ModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
+                m_ModelDisplaceMap->SetData(displaces.data(), displaces.size() * sizeof(float));
+                m_ModelDisplaceMap->Bind(3);
 
-        // Model displace map
-        {
-            int w, h;
-            std::string name = m_Model.Name + "_displacement.exr";
-            std::vector<float> displaces;
-            MeshBaker::ReadExrFile("assets/textures/" + name, w, h, displaces);
+                // Fill curvature data
+                FillCurvature(m_Model, w, h, displaces);
+            }
 
-            iGe::TextureSpecification displaceMapSpec;
-            displaceMapSpec.Width = w;
-            displaceMapSpec.Height = h;
-            displaceMapSpec.Format = iGe::ImageFormat::R32F;
-            displaceMapSpec.GenerateMips = false;
+            // Model normal map
+            {
+                int w, h;
+                std::vector<glm::vec3> normals;
+                std::string name = m_Model.Name + "_normal.exr";
+                MeshBaker::ReadExrFile("assets/textures/" + name, w, h, normals);
 
-            m_ModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
-            m_ModelDisplaceMap->SetData(displaces.data(), displaces.size() * sizeof(float));
-            m_ModelDisplaceMap->Bind(3);
-        }
+                iGe::TextureSpecification normalMapSpec;
+                normalMapSpec.Width = w;
+                normalMapSpec.Height = h;
+                normalMapSpec.Format = iGe::ImageFormat::RGB32F;
+                normalMapSpec.GenerateMips = false;
 
-        // Model normal map
-        {
-            int w, h;
-            std::string name = m_Model.Name + "_normal.exr";
-            std::vector<glm::vec3> normals;
-            MeshBaker::ReadExrFile("assets/textures/" + name, w, h, normals);
+                m_ModelNormalMap = iGe::Texture2D::Create(normalMapSpec);
+                m_ModelNormalMap->SetData(normals.data(), normals.size() * sizeof(glm::vec3));
+                m_ModelNormalMap->Bind(4);
+            }
 
-            iGe::TextureSpecification normalMapSpec;
-            normalMapSpec.Width = w;
-            normalMapSpec.Height = h;
-            normalMapSpec.Format = iGe::ImageFormat::RGB32F;
-            normalMapSpec.GenerateMips = false;
+            // Vertices data
+            {
+                auto vertices = m_Model.Vertices;
+                auto indices = m_Model.Indices;
+                m_ModelVertexArray = iGe::VertexArray::Create();
 
-            m_ModelNormalMap = iGe::Texture2D::Create(normalMapSpec);
-            m_ModelNormalMap->SetData(normals.data(), normals.size() * sizeof(glm::vec3));
-            m_ModelNormalMap->Bind(4);
+                auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+                                                              vertices.size() * sizeof(MeshBaker::Vertex));
+                iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
+                                            {iGe::ShaderDataType::Float3, "a_Normal"},
+                                            {iGe::ShaderDataType::Float2, "a_TexCoord"},
+                                            {iGe::ShaderDataType::Float, "a_Curvature"}};
+                vertexBuffer->SetLayout(layout);
+                m_ModelVertexArray->AddVertexBuffer(vertexBuffer);
+
+                auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
+                m_ModelVertexArray->SetIndexBuffer(indexBuffer);
+            }
         }
     }
 

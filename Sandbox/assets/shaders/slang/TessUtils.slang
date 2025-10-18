@@ -31,7 +31,7 @@ public uint PackTessFactor(float3 v[3], float4x4 mvp, uint2 screenSize) {
     for (uint i = 0; i < 3; ++i) {
         tessEdge[i] = uint(clamp(len[i], 0.0, 255.0));
     }
-    uint tessInside = (tessEdge[0] + tessEdge[1] + tessEdge[2]) / 3.0f;
+    uint tessInside = (tessEdge[0] + tessEdge[1] + tessEdge[2]) / 3;
 
     // Pack tess factors into RGB
     return PackRGBA8ToUint(tessEdge[0], tessEdge[1], tessEdge[2], tessInside);

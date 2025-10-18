@@ -11,6 +11,7 @@ export struct Vertex {
     glm::vec3 Position;
     glm::vec3 Normal;
     glm::vec2 TexCoord;
+    float Curvature;
     // glm::vec3 Tangent;
     // glm::vec3 BiTangent;
 };
@@ -32,10 +33,12 @@ export struct Mesh {
         return positions;
     }
 
-    std::vector<uint32_t> GetIndexArray() const { return Indices; }
+    std::vector<std::uint32_t> GetIndexArray() const { return Indices; }
 };
 
 export Mesh LoadObjFile(const std::filesystem::path& filepath);
+
+export void FillCurvature(Mesh& mesh, int w, int h, const std::vector<float>& displacementValues);
 
 export void ExportMeshAsOBJ(const Mesh& mesh);
 } // namespace MeshBaker
