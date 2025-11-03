@@ -84,8 +84,6 @@ TessControlOutput tcsMain(InputPatch<VertexOutput, 3> input, uint i : SV_OutputC
     return out;
 }
 
-float sigmoid(float x) { return 1.0f / (1.0f + exp(-x)); }
-
 // Patch Constant Function
 PatchConstantData computeTessFactors(InputPatch<VertexOutput, 3> input) {
     float3 v[3]= float3[3](

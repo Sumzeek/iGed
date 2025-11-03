@@ -19,8 +19,8 @@ Mesh LoadObjFile(const std::filesystem::path& filepath) {
     Assimp::Importer importer;
     const aiScene* scene =
             importer.ReadFile(filepath.string(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
-                                                         aiProcess_GenBoundingBoxes /*| aiProcess_ForceGenNormals*/ |
-                                                         aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
+                                                         aiProcess_GenBoundingBoxes /*| aiProcess_ForceGenNormals |
+                                                         aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace*/);
     // check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
     {

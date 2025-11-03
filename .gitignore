@@ -7,5 +7,12 @@
 /cmake-build-debug/
 /cmake-build-release/
 
-# shader compiled file
+# Shader compiled file
 /Sandbox/assets/shaders/generated/
+
+# Original assets
+/Sandbox/assets/models/armadillo.obj
+/Sandbox/assets/models/Bayon Lion.obj
+/Sandbox/assets/models/Dragon_1.obj
+/Sandbox/assets/models/Icosphere.obj
+/Sandbox/assets/models/lucy.obj

@@ -25,9 +25,9 @@ RuntimeLodLayer::RuntimeLodLayer()
     // Load model
     {
         // // Bake
-        // auto oriMesh = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
-        // auto simMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_simed.obj");
-        // MeshBaker::BakeTest(simMesh, oriMesh, 4096);
+        auto oriMesh = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
+        auto bakedMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_baked.obj");
+        MeshBaker::BakeTest(bakedMesh, oriMesh, 1024);
         //  m_OriginModel = oriMesh;
         // {
         //     auto vertices = m_OriginModel.Vertices;

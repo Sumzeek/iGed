@@ -36,6 +36,8 @@ export struct Mesh {
     std::vector<std::uint32_t> GetIndexArray() const { return Indices; }
 };
 
+// export struct QuadMesh : public Mesh {};
+
 export Mesh LoadObjFile(const std::filesystem::path& filepath);
 
 export void FillCurvature(Mesh& mesh, int w, int h, const std::vector<float>& displacementValues);
