@@ -33,8 +33,8 @@ void Renderer::BeginScene(Camera& camera) {
 
 void Renderer::EndScene() {}
 
-void Renderer::Submit(const Ref<GraphicsShader>& shader, const Ref<VertexArray>& vertexArray,
-                      const glm::mat4& transform, bool tessOption) {
+void Renderer::SubmitTris(const Ref<GraphicsShader>& shader, const Ref<VertexArray>& vertexArray,
+                          const glm::mat4& transform) {
     shader->Bind();
 
     s_SceneDataUniform->Bind(0, BufferType::Uniform);
@@ -42,12 +42,31 @@ void Renderer::Submit(const Ref<GraphicsShader>& shader, const Ref<VertexArray>&
     s_SceneDataUniform->SetData(&transform, sizeof(transform), sizeof(SceneData));
 
     vertexArray->Bind();
+    RenderCommand::DrawTriIndexed(vertexArray);
+}
 
-    if (!tessOption) {
-        RenderCommand::DrawIndexed(vertexArray);
-    } else {
-        RenderCommand::DrawPatches(vertexArray);
-    }
+void Renderer::SubmitQuads(const Ref<GraphicsShader>& shader, const Ref<VertexArray>& vertexArray,
+                           const glm::mat4& transform) {
+    shader->Bind();
+
+    s_SceneDataUniform->Bind(0, BufferType::Uniform);
+    s_SceneDataUniform->SetData(s_SceneData.get(), sizeof(SceneData));
+    s_SceneDataUniform->SetData(&transform, sizeof(transform), sizeof(SceneData));
+
+    vertexArray->Bind();
+    RenderCommand::DrawQuadIndexed(vertexArray);
+}
+
+void Renderer::SubmitPatches(const Ref<GraphicsShader>& shader, const Ref<VertexArray>& vertexArray,
+                             uint32_t patchVertexCount, const glm::mat4& transform) {
+    shader->Bind();
+
+    s_SceneDataUniform->Bind(0, BufferType::Uniform);
+    s_SceneDataUniform->SetData(s_SceneData.get(), sizeof(SceneData));
+    s_SceneDataUniform->SetData(&transform, sizeof(transform), sizeof(SceneData));
+
+    vertexArray->Bind();
+    RenderCommand::DrawPatches(vertexArray, patchVertexCount);
 }
 
 void Renderer::Dispatch(const Ref<ComputeShader>& shader, const glm::uvec3 groupSize, const glm::mat4& transform) {

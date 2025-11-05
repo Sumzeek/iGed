@@ -36,14 +36,14 @@ struct VertexInput {
     float3 a_Position  : POSITION;
     float3 a_Normal    : NORMAL;
     float2 a_TexCoord  : TEXCOORD;
-    float a_Curvature  : CURVATURE;
+    //float a_Curvature  : CURVATURE;
 };
 
 struct VertexOutput {
     float3 v_Position  : POSITION;
     float3 v_Normal    : NORMAL;
     float2 v_TexCoord  : TEXCOORD;
-    float v_Curvature  : CURVATURE;
+    //float v_Curvature  : CURVATURE;
 };
 
 [shader("vertex")]
@@ -53,7 +53,7 @@ VertexOutput vsMain(VertexInput input, uint vertexID : SV_VertexID)
     out.v_Position  = input.a_Position;
     out.v_TexCoord  = input.a_TexCoord;
     out.v_Normal    = input.a_Normal;
-    out.v_Curvature = input.a_Curvature;
+    //out.v_Curvature = input.a_Curvature;
     return out;
 }
 
@@ -64,17 +64,17 @@ struct TessControlOutput {
 };
 
 struct PatchConstantData {
-    float EdgeTessFactor[3] : SV_TessFactor;
-    float InsideTessFactor[1] : SV_InsideTessFactor;
+    float EdgeTessFactor[4] : SV_TessFactor;
+    float InsideTessFactor[2] : SV_InsideTessFactor;
 };
 
 [shader("tesscontrol")]
-[domain("tri")]
+[domain("quad")]
 [partitioning("integer")]
 [outputtopology("triangle_cw")]
-[outputcontrolpoints(3)]
+[outputcontrolpoints(4)]
 [patchconstantfunc("computeTessFactors")]
-TessControlOutput tcsMain(InputPatch<VertexOutput, 3> input, uint i : SV_OutputControlPointID)
+TessControlOutput tcsMain(InputPatch<VertexOutput, 4> input, uint i : SV_OutputControlPointID)
 {
     TessControlOutput out;
     out.tc_Position = input[i].v_Position;
@@ -85,15 +85,16 @@ TessControlOutput tcsMain(InputPatch<VertexOutput, 3> input, uint i : SV_OutputC
 }
 
 // Patch Constant Function
-PatchConstantData computeTessFactors(InputPatch<VertexOutput, 3> input) {
-    float3 v[3]= float3[3](
+PatchConstantData computeTessFactors(InputPatch<VertexOutput, 4> input) {
+    float3 v[4]= float3[4](
         input[0].v_Position,
         input[1].v_Position,
-        input[2].v_Position
+        input[2].v_Position,
+        input[3].v_Position,
     );
 
     float4x4 mvp = mul(u_ProjectionView, u_Transform);
-    uint packed = PackTessFactor(v, mvp, u_ScreenSize);
+    uint packed = PackTessFactorQuad(v, mvp, u_ScreenSize);
 
     uint r,g,b,a;
     UnpackUintToRGBA8(packed, r, g, b, a);
@@ -101,10 +102,17 @@ PatchConstantData computeTessFactors(InputPatch<VertexOutput, 3> input) {
     uint targetPixelSize = 8; // in pixels
 
     PatchConstantData pcd;
-    pcd.EdgeTessFactor[0] = max(max(input[0].v_Curvature, r / targetPixelSize), 1.0f);
-    pcd.EdgeTessFactor[1] = max(max(input[1].v_Curvature, g / targetPixelSize), 1.0f);
-    pcd.EdgeTessFactor[2] = max(max(input[2].v_Curvature, b / targetPixelSize), 1.0f);
-    pcd.InsideTessFactor[0] = max(a / targetPixelSize, 1);
+    // pcd.EdgeTessFactor[0] = max(max(input[0].v_Curvature, r / targetPixelSize), 1.0f);
+    // pcd.EdgeTessFactor[1] = max(max(input[1].v_Curvature, g / targetPixelSize), 1.0f);
+    // pcd.EdgeTessFactor[2] = max(max(input[2].v_Curvature, b / targetPixelSize), 1.0f);
+    // pcd.EdgeTessFactor[3] = max(max(input[3].v_Curvature, b / targetPixelSize), 1.0f);
+    // pcd.InsideTessFactor[0] = max(a / targetPixelSize, 1);
+    pcd.EdgeTessFactor[0] = u_TargetTessFactor;
+    pcd.EdgeTessFactor[1] = u_TargetTessFactor;
+    pcd.EdgeTessFactor[2] = u_TargetTessFactor;
+    pcd.EdgeTessFactor[3] = u_TargetTessFactor;
+    pcd.InsideTessFactor[0] = u_TargetTessFactor;
+    pcd.InsideTessFactor[1] = u_TargetTessFactor;
 
     return pcd;
 }
@@ -114,33 +122,51 @@ struct TessEvalOutput {
     float3 te_WorldPos  : POSITION;
     float3 te_Normal    : NORMAL;
     float2 te_TexCoord  : TEXCOORD;
+    float te_T;
 };
 
 [shader("tesseval")]
-[domain("tri")]
+[domain("quad")]
 TessEvalOutput tesMain(
-    float3 bary : SV_DomainLocation,
-    const OutputPatch<TessControlOutput, 3> input,
+    float2 uv : SV_DomainLocation,
+    const OutputPatch<TessControlOutput, 4> input,
     PatchConstantData tessData)
 {
     float3 p0 = input[0].tc_Position;
     float3 p1 = input[1].tc_Position;
     float3 p2 = input[2].tc_Position;
-    float3 interpolatedPosition = p0 * bary.x + p1 * bary.y + p2 * bary.z;
+    float3 p3 = input[3].tc_Position;
+    // Assume quad index order: 0:(0,0), 1:(1,0), 2:(1,1), 3:(0,1)
+    float3 interpolatedPosition =
+          p0 * (1 - uv.x) * (1 - uv.y)
+        + p1 * uv.x * (1 - uv.y)
+        + p2 * uv.x * uv.y
+        + p3 * (1 - uv.x) * uv.y;
 
     float3 n0 = input[0].tc_Normal;
     float3 n1 = input[1].tc_Normal;
     float3 n2 = input[2].tc_Normal;
-    float3 interpolatedNormal = normalize(n0 * bary.x + n1 * bary.y + n2 * bary.z);
+    float3 n3 = input[3].tc_Normal;
+    float3 interpolatedNormal =
+          n0 * (1 - uv.x) * (1 - uv.y)
+        + n1 * uv.x * (1 - uv.y)
+        + n2 * uv.x * uv.y
+        + n3 * (1 - uv.x) * uv.y;
+    interpolatedNormal = normalize(interpolatedNormal);
 
     float2 uv0 = input[0].tc_TexCoord;
     float2 uv1 = input[1].tc_TexCoord;
     float2 uv2 = input[2].tc_TexCoord;
-    float2 interpolatedTexCoord = uv0 * bary.x + uv1 * bary.y + uv2 * bary.z;
+    float2 uv3 = input[3].tc_TexCoord;
+    float2 interpolatedTexCoord =
+          uv0 * (1 - uv.x) * (1 - uv.y)
+        + uv1 * uv.x * (1 - uv.y)
+        + uv2 * uv.x * uv.y
+        + uv3 * (1 - uv.x) * uv.y;
 
     TessEvalOutput out;
 
-    // Displacement Mapping
+    // Displacement Mapping (currently disabled for geometry position)
     // Compute integer pixel coordinates and fractional offsets
     int2 base = int2(floor(interpolatedTexCoord));
     float2 f = frac(interpolatedTexCoord);
@@ -157,12 +183,13 @@ TessEvalOutput tesMain(
     float displacement = lerp(sx0, sx1, f.y);
 
     // Offset the vertex along its normal by the displacement value
-    float3 position = interpolatedPosition + displacement * interpolatedNormal;
+    float3 position = interpolatedPosition + displacement * interpolatedNormal;;
 
     out.te_Position = mul(u_ProjectionView, mul(u_Transform, float4(position, 1.0f)));
     out.te_WorldPos = mul(u_Transform, float4(position, 1.0f)).xyz;
     out.te_Normal = interpolatedNormal;
     out.te_TexCoord = interpolatedTexCoord;
+    out.te_T = displacement;
 
     return out;
 }
@@ -173,10 +200,11 @@ struct GeometryOutput {
     float3 g_Normal    : NORMAL;
     float2 g_TexCoord  : TEXCOORD;
     float3 g_Barycentric : BARYCENTRIC;
+    float3 g_T;
 };
 
 [shader("geometry")]
-[maxvertexcount(3)]
+[maxvertexcount(6)]
 void gsMain(
     triangle TessEvalOutput input[3],
     inout TriangleStream<GeometryOutput> outputStream,
@@ -195,6 +223,7 @@ void gsMain(
         outputVertex.g_Normal = input[i].te_Normal;
         outputVertex.g_Barycentric = barycentrics[i];
         outputVertex.g_TexCoord = input[i].te_TexCoord;
+        outputVertex.g_T = input[i].te_T;
         outputStream.Append(outputVertex);
     }
 }
@@ -221,6 +250,7 @@ float4 fsMain(GeometryOutput input) : SV_Target
     float3 sx0 = lerp(s00, s10, f.x);
     float3 sx1 = lerp(s01, s11, f.x);
     float3 normal = mul(float3x3(u_Normal), lerp(sx0, sx1, f.y));
+    normal = normalize(normal);
 
     float3 viewPosition = mul(u_View, float4(input.g_WorldPos, 1.0f)).xyz;
     if (dot(normal, viewPosition) > 0.0f) {
@@ -230,7 +260,7 @@ float4 fsMain(GeometryOutput input) : SV_Target
     // ambient
     color += ambient * baseColor;
 
-    // lighing
+    // lighting
     float3 lighting = BlinnPhong(u_ViewPos, input.g_WorldPos, normal, light);
     color += lighting * baseColor;
 

@@ -37,6 +37,41 @@ public uint PackTessFactor(float3 v[3], float4x4 mvp, uint2 screenSize) {
     return PackRGBA8ToUint(tessEdge[0], tessEdge[1], tessEdge[2], tessInside);
 }
 
+public uint PackTessFactorQuad(float3 v[4], float4x4 mvp, uint2 screenSize) {
+    // Transform to clip space → NDC → screen space
+    float4 clip[4];
+    [unroll] for (uint i = 0; i < 4; ++i) {
+        clip[i] = mul(mvp, float4(v[i], 1.0));
+    }
+
+    float3 ndc[4];
+    [unroll] for (uint i = 0; i < 4; ++i) {
+        float w = max(abs(clip[i].w), 1e-6f) * (clip[i].w < 0.0f ? -1.0f : 1.0f);
+        ndc[i] = clip[i].xyz / w;
+    }
+
+    float2 screen[4];
+    [unroll] for (uint i = 0; i < 4; ++i) {
+        screen[i] = (ndc[i].xy * 0.5 + 0.5) * float2(screenSize);
+    }
+
+    // Compute edge lengths in screen space
+    float len[4];
+    len[0] = length(screen[0] - screen[1]);
+    len[1] = length(screen[1] - screen[2]);
+    len[2] = length(screen[2] - screen[3]);
+    len[3] = length(screen[3] - screen[0]);
+
+    // Convert lengths to tess factors
+    uint tessEdge[4];
+    for (uint i = 0; i < 4; ++i) {
+        tessEdge[i] = uint(clamp(len[i], 0.0, 255.0));
+    }
+
+    // Pack tess factors into RGB
+    return PackRGBA8ToUint(tessEdge[0], tessEdge[1], tessEdge[2], tessEdge[3]);
+}
+
 public float CalTrianglePixelArea(float3 v[3], float4x4 mvp, uint2 screenSize) {
     // Transform to clip space → NDC → screen space
     float4 clip[3];

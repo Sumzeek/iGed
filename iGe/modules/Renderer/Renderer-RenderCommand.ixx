@@ -17,7 +17,10 @@ public:
     static void SetClearColor(const glm::vec4& color);
     static void Clear();
 
-    static void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0);
+    static void DrawTri(const Ref<VertexArray>& vertexArray, uint32_t triCount);
+    static void DrawTriIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0);
+    static void DrawQuad(const Ref<VertexArray>& vertexArray, uint32_t quadCount);
+    static void DrawQuadIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0);
     static void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount);
     static void DrawPatches(const Ref<VertexArray>& vertexArray, uint32_t patchVertexCount = 3,
                             uint32_t indexCount = 0);

@@ -24,28 +24,28 @@ RuntimeLodLayer::RuntimeLodLayer()
 
     // Load model
     {
-        // // Bake
+        // Bake
         auto oriMesh = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
         auto bakedMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_baked.obj");
         MeshBaker::BakeTest(bakedMesh, oriMesh, 1024);
-        //  m_OriginModel = oriMesh;
-        // {
-        //     auto vertices = m_OriginModel.Vertices;
-        //     auto indices = m_OriginModel.Indices;
-        //     m_OriginModelVertexArray = iGe::VertexArray::Create();
-        //
-        //     auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
-        //                                                   vertices.size() * sizeof(MeshBaker::Vertex));
-        //     iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
-        //                                 {iGe::ShaderDataType::Float3, "a_Normal"},
-        //                                 {iGe::ShaderDataType::Float2, "a_TexCoord"},
-        //                                 {iGe::ShaderDataType::Float, "a_Curvature"}};
-        //     vertexBuffer->SetLayout(layout);
-        //     m_OriginModelVertexArray->AddVertexBuffer(vertexBuffer);
-        //
-        //     auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
-        //     m_OriginModelVertexArray->SetIndexBuffer(indexBuffer);
-        // }
+
+        m_OriginModel = oriMesh;
+        {
+            auto vertices = m_OriginModel.Vertices;
+            auto indices = m_OriginModel.Indices;
+            m_OriginModelVertexArray = iGe::VertexArray::Create();
+
+            auto vertexBuffer = iGe::VertexBuffer::Create(reinterpret_cast<float*>(vertices.data()),
+                                                          vertices.size() * sizeof(MeshBaker::Vertex));
+            iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
+                                        {iGe::ShaderDataType::Float3, "a_Normal"},
+                                        {iGe::ShaderDataType::Float2, "a_TexCoord"}};
+            vertexBuffer->SetLayout(layout);
+            m_OriginModelVertexArray->AddVertexBuffer(vertexBuffer);
+
+            auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
+            m_OriginModelVertexArray->SetIndexBuffer(indexBuffer);
+        }
 
         m_Model = MeshBaker::LoadObjFile("assets/models/Icosphere_baked.obj");
         {
@@ -66,8 +66,8 @@ RuntimeLodLayer::RuntimeLodLayer()
                 m_ModelDisplaceMap->SetData(displaces.data(), displaces.size() * sizeof(float));
                 m_ModelDisplaceMap->Bind(3);
 
-                // Fill curvature data
-                FillCurvature(m_Model, w, h, displaces);
+                // // Fill curvature data
+                // FillCurvature(m_Model, w, h, displaces);
             }
 
             // Model normal map
@@ -98,8 +98,7 @@ RuntimeLodLayer::RuntimeLodLayer()
                                                               vertices.size() * sizeof(MeshBaker::Vertex));
                 iGe::BufferLayout layout = {{iGe::ShaderDataType::Float3, "a_Position"},
                                             {iGe::ShaderDataType::Float3, "a_Normal"},
-                                            {iGe::ShaderDataType::Float2, "a_TexCoord"},
-                                            {iGe::ShaderDataType::Float, "a_Curvature"}};
+                                            {iGe::ShaderDataType::Float2, "a_TexCoord"}};
                 vertexBuffer->SetLayout(layout);
                 m_ModelVertexArray->AddVertexBuffer(vertexBuffer);
 
@@ -269,8 +268,8 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         // Draw model
         {
             if (m_OriginModelOption) {
-                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Lighting"), m_OriginModelVertexArray,
-                                      m_ModelTransform);
+                iGe::Renderer::SubmitTris(m_GraphicsShaderLibrary.Get("Lighting"), m_OriginModelVertexArray,
+                                          m_ModelTransform);
             } else {
                 m_TessellatorData->ScreenSize = glm::uvec2{(std::uint32_t) width, (std::uint32_t) height};
                 m_TessellatorData->TriSize = m_TargetTessFactor;
@@ -279,8 +278,8 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
                 m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
                 m_ModelDisplaceMap->Bind(3);
                 m_ModelNormalMap->Bind(4);
-                iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray,
-                                      m_ModelTransform, true);
+                iGe::Renderer::SubmitPatches(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray, 4,
+                                             m_ModelTransform);
             }
         }
 

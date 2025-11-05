@@ -18,7 +18,10 @@ public:
     virtual void SetClearColor(const glm::vec4& color) override;
     virtual void Clear() override;
 
-    virtual void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) override;
+    virtual void DrawTri(const Ref<VertexArray>& vertexArray, uint32_t triCount) override;
+    virtual void DrawTriIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) override;
+    virtual void DrawQuad(const Ref<VertexArray>& vertexArray, uint32_t quadCount) override;
+    virtual void DrawQuadIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) override;
     virtual void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) override;
     virtual void DrawPatches(const Ref<VertexArray>& vertexArray, uint32_t patchVertexCount = 3,
                              uint32_t indexCount = 0) override;

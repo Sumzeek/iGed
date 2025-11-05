@@ -11,7 +11,7 @@ export struct Vertex {
     glm::vec3 Position;
     glm::vec3 Normal;
     glm::vec2 TexCoord;
-    float Curvature;
+    // float Curvature;
     // glm::vec3 Tangent;
     // glm::vec3 BiTangent;
 };
@@ -35,8 +35,6 @@ export struct Mesh {
 
     std::vector<std::uint32_t> GetIndexArray() const { return Indices; }
 };
-
-// export struct QuadMesh : public Mesh {};
 
 export Mesh LoadObjFile(const std::filesystem::path& filepath);
 

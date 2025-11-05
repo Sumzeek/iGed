@@ -21,9 +21,12 @@ public:
     virtual void SetClearColor(const glm::vec4& color) = 0;
     virtual void Clear() = 0;
 
-    virtual void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) = 0;
+    virtual void DrawTri(const Ref<VertexArray>& vertexArray, uint32_t triCount) = 0;
+    virtual void DrawTriIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) = 0;
+    virtual void DrawQuad(const Ref<VertexArray>& vertexArray, uint32_t quadCount) = 0;
+    virtual void DrawQuadIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) = 0;
     virtual void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) = 0;
-    virtual void DrawPatches(const Ref<VertexArray>& vertexArray, uint32_t patchVertexCount = 3,
+    virtual void DrawPatches(const Ref<VertexArray>& vertexArray, uint32_t patchVertexCount,
                              uint32_t indexCount = 0) = 0;
 
     virtual void SetLineWidth(float width) = 0;

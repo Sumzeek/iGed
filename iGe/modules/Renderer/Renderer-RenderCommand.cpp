@@ -21,9 +21,22 @@ void RenderCommand::SetClearColor(const glm::vec4& color) { s_RendererAPI->SetCl
 
 void RenderCommand::Clear() { s_RendererAPI->Clear(); }
 
-void RenderCommand::DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount) {
-    s_RendererAPI->DrawIndexed(vertexArray, indexCount);
+void RenderCommand::DrawTri(const Ref<VertexArray>& vertexArray, uint32_t triCount) {
+    s_RendererAPI->DrawTri(vertexArray, triCount);
 }
+
+void RenderCommand::DrawTriIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount) {
+    s_RendererAPI->DrawTriIndexed(vertexArray, indexCount);
+}
+
+void RenderCommand::DrawQuad(const Ref<VertexArray>& vertexArray, uint32_t quadCount) {
+    s_RendererAPI->DrawQuad(vertexArray, quadCount);
+}
+
+void RenderCommand::DrawQuadIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount) {
+    s_RendererAPI->DrawQuadIndexed(vertexArray, indexCount);
+}
+
 
 void RenderCommand::DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) {
     s_RendererAPI->DrawLines(vertexArray, vertexCount);

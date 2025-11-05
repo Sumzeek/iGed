@@ -90,15 +90,15 @@ void ExampleLayer::OnUpdate(iGe::Timestep ts) {
     iGe::Renderer::BeginScene(m_Camera);
     {
         // Triangle
-        iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Color"), m_VertexArray, model);
+        iGe::Renderer::SubmitTris(m_GraphicsShaderLibrary.Get("Color"), m_VertexArray, model);
 
         // Square
         //m_Texture->Bind(1);
-        //iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Texture"), m_SquareVertexArray);
+        //iGe::Renderer::SubmitTris(m_GraphicsShaderLibrary.Get("Texture"), m_SquareVertexArray);
 
         // iGame Logo
         //m_iGameLogoTexture->Bind(1);
-        //iGe::Renderer::Submit(m_GraphicsShaderLibrary.Get("Texture"), m_SquareVertexArray);
+        //iGe::Renderer::SubmitTris(m_GraphicsShaderLibrary.Get("Texture"), m_SquareVertexArray);
     }
     iGe::Renderer::EndScene();
 }

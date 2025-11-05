@@ -56,7 +56,23 @@ void OpenGLRendererAPI::SetClearColor(const glm::vec4& color) { glClearColor(col
 
 void OpenGLRendererAPI::Clear() { glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); }
 
-void OpenGLRendererAPI::DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount) {
+void OpenGLRendererAPI::DrawQuad(const Ref<VertexArray>& vertexArray, uint32_t quadCount) {
+    vertexArray->Bind();
+    glDrawArrays(GL_QUADS, 0, quadCount * 4);
+}
+
+void OpenGLRendererAPI::DrawQuadIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount) {
+    vertexArray->Bind();
+    uint32_t count = indexCount ? indexCount : vertexArray->GetIndexBuffer()->GetCount();
+    glDrawElements(GL_QUADS, count, GL_UNSIGNED_INT, nullptr);
+}
+
+void OpenGLRendererAPI::DrawTri(const Ref<VertexArray>& vertexArray, uint32_t triCount) {
+    vertexArray->Bind();
+    glDrawArrays(GL_TRIANGLES, 0, triCount * 3);
+}
+
+void OpenGLRendererAPI::DrawTriIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount) {
     vertexArray->Bind();
     uint32_t count = indexCount ? indexCount : vertexArray->GetIndexBuffer()->GetCount();
     glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, nullptr);
