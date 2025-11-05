@@ -151,7 +151,7 @@ void SaveExrFile(const BakeData& bakeData, const std::vector<float>& pixels) {
     header.requested_pixel_types[0] = TINYEXR_PIXELTYPE_FLOAT;
 
     const char* err = nullptr;
-    std::string filename = "assets/textures/" + bakeData.Mesh1->Name + "_displacement.exr";
+    std::string filename = "assets/textures/" + bakeData.Mesh1->Name + "_disp.exr";
     int ret = SaveEXRImageToFile(&image, &header, filename.c_str(), &err);
     if (ret != TINYEXR_SUCCESS) {
         if (err) {
@@ -215,7 +215,7 @@ void SaveExrFile(const BakeData& bakeData, const std::vector<glm::vec3>& pixels)
     }
 
     const char* err = nullptr;
-    std::string filename = "assets/textures/" + bakeData.Mesh1->Name + "_normal.exr";
+    std::string filename = "assets/textures/" + bakeData.Mesh1->Name + "_norm.exr";
     int ret = SaveEXRImageToFile(&image, &header, filename.c_str(), &err);
     if (ret != TINYEXR_SUCCESS) {
         if (err) {

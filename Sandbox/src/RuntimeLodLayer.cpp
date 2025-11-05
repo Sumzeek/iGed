@@ -53,7 +53,7 @@ RuntimeLodLayer::RuntimeLodLayer()
             {
                 int w, h;
                 std::vector<float> displaces;
-                std::string name = m_Model.Name + "_displacement.exr";
+                std::string name = m_Model.Name + "_disp.exr";
                 MeshBaker::ReadExrFile("assets/textures/" + name, w, h, displaces);
 
                 iGe::TextureSpecification displaceMapSpec;
@@ -74,7 +74,7 @@ RuntimeLodLayer::RuntimeLodLayer()
             {
                 int w, h;
                 std::vector<glm::vec3> normals;
-                std::string name = m_Model.Name + "_normal.exr";
+                std::string name = m_Model.Name + "_norm.exr";
                 MeshBaker::ReadExrFile("assets/textures/" + name, w, h, normals);
 
                 iGe::TextureSpecification normalMapSpec;

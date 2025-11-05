@@ -85,7 +85,7 @@ BakeData OptixBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) 
                         glm::normalize((1 - u) * (1 - v) * n0 + u * (1 - v) * n1 + u * v * n2 + (1 - u) * v * n3);
 
                 int idx = y * resolution + x;
-                bakeData.Originals[idx] = posOnMesh1; // Add a small epsilon to origin
+                bakeData.Originals[idx] = posOnMesh1 - 1e-6f * norOnMesh1; // Add a small epsilon to origin
                 bakeData.Directions[idx] = norOnMesh1;
             }
         }

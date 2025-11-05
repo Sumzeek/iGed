@@ -4,6 +4,7 @@ import math
 import logging
 
 
+# 确保原始网格存在法线，并且不存在纹理坐标
 def quadrangulate_surface(mesh: str, destination: str, resolution: int) -> None:
     ms = pymeshlab.MeshSet()
     ms.load_new_mesh(mesh)
@@ -11,7 +12,7 @@ def quadrangulate_surface(mesh: str, destination: str, resolution: int) -> None:
     # 获取原始面数
     original_face_count = ms.current_mesh().face_number()
 
-    # 计算目标面数（原来的 1/10）
+    # 计算目标面数（原来的 1/100）
     target_count = max(1, original_face_count // 100)  # 防止为0
 
     # 网格简化
