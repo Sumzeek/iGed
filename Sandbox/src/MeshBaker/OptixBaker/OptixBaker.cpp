@@ -179,7 +179,7 @@ BakeData OptixBaker::Bake(const Mesh& mesh1, const Mesh& mesh2, int resolution) 
         pipelineCompileOptions.pipelineLaunchParamsVariableName = "params";
 
         // load ptx file
-        std::string ptx = LoadPTX("assets/ptxs/bakeKernel_75.ptx");
+        std::string ptx = LoadPTX("assets/ptxs/optixKernel_75.ptx");
 
         OPTIX_CHECK(optixModuleCreate(context, &moduleCompileOptions, &pipelineCompileOptions, ptx.c_str(), ptx.size(),
                                       log, &logSize, &module));

@@ -3,8 +3,8 @@
 
 #include "myStruct.h"
 
-// Compile for use "nvcc -I"C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0/include" --ptx bakeKernel.cu -o bakeKernel.ptx -arch=compute_75"
-// Compile for use "nvcc -I"C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0/include" --ptx bakeKernel.cu -o bakeKernel.ptx -arch=compute_86"
+// Compile for use "nvcc -I"C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0/include" --ptx optixKernel.cu -o optixKernel.ptx -arch=compute_75"
+// Compile for use "nvcc -I"C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0/include" --ptx optixKernel.cu -o optixKernel.ptx -arch=compute_86"
 
 __device__ float3 operator-(const float3& a) { return make_float3(-a.x, -a.y, -a.z); }
 

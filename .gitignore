@@ -7,6 +7,9 @@
 /cmake-build-debug/
 /cmake-build-release/
 
+# Pycharm
+/NTF/.idea/
+
 # Shader compiled file
 /Sandbox/assets/shaders/generated/
 

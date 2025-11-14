@@ -786,8 +786,133 @@ void BakeTest(const Mesh& bakedMesh, const Mesh& oriMesh, int resolution) {
         }
     }
 
-    // Save exr file for displacement map
+    // Save exr file
     SaveExrFile(bakeData, displaces);
     SaveExrFile(bakeData, normals);
+
+    // Generate limit mesh (pixel-precision triangulation per baked quad)
+    Mesh limitMesh;
+    limitMesh.Name = bakedMesh.Name + std::string("_limited");
+    {
+        auto addVertex = [&](const glm::vec3& pos, const glm::vec3& n, const glm::vec2& uv) -> uint32_t {
+            Vertex v{};
+            v.Position = pos;
+            v.Normal = n;
+            v.TexCoord = uv;
+            limitMesh.Vertices.push_back(v);
+            return static_cast<uint32_t>(limitMesh.Vertices.size() - 1);
+        };
+
+        auto triWindingFix = [&](uint32_t a, uint32_t b, uint32_t c) {
+            const glm::vec3& p0 = limitMesh.Vertices[a].Position;
+            const glm::vec3& p1 = limitMesh.Vertices[b].Position;
+            const glm::vec3& p2 = limitMesh.Vertices[c].Position;
+            glm::vec3 nTri = glm::normalize(glm::cross(p1 - p0, p2 - p0));
+            // Use averaged per-vertex normal to determine desired orientation
+            glm::vec3 nAvg = glm::normalize(limitMesh.Vertices[a].Normal + limitMesh.Vertices[b].Normal +
+                                            limitMesh.Vertices[c].Normal);
+            if (!std::isfinite(nAvg.x) || !std::isfinite(nAvg.y) || !std::isfinite(nAvg.z)) { nAvg = nTri; }
+            if (glm::dot(nTri, nAvg) < 0.0f) {
+                // Flip winding
+                std::swap(b, c);
+            }
+            limitMesh.Indices.push_back(a);
+            limitMesh.Indices.push_back(b);
+            limitMesh.Indices.push_back(c);
+        };
+
+        // For each baked quad, build a local grid and generate triangles
+        for (size_t qi = 0; qi + 3 < bakedMesh.Indices.size(); qi += 4) {
+            uint32_t i0 = bakedMesh.Indices[qi + 0];
+            uint32_t i1 = bakedMesh.Indices[qi + 1];
+            uint32_t i2 = bakedMesh.Indices[qi + 2];
+            uint32_t i3 = bakedMesh.Indices[qi + 3];
+
+            glm::ivec2 px0 = glm::ivec2(bakedMesh.Vertices[i0].TexCoord);
+            glm::ivec2 px1 = glm::ivec2(bakedMesh.Vertices[i1].TexCoord);
+            glm::ivec2 px2 = glm::ivec2(bakedMesh.Vertices[i2].TexCoord);
+            glm::ivec2 px3 = glm::ivec2(bakedMesh.Vertices[i3].TexCoord);
+
+            int minX = std::max(0, std::min({px0.x, px1.x, px2.x, px3.x}));
+            int maxX = std::min(resolution - 1, std::max({px0.x, px1.x, px2.x, px3.x}));
+            int minY = std::max(0, std::min({px0.y, px1.y, px2.y, px3.y}));
+            int maxY = std::min(resolution - 1, std::max({px0.y, px1.y, px2.y, px3.y}));
+
+            if (minX >= maxX || minY >= maxY) { continue; }
+
+            int gridW = maxX - minX; // number of cells in X
+            int gridH = maxY - minY; // number of cells in Y
+            int vertsW = gridW + 1;  // number of vertices in X
+            int vertsH = gridH + 1;  // number of vertices in Y
+
+            // Build local vertex grid and keep their indices
+            std::vector<uint32_t> gridIndices;
+            gridIndices.resize(static_cast<size_t>(vertsW * vertsH), std::numeric_limits<uint32_t>::max());
+
+            auto sampleValid = [&](int x, int y) -> bool {
+                int idx = y * resolution + x;
+                return bakeData.BakedIndices[idx] != BakedInvalidData;
+            };
+
+            auto samplePos = [&](int x, int y) -> glm::vec3 {
+                int idx = y * resolution + x;
+                const glm::vec3& o = bakeData.Originals[idx];
+                const glm::vec3& d = bakeData.Directions[idx];
+                float t = displaces[idx];
+                return o + d * t;
+            };
+
+            auto sampleNor = [&](int x, int y) -> glm::vec3 {
+                int idx = y * resolution + x;
+                glm::vec3 n = normals[idx];
+                if (glm::length(n) * glm::length(n) < 1e-12f) {
+                    // Fallback: estimate from neighboring positions if normal missing
+                    glm::vec3 p = samplePos(x, y);
+                    glm::vec3 px = (x + 1 <= maxX && sampleValid(x + 1, y)) ? samplePos(x + 1, y) : p;
+                    glm::vec3 py = (y + 1 <= maxY && sampleValid(x, y + 1)) ? samplePos(x, y + 1) : p;
+                    glm::vec3 nEst = glm::cross(px - p, py - p);
+                    if (glm::length(nEst) * glm::length(nEst) > 0.0f) n = glm::normalize(nEst);
+                    else
+                        n = glm::vec3(0, 0, 1);
+                }
+                return n;
+            };
+
+            for (int vy = 0; vy < vertsH; ++vy) {
+                for (int vx = 0; vx < vertsW; ++vx) {
+                    int x = minX + vx;
+                    int y = minY + vy;
+                    if (!sampleValid(x, y)) { continue; }
+                    glm::vec3 pos = samplePos(x, y);
+                    glm::vec3 nor = sampleNor(x, y);
+                    glm::vec2 uv = glm::vec2(static_cast<float>(x), static_cast<float>(y));
+                    uint32_t vid = addVertex(pos, nor, uv);
+                    gridIndices[static_cast<size_t>(vy * vertsW + vx)] = vid;
+                }
+            }
+
+            // Generate two triangles per cell where all 4 corners are valid
+            for (int cy = 0; cy < gridH; ++cy) {
+                for (int cx = 0; cx < gridW; ++cx) {
+                    uint32_t v00 = gridIndices[static_cast<size_t>(cy * vertsW + cx)];
+                    uint32_t v10 = gridIndices[static_cast<size_t>(cy * vertsW + (cx + 1))];
+                    uint32_t v01 = gridIndices[static_cast<size_t>((cy + 1) * vertsW + cx)];
+                    uint32_t v11 = gridIndices[static_cast<size_t>((cy + 1) * vertsW + (cx + 1))];
+
+                    if (v00 == std::numeric_limits<uint32_t>::max() || v10 == std::numeric_limits<uint32_t>::max() ||
+                        v01 == std::numeric_limits<uint32_t>::max() || v11 == std::numeric_limits<uint32_t>::max()) {
+                        continue; // skip cells touching invalid samples
+                    }
+
+                    // Diagonal split consistent across grid; fix winding per-triangle
+                    triWindingFix(v00, v10, v11);
+                    triWindingFix(v00, v11, v01);
+                }
+            }
+        }
+    }
+
+    // Save limited mesh
+    ExportMeshAsOBJ(limitMesh);
 }
 } // namespace MeshBaker

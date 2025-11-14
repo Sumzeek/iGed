@@ -26,8 +26,8 @@ RuntimeLodLayer::RuntimeLodLayer()
     {
         // Bake
         auto oriMesh = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
-        auto bakedMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_baked.obj");
-        MeshBaker::BakeTest(bakedMesh, oriMesh, 1024);
+        // auto bakedMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_baked.obj");
+        // MeshBaker::BakeTest(bakedMesh, oriMesh, 1024);
 
         m_OriginModel = oriMesh;
         {
