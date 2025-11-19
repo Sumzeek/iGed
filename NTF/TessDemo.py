@@ -364,7 +364,7 @@ def demo():
 
     # 策略: I0 偏向左/下; I1 偏向右/上
     # 可传入 lift 显式指定过渡带宽度，否则自动推导
-    params = TessParams(edge=(5, 5, 5, 5), inner=(11, 10), i0_pref_lower=True)
+    params = TessParams(edge=(1, 1, 1, 1), inner=(1, 1), i0_pref_lower=True)
 
     verts, tris = tessellate_quad(p00, p10, p01, p11, params)
     print(f"Generated {len(tris)} triangles and {len(verts)} vertices")

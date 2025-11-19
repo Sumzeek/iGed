@@ -3,12 +3,13 @@ import sys
 import math
 import logging
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple  # removed Optional
 
 import numpy as np
 import pymeshlab
 import OpenEXR
 import Imath
+import csv  # added for training data output
 
 
 @dataclass
@@ -69,6 +70,7 @@ class Preprocessor:
 
         original_faces = ms.current_mesh().face_number()
         target_faces = max(1, original_faces // 100)
+        target_faces = 20000
         logging.info(f"[Stage 1] Original faces={original_faces} target={target_faces}")
 
         ms.meshing_decimation_quadric_edge_collapse(targetfacenum=target_faces, qualitythr=1.0)
@@ -138,13 +140,14 @@ class Preprocessor:
             n = [np.array(baked["normals"][i]) for i in face.norms]
             uv = [np.array(baked["uvs"][i][:2]) for i in face.uvs]
 
-            px = [u.astype(int) for u in uv]
-            xs = [v[0] for v in px]
-            ys = [v[1] for v in px]
+            # convert uv arrays to python int tuples to avoid type warnings
+            px = [(int(u[0]), int(u[1])) for u in uv]
+            xs = [puv[0] for puv in px]
+            ys = [puv[1] for puv in px]
             min_x = max(0, min(xs))
-            max_x = min(res - 1, max(xs))
+            max_x = min(self.resolution - 1, max(xs))
             min_y = max(0, min(ys))
-            max_y = min(res - 1, max(ys))
+            max_y = min(self.resolution - 1, max(ys))
 
             for y in range(min_y, max_y + 1):
                 for x in range(min_x, max_x + 1):
@@ -232,9 +235,9 @@ class Preprocessor:
 
         for face in quads:
             uv = [np.array(self._uv_cache[i][:2]) for i in face.uvs]
-            px = [u.astype(int) for u in uv]
-            xs = [v[0] for v in px]
-            ys = [v[1] for v in px]
+            px = [(int(u[0]), int(u[1])) for u in uv]
+            xs = [puv[0] for puv in px]
+            ys = [puv[1] for puv in px]
             min_x = max(0, min(xs))
             max_x = min(res - 1, max(xs))
             min_y = max(0, min(ys))
@@ -257,10 +260,10 @@ class Preprocessor:
 
             for cy in range(gh):
                 for cx in range(gw):
-                    v00 = grid[cy, cx]
-                    v10 = grid[cy, cx + 1]
-                    v01 = grid[cy + 1, cx]
-                    v11 = grid[cy + 1, cx + 1]
+                    v00 = int(grid[cy, cx])
+                    v10 = int(grid[cy, cx + 1])
+                    v01 = int(grid[cy + 1, cx])
+                    v11 = int(grid[cy + 1, cx + 1])
                     if -1 in (v00, v10, v01, v11):
                         continue
                     # Two triangles
@@ -427,7 +430,7 @@ if __name__ == '__main__':
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
-    input_mesh = "Icosphere.obj"
+    input_mesh = "assets/lucy.obj"
     resolution = 1024
 
     preprocessor = Preprocessor(input_mesh, resolution)

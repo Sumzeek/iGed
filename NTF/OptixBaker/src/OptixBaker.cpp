@@ -35,7 +35,7 @@ inline void Print(const char* s) {
 } // namespace
 
 static void ContextLogCB(unsigned int level, const char* tag, const char* message, void* /*cbdata*/) {
-    std::cerr << "[" << level << "]" << tag << ": " << message << "\n";
+    // std::cerr << "[" << level << "]" << tag << ": " << message << "\n";
 }
 
 static std::string LoadPTX(const std::string& path) {
