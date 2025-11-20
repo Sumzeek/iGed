@@ -69,8 +69,7 @@ class Preprocessor:
         ms.load_new_mesh(self.input_mesh)
 
         original_faces = ms.current_mesh().face_number()
-        target_faces = max(1, original_faces // 100)
-        target_faces = 20000
+        target_faces = max(1, original_faces // 1000)
         logging.info(f"[Stage 1] Original faces={original_faces} target={target_faces}")
 
         ms.meshing_decimation_quadric_edge_collapse(targetfacenum=target_faces, qualitythr=1.0)
@@ -154,16 +153,16 @@ class Preprocessor:
                     u = (x - min_x) / max(1, (max_x - min_x))
                     v = (y - min_y) / max(1, (max_y - min_y))
                     pos = (
-                        (1 - u) * (1 - v) * p[0] +
-                        u * (1 - v) * p[1] +
-                        u * v * p[2] +
-                        (1 - u) * v * p[3]
+                            (1 - u) * (1 - v) * p[0] +
+                            u * (1 - v) * p[1] +
+                            u * v * p[2] +
+                            (1 - u) * v * p[3]
                     )
                     nor = (
-                        (1 - u) * (1 - v) * n[0] +
-                        u * (1 - v) * n[1] +
-                        u * v * n[2] +
-                        (1 - u) * v * n[3]
+                            (1 - u) * (1 - v) * n[0] +
+                            u * (1 - v) * n[1] +
+                            u * v * n[2] +
+                            (1 - u) * v * n[3]
                     )
                     nor /= (np.linalg.norm(nor) + 1e-8)
                     idx = y * res + x
@@ -253,8 +252,6 @@ class Preprocessor:
                     y = min_y + gy
                     idx = y * res + x
                     d = disp[idx]
-                    if d <= 0:
-                        continue
                     pos = origins[idx] + dirs[idx] * d
                     grid[gy, gx] = add_vertex(pos)
 
@@ -430,7 +427,7 @@ if __name__ == '__main__':
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
-    input_mesh = "assets/lucy.obj"
+    input_mesh = "assets/Icosphere.obj"
     resolution = 1024
 
     preprocessor = Preprocessor(input_mesh, resolution)
