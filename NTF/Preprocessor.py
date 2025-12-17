@@ -3,13 +3,14 @@ import sys
 import math
 import logging
 from dataclasses import dataclass
-from typing import List, Tuple  # removed Optional
+from typing import List, Tuple
 
 import numpy as np
 import pymeshlab
 import OpenEXR
 import Imath
-import csv  # added for training data output
+
+from OptixBaker import import_optixbaker
 
 
 @dataclass
@@ -17,6 +18,54 @@ class QuadFace:
     verts: Tuple[int, int, int, int]
     norms: Tuple[int, int, int, int]
     uvs: Tuple[int, int, int, int]
+
+
+def parse_quad_mesh(input_mesh: str):
+    """Parse a quad-based OBJ mesh.
+
+    Returns (vertices, normals, uvs, quads) to match the unpacking in NTF.py
+    and other call sites.
+    """
+    logging.info(f"[Parse] Reading baked mesh {input_mesh}")
+    verts: List[List[float]] = []
+    norms: List[List[float]] = []
+    uvs: List[List[float]] = []
+    quads: List[QuadFace] = []
+    face_specs = []
+
+    with open(input_mesh, "r") as f:
+        for line in f:
+            if line.startswith("v "):
+                _, x, y, z = line.strip().split()[:4]
+                verts.append([float(x), float(y), float(z)])
+            elif line.startswith("vn "):
+                _, x, y, z = line.strip().split()[:4]
+                norms.append([float(x), float(y), float(z)])
+            elif line.startswith("vt "):
+                parts = line.strip().split()
+                # Allow 2 or 3 components (ignore w if present)
+                u = float(parts[1])
+                v = float(parts[2]) if len(parts) > 2 else 0.0
+                uvs.append([u, v])
+            elif line.startswith("f "):
+                parts = line.strip().split()[1:]
+                if len(parts) != 4:
+                    continue
+                fs = []
+                for p in parts:
+                    v_idx, t_idx, n_idx = p.split("/")
+                    fs.append((int(v_idx) - 1, int(t_idx) - 1, int(n_idx) - 1))
+                face_specs.append(fs)
+
+    # Build QuadFace objects
+    for spec in face_specs:
+        v_i = tuple(s[0] for s in spec)
+        t_i = tuple(s[1] for s in spec)
+        n_i = tuple(s[2] for s in spec)
+        quads.append(QuadFace(v_i, n_i, t_i))
+
+    logging.info(f"[Parse] verts={len(verts)} norms={len(norms)} uvs={len(uvs)} quads={len(quads)}")
+    return verts, norms, uvs, quads
 
 
 class Preprocessor:
@@ -32,19 +81,14 @@ class Preprocessor:
     def __init__(self, input_mesh: str, resolution: int):
         self.input_mesh = input_mesh
         self.resolution = resolution
-
         base, ext = os.path.splitext(input_mesh)
         self.baked_mesh = f"{base}_baked{ext}"
         self.limited_mesh = f"{base}_baked_limited{ext}"
         self.baked_disp_exr = f"{base}_baked_disp.exr"
         self.baked_norm_exr = f"{base}_baked_norm.exr"
 
-        self._optix = self._import_optixbaker()
-
-        # Optional pre-built PTX path
-        ptx_default = os.path.join("OptixBaker", "assets", "optix_kernel.ptx")
-        if os.path.isfile(ptx_default):
-            os.environ["OPTIX_INTERSECT_PTX"] = ptx_default
+        # Use shared helper to import optixbaker and set PTX env
+        self._optix = import_optixbaker()
 
         logging.info(f"[Init] input={self.input_mesh} resolution={self.resolution}")
 
@@ -53,12 +97,23 @@ class Preprocessor:
     def run(self):
         logging.info("[Run] Start preprocessing pipeline")
         self._quadrangulate_and_tile()
-        baked_data = self._parse_baked_mesh()
+        verts, norms, uvs, quads = parse_quad_mesh(self.baked_mesh)
+        baked_data = {
+            "vertices": np.array(verts, dtype=np.float32),
+            "normals": np.array(norms, dtype=np.float32),
+            "uvs": np.array(uvs, dtype=np.float32),
+            "quads": quads,
+        }
+        self._uv_cache = baked_data["uvs"]  # for later reconstruction
         original = self._load_original_mesh()
-        disp, norms, origins, dirs, quads = self._bake_surface(original, baked_data)
+        disp, norms_out, origins, dirs, quads_out = self._bake_surface(original, baked_data)
+
+        # Save EXR maps only; training data is generated separately (see NTF.py / Trainer).
         self._save_exr_displacement(disp)
-        self._save_exr_normal(norms)
-        self._reconstruct_limited_mesh(disp, origins, dirs, quads, baked_data["vertices"])
+        self._save_exr_normal(norms_out)
+
+        # Reconstruct limited mesh for visualization / reference surface.
+        self._reconstruct_limited_mesh(disp, origins, dirs, quads_out, baked_data["vertices"])
         logging.info("[Run] Completed all stages")
 
     # ---------- Stage 1: Quadrangulate + UV Atlas ----------
@@ -316,21 +371,6 @@ class Preprocessor:
 
     # ---------- Helpers ----------
 
-    def _import_optixbaker(self):
-        logging.info("[Import] Attempting to import optixbaker")
-        assets_path = os.path.join(os.path.dirname(__file__), "OptixBaker", "assets")
-        if os.path.isdir(assets_path):
-            if assets_path not in sys.path:
-                sys.path.insert(0, assets_path)
-        try:
-            import optixbaker
-            logging.info("[Import] optixbaker loaded successfully")
-            return optixbaker
-        except ImportError as e:
-            logging.error("[Import] Failed to import optixbaker. Ensure build or install.\n"
-                          "Expected path: OptixBaker/assets")
-            raise
-
     def _load_original_mesh(self):
         ms = pymeshlab.MeshSet()
         ms.load_new_mesh(self.input_mesh)
@@ -342,49 +382,6 @@ class Preprocessor:
         }
         logging.info(f"[Original] Loaded vertices={data['vertices'].shape[0]} faces={data['indices'].shape[0]}")
         return data
-
-    def _parse_baked_mesh(self):
-        logging.info(f"[Parse] Reading baked mesh {self.baked_mesh}")
-        verts = []
-        norms = []
-        uvs = []
-        quads: List[QuadFace] = []
-        face_specs = []
-
-        with open(self.baked_mesh, "r") as f:
-            for line in f:
-                if line.startswith("v "):
-                    _, x, y, z = line.strip().split()[:4]
-                    verts.append([float(x), float(y), float(z)])
-                elif line.startswith("vn "):
-                    _, x, y, z = line.strip().split()[:4]
-                    norms.append([float(x), float(y), float(z)])
-                elif line.startswith("vt "):
-                    parts = line.strip().split()
-                    # Allow 2 or 3 components (ignore w if present)
-                    u = float(parts[1])
-                    v = float(parts[2]) if len(parts) > 2 else 0.0
-                    uvs.append([u, v])
-                elif line.startswith("f "):
-                    parts = line.strip().split()[1:]
-                    if len(parts) != 4:
-                        continue
-                    fs = []
-                    for p in parts:
-                        v_idx, t_idx, n_idx = p.split("/")
-                        fs.append((int(v_idx) - 1, int(t_idx) - 1, int(n_idx) - 1))
-                    face_specs.append(fs)
-
-        # Build QuadFace objects
-        for spec in face_specs:
-            v_i = tuple(s[0] for s in spec)
-            t_i = tuple(s[1] for s in spec)
-            n_i = tuple(s[2] for s in spec)
-            quads.append(QuadFace(v_i, n_i, t_i))
-
-        self._uv_cache = uvs  # for later reconstruction
-        logging.info(f"[Parse] verts={len(verts)} norms={len(norms)} uvs={len(uvs)} quads={len(quads)}")
-        return {"vertices": verts, "normals": norms, "uvs": uvs, "quads": quads}
 
     def _read_obj_quads(self, path: str):
         verts = []
