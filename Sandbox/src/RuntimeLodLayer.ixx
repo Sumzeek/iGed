@@ -26,6 +26,7 @@ private:
 
     iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
     iGe::ShaderLibrary<iGe::ComputeShader> m_ComputeShaderLibrary;
+    iGe::ShaderLibrary<iGe::MeshShader> m_MeshShaderLibrary;
 
     struct PerFrameData {
         glm::vec3 ViewPos;
@@ -43,8 +44,13 @@ private:
     iGe::Ref<iGe::VertexArray> m_ModelVertexArray;
     iGe::Ref<iGe::Texture2D> m_ModelDisplaceMap;
     iGe::Ref<iGe::Texture2D> m_ModelNormalMap;
+    iGe::Ref<iGe::Buffer> m_ModelPositionBuffer;
+    iGe::Ref<iGe::Buffer> m_ModelNormalBuffer;
+    iGe::Ref<iGe::Buffer> m_ModelTexCoordBuffer;
+    iGe::Ref<iGe::Buffer> m_ModelQuadIndexBuffer;
     MeshBaker::Mesh m_OriginModel;
     iGe::Ref<iGe::VertexArray> m_OriginModelVertexArray;
+
     std::uint32_t m_TargetTessFactor = 5;
     bool m_LineOption = false;
     bool m_OriginModelOption = false;
@@ -52,10 +58,11 @@ private:
     // Software Tessellation
     struct TessellatorData {
         glm::uvec2 ScreenSize;
-        std::uint32_t TriSize;
+        std::uint32_t QuadSize;
         std::uint32_t LineOption;
     };
     iGe::Scope<TessellatorData> m_TessellatorData;
+
     iGe::Ref<iGe::Buffer> m_TessellatorDataUniform;
     static constexpr std::uint32_t kMaxLodLevel = 4;
     iGe::Ref<iGe::Buffer> m_VertexBuffer;

@@ -18,6 +18,8 @@ export enum class ShaderStage : int {
     Geometry,
     Fragment,
     Compute,
+    Amplification,
+    Mesh,
 };
 
 ShaderStage ShaderStageFromString(const std::string& stageStr);
@@ -47,6 +49,16 @@ public:
     virtual void Bind() const = 0;
     virtual void Unbind() const = 0;
     virtual void Dispatch(std::uint32_t groupX, std::uint32_t groupY, std::uint32_t groupZ) = 0;
+};
+
+export class IGE_API MeshShader : public ShaderBase {
+public:
+    static Ref<MeshShader> Create(const std::filesystem::path& filepath);
+    static Ref<MeshShader> Create(const std::string& name, const std::filesystem::path& filepath);
+
+    virtual void Bind() const = 0;
+    virtual void Unbind() const = 0;
+    virtual void DispatchTask(std::uint32_t offset, std::uint32_t count) = 0;
 };
 
 export template<typename TShader>

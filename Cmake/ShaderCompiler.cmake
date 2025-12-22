@@ -6,9 +6,15 @@ function(_CompileShaders TARGET_NAME WORKING_DIR SHADERS GENERATED_DIR COPY_DIR 
 
     set(ALL_GENERATED_FILES "")
     foreach (SHADER ${SHADERS})
-        get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+        # Read file contents, If any line starts with `module`, skip this file
+        file(READ "${SHADER}" SHADER_CONTENTS)
+        string(REGEX MATCH "^[ \t]*module[ \t(]" MODULE_MATCH "${SHADER_CONTENTS}")
+        if (MODULE_MATCH)
+            continue()
+        endif ()
 
         # Create compiled json dependency
+        get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
         set(JSON_OUTPUT "${GENERATED_DIR}/${TARGET_PLATFORM}/${SHADER_NAME}.json")
         add_custom_command(
                 OUTPUT ${JSON_OUTPUT}

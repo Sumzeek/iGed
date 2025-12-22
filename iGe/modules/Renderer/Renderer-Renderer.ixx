@@ -28,6 +28,8 @@ public:
                               uint32_t patchVertexCount, const glm::mat4& transform = glm::mat4(1.0f));
     static void Dispatch(const Ref<ComputeShader>& shader, const glm::uvec3 groupSize,
                          const glm::mat4& transform = glm::mat4(1.0f));
+    static void DispatchTask(const Ref<MeshShader>& shader, const std::uint32_t offset, const std::uint32_t count,
+                             const glm::mat4& transform = glm::mat4(1.0f));
 
     static RendererAPI::API GetAPI();
 

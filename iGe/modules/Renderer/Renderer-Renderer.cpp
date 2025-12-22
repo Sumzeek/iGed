@@ -79,6 +79,17 @@ void Renderer::Dispatch(const Ref<ComputeShader>& shader, const glm::uvec3 group
     shader->Dispatch(groupSize.x, groupSize.y, groupSize.z);
 }
 
+void Renderer::DispatchTask(const Ref<MeshShader>& shader, const std::uint32_t offset, const std::uint32_t count,
+                            const glm::mat4& transform) {
+    shader->Bind();
+
+    s_SceneDataUniform->Bind(0, BufferType::Uniform);
+    s_SceneDataUniform->SetData(s_SceneData.get(), sizeof(SceneData));
+    s_SceneDataUniform->SetData(&transform, sizeof(transform), sizeof(SceneData));
+
+    shader->DispatchTask(offset, count);
+}
+
 RendererAPI::API Renderer::GetAPI() { return RendererAPI::GetAPI(); }
 
 } // namespace iGe

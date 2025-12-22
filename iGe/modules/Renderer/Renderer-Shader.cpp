@@ -17,6 +17,8 @@ ShaderStage ShaderStageFromString(const std::string& stageStr) {
     if (stageStr == "geometry") { return ShaderStage::Geometry; }
     if (stageStr == "fragment" || stageStr == "pixel") { return ShaderStage::Fragment; }
     if (stageStr == "compute") { return ShaderStage::Compute; }
+    if (stageStr == "amplification") { return ShaderStage::Amplification; }
+    if (stageStr == "mesh") { return ShaderStage::Mesh; }
 
     IGE_CORE_ASSERT(false, "Unknown file stage string!");
     return ShaderStage::None;
@@ -105,6 +107,41 @@ Ref<ComputeShader> ComputeShader::Create(const std::string& name, const std::fil
             return nullptr;
         case RendererAPI::API::OpenGL:
             return CreateRef<OpenGLComputeShader>(name, filepath);
+        case RendererAPI::API::Vulkan:
+            IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
+            return nullptr;
+    }
+
+    IGE_CORE_ASSERT(false, "Unknown RendererAPI!");
+    return nullptr;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// MeshShader ///////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+Ref<MeshShader> MeshShader::Create(const std::filesystem::path& filepath) {
+    switch (Renderer::GetAPI()) {
+        case RendererAPI::API::None:
+            IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
+            return nullptr;
+        case RendererAPI::API::OpenGL:
+            return CreateRef<OpenGLMeshShader>(filepath);
+        case RendererAPI::API::Vulkan:
+            IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
+            return nullptr;
+    }
+
+    IGE_CORE_ASSERT(false, "Unknown RendererAPI!");
+    return nullptr;
+}
+
+Ref<MeshShader> MeshShader::Create(const std::string& name, const std::filesystem::path& filepath) {
+    switch (Renderer::GetAPI()) {
+        case RendererAPI::API::None:
+            IGE_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
+            return nullptr;
+        case RendererAPI::API::OpenGL:
+            return CreateRef<OpenGLMeshShader>(name, filepath);
         case RendererAPI::API::Vulkan:
             IGE_CORE_ASSERT(false, "RendererAPI::Vulkan is currently not supported!");
             return nullptr;

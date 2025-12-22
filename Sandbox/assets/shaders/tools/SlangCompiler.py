@@ -59,7 +59,11 @@ class SlangCompiler:
 
             "hull": "_hs",
             "domain": "_ds",
-            "pixel": "_ps"
+            "pixel": "_ps",
+
+            "amplification": "_as",
+            "task": "_ts",
+            "mesh": "_ms"
         }
 
     def detect_entries(self, slang_file: Path) -> Dict[str, str]:

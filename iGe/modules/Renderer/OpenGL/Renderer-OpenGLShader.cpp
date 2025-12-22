@@ -20,6 +20,8 @@ static GLenum ShaderTypeFromStage(const ShaderStage stage) {
     if (stage == ShaderStage::Geometry) { return GL_GEOMETRY_SHADER; }
     if (stage == ShaderStage::Fragment) { return GL_FRAGMENT_SHADER; }
     if (stage == ShaderStage::Compute) { return GL_COMPUTE_SHADER; }
+    if (stage == ShaderStage::Amplification) { return GL_TASK_SHADER_NV; }
+    if (stage == ShaderStage::Mesh) { return GL_MESH_SHADER_NV; }
 
     IGE_CORE_ASSERT(false, "Unknown shader type!");
     return 0;
@@ -230,5 +232,60 @@ void OpenGLComputeShader::Dispatch(std::uint32_t groupX, std::uint32_t groupY, s
 }
 
 const std::string& OpenGLComputeShader::GetName() const { return m_Name; }
+
+/////////////////////////////////////////////////////////////////////////////
+// OpenGLMeshShader /////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+OpenGLMeshShader::OpenGLMeshShader(const std::filesystem::path& filepath) {
+    m_Name = filepath.stem().string();
+
+    auto shaderMap = ParseShaderEntryMap(filepath);
+    for (const auto& shaderPair: shaderMap) {
+        ShaderStage stage = shaderPair.first;
+        const auto& shaderFile = shaderPair.second;
+        m_SourceCodes[stage] = Utils::ReadFile(shaderFile);
+    }
+
+    // Create Shader
+    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCodes);
+    if (!maybeProgram.has_value()) {
+        IGE_CORE_ERROR("Shader creation failed: {}", m_Name);
+        IGE_CORE_ASSERT(false, "shader compilation failure!");
+        return;
+    }
+    m_RendererID = *maybeProgram;
+}
+
+OpenGLMeshShader::OpenGLMeshShader(const std::string& name, const std::filesystem::path& filepath) : m_Name(name) {
+    auto shaderMap = ParseShaderEntryMap(filepath);
+    for (const auto& shaderPair: shaderMap) {
+        ShaderStage stage = shaderPair.first;
+        const auto& shaderFile = shaderPair.second;
+        m_SourceCodes[stage] = Utils::ReadFile(shaderFile);
+    }
+
+    // Create Shader
+    auto maybeProgram = Utils::CompileAndLinkProgram(m_SourceCodes);
+    if (!maybeProgram.has_value()) {
+        IGE_CORE_ERROR("Shader creation failed: {}", m_Name);
+        IGE_CORE_ASSERT(false, "shader compilation failure!");
+        return;
+    }
+    m_RendererID = *maybeProgram;
+}
+
+OpenGLMeshShader::~OpenGLMeshShader() { glDeleteProgram(m_RendererID); }
+
+void OpenGLMeshShader::Bind() const { glUseProgram(m_RendererID); }
+
+void OpenGLMeshShader::Unbind() const { glUseProgram(0); }
+
+void OpenGLMeshShader::DispatchTask(std::uint32_t offset, std::uint32_t count) {
+    glUseProgram(m_RendererID);
+    glDrawMeshTasksNV(offset, count);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+}
+
+const std::string& OpenGLMeshShader::GetName() const { return m_Name; }
 
 } // namespace iGe

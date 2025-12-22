@@ -105,6 +105,27 @@ RuntimeLodLayer::RuntimeLodLayer()
                 auto indexBuffer = iGe::IndexBuffer::Create(indices.data(), indices.size());
                 m_ModelVertexArray->SetIndexBuffer(indexBuffer);
             }
+
+            // Software tessellation buffer
+            {
+                std::vector<glm::vec3> positions;
+                std::vector<glm::vec3> normals;
+                std::vector<glm::vec2> texcoords;
+                for (const auto vertex: m_Model.Vertices) {
+                    positions.push_back(vertex.Position);
+                    normals.push_back(vertex.Normal);
+                    texcoords.push_back(vertex.TexCoord);
+                }
+
+                m_ModelPositionBuffer = iGe::Buffer::Create(reinterpret_cast<void*>(positions.data()),
+                                                            positions.size() * sizeof(glm::vec3));
+                m_ModelNormalBuffer = iGe::Buffer::Create(reinterpret_cast<void*>(normals.data()),
+                                                          normals.size() * sizeof(glm::vec3));
+                m_ModelTexCoordBuffer = iGe::Buffer::Create(reinterpret_cast<void*>(texcoords.data()),
+                                                            texcoords.size() * sizeof(glm::vec2));
+                m_ModelQuadIndexBuffer = iGe::Buffer::Create(reinterpret_cast<void*>(m_Model.Indices.data()),
+                                                             m_Model.Indices.size() * sizeof(std::uint32_t));
+            }
         }
     }
 
@@ -185,6 +206,8 @@ RuntimeLodLayer::RuntimeLodLayer()
     // m_ComputeShaderLibrary.Load("SWTessellator", "assets/shaders/glsl/SWTessellator.json");
     // m_ComputeShaderLibrary.Load("ClearDepth", "assets/shaders/glsl/ClearDepth.json");
     // m_ComputeShaderLibrary.Load("SWRasterizer", "assets/shaders/glsl/SWRasterizer.json");
+
+    m_MeshShaderLibrary.Load("SWTessellator", "assets/shaders/other/SWTessellator.json");
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -219,7 +242,7 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
     {
         const float width = m_DepthBuffer->GetWidth();
         const float height = m_DepthBuffer->GetHeight();
-        std::uint32_t triSize = m_Model.GetIndexArray().size() / 3;
+        std::uint32_t quadSize = m_Model.GetIndexArray().size() / 4;
 
         //// Use compute shader to tessellation
         //{
@@ -272,14 +295,21 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
                                           m_ModelTransform);
             } else {
                 m_TessellatorData->ScreenSize = glm::uvec2{(std::uint32_t) width, (std::uint32_t) height};
-                m_TessellatorData->TriSize = m_TargetTessFactor;
+                m_TessellatorData->QuadSize = quadSize;
                 m_TessellatorData->LineOption = m_LineOption ? 1 : 0;
                 m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
                 m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
                 m_ModelDisplaceMap->Bind(3);
                 m_ModelNormalMap->Bind(4);
-                iGe::Renderer::SubmitPatches(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray, 4,
-                                             m_ModelTransform);
+
+                // iGe::Renderer::SubmitPatches(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray, 4,
+                //                              m_ModelTransform);
+                m_ModelPositionBuffer->Bind(5, iGe::BufferType::Storage);
+                m_ModelNormalBuffer->Bind(6, iGe::BufferType::Storage);
+                m_ModelTexCoordBuffer->Bind(7, iGe::BufferType::Storage);
+                m_ModelQuadIndexBuffer->Bind(8, iGe::BufferType::Storage);
+                iGe::Renderer::DispatchTask(m_MeshShaderLibrary.Get("SWTessellator"), 0, (quadSize + 31) / 32,
+                                            m_ModelTransform);
             }
         }
 
