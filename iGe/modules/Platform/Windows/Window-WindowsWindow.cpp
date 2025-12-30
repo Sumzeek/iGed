@@ -1,15 +1,20 @@
 module;
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#if defined(IGE_PLATFORM_WINDOWS)
+    #define GLFW_INCLUDE_NONE
+    #include <GLFW/glfw3.h>
+    #define GLFW_EXPOSE_NATIVE_WIN32
+    #include <GLFW/glfw3native.h>
 
 module iGe.Window;
 import :WindowsWindow;
 
 namespace iGe
 {
-/////////////////////////////////////////////////////////////////////////////
-// WindowsWindow ////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////
+
+// =================================================================================================
+// WindowsWindow
+// =================================================================================================
+
 static bool s_GLFWInitialized = false;
 
 static void GLFWErrorCallback(int error_code, const char* description) {
@@ -18,25 +23,18 @@ static void GLFWErrorCallback(int error_code, const char* description) {
 
 iGeKey GlfwKeyToiGeKey(int keycode);
 
-WindowsWindow::WindowsWindow(const iGe::WindowProps& props) { Init(props); }
+WindowsWindow::WindowsWindow(const WindowProps& props) { Init(props); }
 
 WindowsWindow::~WindowsWindow() { ShutDown(); }
 
-void WindowsWindow::OnUpdate() {
-    glfwPollEvents();
-    m_Context->SwapBuffers();
-}
+void WindowsWindow::OnUpdate() { glfwPollEvents(); }
 
 void WindowsWindow::SetVSync(bool enable) {
-    if (enable) {
-        glfwSwapInterval(1);
-    } else {
-        glfwSwapInterval(0);
-    }
+    Internal::LogWarn("VSync setting is not implemented on Windows platform yet.");
     m_Data.VSync = enable;
 }
 
-void WindowsWindow::Init(const iGe::WindowProps& props) {
+void WindowsWindow::Init(const WindowProps& props) {
     m_Data.Title = props.Title;
     m_Data.Width = props.Width;
     m_Data.Height = props.Height;
@@ -53,9 +51,6 @@ void WindowsWindow::Init(const iGe::WindowProps& props) {
     }
 
     m_Window = glfwCreateWindow((int) m_Data.Width, (int) m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
-
-    m_Context = GraphicsContext::Create(m_Window);
-    m_Context->Init();
 
     glfwSetWindowUserPointer(m_Window, &m_Data);
     SetVSync(true);
@@ -374,4 +369,6 @@ iGeKey GlfwKeyToiGeKey(int keycode) {
             return iGeKey::None; // Return None for any unrecognized keys
     }
 }
+
 } // namespace iGe
+#endif

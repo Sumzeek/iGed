@@ -6,6 +6,7 @@ import iGe.Types;
 
 namespace iGe
 {
+
 export class IGE_API Timestep {
 public:
     Timestep(float32 time = 0.0f) : m_Time(time) {}
@@ -18,4 +19,5 @@ public:
 private:
     float32 m_Time;
 };
+
 } // namespace iGe

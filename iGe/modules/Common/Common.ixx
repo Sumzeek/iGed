@@ -8,3 +8,5 @@ export import iGe.SmartPointer;
 export import iGe.Timestep;
 export import iGe.Types;
 export import iGe.Diagnostics;
+export import iGe.Flags;
+export import iGe.CommonFunctions;

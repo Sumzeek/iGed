@@ -6,6 +6,7 @@ import iGe.Common;
 
 namespace iGe
 {
+
 export class IGE_API Input {
 public:
     static bool IsKeyPressed(iGeKey keycode) { return s_Instance->IsKeyPressedImpl(keycode); }
@@ -23,4 +24,5 @@ protected:
 
     static Input* s_Instance;
 };
+
 } // namespace iGe

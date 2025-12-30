@@ -2,11 +2,12 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Renderer:OrthographicCamera;
-import iGe.Common;
 import glm;
+import iGe.Common;
 
 namespace iGe
 {
+
 export class IGE_API OrthographicCamera {
 public:
     OrthographicCamera(float32 left, float32 right, float32 bottom, float32 top);
@@ -33,4 +34,5 @@ private:
     glm::vec3 m_Position = {0.0f, 0.0f, 0.0f};
     float32 m_Rotation = 0.0f;
 };
+
 } // namespace iGe

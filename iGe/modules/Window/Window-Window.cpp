@@ -4,23 +4,34 @@ import :WindowsWindow;
 
 namespace iGe
 {
-/////////////////////////////////////////////////////////////////////////////
-// WindowProps //////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////
+
+// =================================================================================================
+// WindowProps
+// =================================================================================================
+
 WindowProps::WindowProps(const string& title, uint32 width, uint32 height)
     : Title(title), Width(width), Height(height) {}
 
-/////////////////////////////////////////////////////////////////////////////
-// Window ///////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////
+// =================================================================================================
+// Window
+// =================================================================================================
+
 Window::~Window() {}
 
 Scope<Window> Window::Create(const WindowProps& props) {
+#ifdef IGE_PLATFORM_LINUX
+    Internal::Assert(false, "Unknown platform!");
+    return nullptr;
+#endif
+
 #ifdef IGE_PLATFORM_WINDOWS
     return CreateScope<WindowsWindow>(props);
-#else
+#endif
+
+#ifdef IGE_PLATFORM_MACOS
     Internal::Assert(false, "Unknown platform!");
     return nullptr;
 #endif
 }
+
 } // namespace iGe

@@ -18,10 +18,15 @@ add_subdirectory(3rdparty)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty)
 target_link_libraries(${TARGET_NAME} PUBLIC spdlog::spdlog)
 target_link_libraries(${TARGET_NAME} PUBLIC glfw)
-target_link_libraries(${TARGET_NAME} PUBLIC glad)
 target_link_libraries(${TARGET_NAME} PUBLIC imgui)
 target_link_libraries(${TARGET_NAME} PUBLIC glm::glm)
 target_link_libraries(${TARGET_NAME} PUBLIC stb_image)
+
+if (WIN32)
+    target_link_libraries(${TARGET_NAME} PUBLIC d3d12)
+    target_link_libraries(${TARGET_NAME} PUBLIC dxgi)
+    target_link_libraries(${TARGET_NAME} PUBLIC d3dcompiler)
+endif ()
 
 # set platform symbol
 if (WIN32)

@@ -20,11 +20,6 @@ if (NOT TARGET glfw)
     set_target_properties(update_mappings PROPERTIES FOLDER ${third_party_folder}/glfw)
 endif ()
 
-if (NOT TARGET glad)
-    include(glad.cmake)
-    set_target_properties(glad PROPERTIES FOLDER ${third_party_folder}/glad)
-endif ()
-
 if (NOT TARGET imgui)
     include(imgui.cmake)
     set_target_properties(imgui PROPERTIES FOLDER ${third_party_folder}/imgui)
@@ -39,3 +34,4 @@ if (NOT TARGET stb_image)
     include(stb_image.cmake)
     set_target_properties(stb_image PROPERTIES FOLDER ${third_party_folder}/stb_image)
 endif ()
+

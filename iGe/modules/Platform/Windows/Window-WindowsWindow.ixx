@@ -1,8 +1,10 @@
 module;
-#include "iGeMacro.h"
-
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#if defined(IGE_PLATFORM_WINDOWS)
+    #include "iGeMacro.h"
+    #define GLFW_INCLUDE_NONE
+    #include <GLFW/glfw3.h>
+    #define GLFW_EXPOSE_NATIVE_WIN32
+    #include <GLFW/glfw3native.h>
 
 export module iGe.Window:WindowsWindow;
 import :Window;
@@ -11,6 +13,7 @@ import iGe.Renderer;
 
 namespace iGe
 {
+
 export class IGE_API WindowsWindow : public Window {
 public:
     WindowsWindow(const WindowProps& props);
@@ -27,6 +30,7 @@ public:
     virtual bool IsVSync() const override { return m_Data.VSync; }
 
     virtual void* GetNativeWindow() const override { return m_Window; }
+    virtual void* GetNativeWindowHandle() const override { return glfwGetWin32Window(m_Window); };
 
 private:
     virtual void Init(const WindowProps& props);
@@ -42,7 +46,8 @@ private:
     };
 
     GLFWwindow* m_Window;
-    Scope<GraphicsContext> m_Context;
     WindowData m_Data;
 };
+
 } // namespace iGe
+#endif

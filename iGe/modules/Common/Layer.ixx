@@ -8,6 +8,7 @@ import iGe.Timestep;
 
 namespace iGe
 {
+
 export class IGE_API Layer {
 public:
     Layer(const string& name = "Layer") : m_DebugName(name) {}
@@ -24,4 +25,5 @@ public:
 protected:
     string m_DebugName;
 };
+
 } // namespace iGe

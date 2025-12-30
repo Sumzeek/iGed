@@ -1,0 +1,89 @@
+{
+  "name": "StandardPBR",
+  "shaders": [
+    {
+      "stage": "vertex",
+      "entry": "vsMain",
+      "path": "assets/shaders/hlsl/Texture_vs.hlsl"
+    },
+    {
+      "stage": "fragment",
+      "entry": "fsMain",
+      "path": "assets/shaders/hlsl/Texture_fs.hlsl"
+    }
+  ],
+  "vertexInput": {
+    "bindings": [
+      {
+        "binding": 0,
+        "stride": 20,
+        "inputRate": "Vertex"
+      }
+    ],
+    "attributes": [
+      {
+        "location": 0,
+        "binding": 0,
+        "format": "R32G32B32SFloat",
+        "offset": 0
+      },
+      {
+        "location": 1,
+        "binding": 0,
+        "format": "R32G32SFloat",
+        "offset": 12
+      }
+    ]
+  },
+  "inputAssembly": {
+    "topology": "TriangleList",
+    "primitiveRestartEnable": false
+  },
+  "viewport": {
+    "viewportCount": 1,
+    "scissorCount": 1
+  },
+  "rasterization": {
+    "depthClampEnable": false,
+    "rasterizerDiscardEnable": false,
+    "polygonMode": "Fill",
+    "cullMode": "None",
+    "frontFace": "CounterClockwise",
+    "depthBiasEnable": false,
+    "lineWidth": 1.0
+  },
+  "multisample": {
+    "rasterizationSamples": 1,
+    "sampleShadingEnable": false
+  },
+  "depthStencil": {
+    "depthTestEnable": true,
+    "depthWriteEnable": true,
+    "depthCompareOp": "Less",
+    "stencilTestEnable": false
+  },
+  "colorBlend": {
+    "logicOpEnable": false,
+    "attachments": [
+      {
+        "blendEnable": true,
+        "srcColorBlendFactor": "SrcAlpha",
+        "dstColorBlendFactor": "OneMinusSrcAlpha",
+        "colorBlendOp": "Add",
+        "srcAlphaBlendFactor": "One",
+        "dstAlphaBlendFactor": "Zero",
+        "alphaBlendOp": "Add",
+        "colorWriteMask": [
+          "R",
+          "G",
+          "B",
+          "A"
+        ]
+      }
+    ]
+  },
+  "dynamicState": [
+    "Viewport",
+    "Scissor"
+  ]
+}

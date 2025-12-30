@@ -1,19 +1,20 @@
-module;
 module iGe.Renderer;
 import :OrthographicCamera;
 
 namespace iGe
 {
-/////////////////////////////////////////////////////////////////////////////
-// OrthographicCamera ///////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////
+
+// =================================================================================================
+// OrthographicCamera
+// =================================================================================================
+
 OrthographicCamera::OrthographicCamera(float32 left, float32 right, float32 bottom, float32 top)
-    : m_ProjectionMatrix{glm::gtc::ortho(left, right, bottom, top, -1.0f, 1.0f)}, m_ViewMatrix{1.0f} {
+    : m_ProjectionMatrix{glm::gtc::orthoRH_ZO(left, right, bottom, top, -1.0f, 1.0f)}, m_ViewMatrix{1.0f} {
     m_ViewProjectionMatrix = m_ProjectionMatrix * m_ViewMatrix;
 }
 
 void OrthographicCamera::SetProjection(float32 left, float32 right, float32 bottom, float32 top) {
-    m_ProjectionMatrix = glm::gtc::ortho(left, right, bottom, top, -1.0f, 1.0f);
+    m_ProjectionMatrix = glm::gtc::orthoRH_ZO(left, right, bottom, top, -1.0f, 1.0f);
     m_ViewProjectionMatrix = m_ProjectionMatrix * m_ViewMatrix;
 }
 
@@ -35,4 +36,5 @@ void OrthographicCamera::RecalculateViewMatrix() {
     m_ViewMatrix = glm::inverse(transform);
     m_ViewProjectionMatrix = m_ProjectionMatrix * m_ViewMatrix;
 }
+
 } // namespace iGe

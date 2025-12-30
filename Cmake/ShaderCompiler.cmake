@@ -1,36 +1,33 @@
 # Core shader compilation function
 function(_CompileShaders TARGET_NAME WORKING_DIR SHADERS GENERATED_DIR COPY_DIR TARGET_PLATFORM)
     set(SLANGC_EXECUTABLE "${WORKING_DIR}/slangc.exe")
-    set(SPIRVCROSS_EXECUTABLE "${WORKING_DIR}/spirv-cross.exe")
     set(SHADER_COMPILER_PY "${WORKING_DIR}/SlangCompiler.py")
 
-    set(ALL_GENERATED_FILES "")
+    set(ALL_SHADER_OUTPUTS "")
+
     foreach (SHADER ${SHADERS})
         get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+        set(OUTPUT_FILE "${GENERATED_DIR}/${SHADER_NAME}.${TARGET_PLATFORM}")
 
-        # Create compiled json dependency
-        set(JSON_OUTPUT "${GENERATED_DIR}/${TARGET_PLATFORM}/${SHADER_NAME}.json")
         add_custom_command(
-                OUTPUT ${JSON_OUTPUT}
+                OUTPUT ${OUTPUT_FILE}
                 COMMAND ${Python3_EXECUTABLE} ${SHADER_COMPILER_PY}
                 ${SLANGC_EXECUTABLE}
-                ${SPIRVCROSS_EXECUTABLE}
-                ${SHADER}
+                "${SHADER}"
                 ${GENERATED_DIR}
                 ${COPY_DIR}
                 -target ${TARGET_PLATFORM}
                 DEPENDS ${SHADER}
                 WORKING_DIRECTORY ${WORKING_DIR}
-                COMMENT "Compiling ${SHADER_NAME} to ${TARGET_PLATFORM}"
+                COMMENT "Compiling shader ${SHADER} for ${TARGET_PLATFORM}"
                 VERBATIM
         )
 
-        list(APPEND ALL_GENERATED_FILES ${JSON_OUTPUT})
-
+        list(APPEND ALL_SHADER_OUTPUTS ${OUTPUT_FILE})
     endforeach ()
 
-    add_custom_target(${TARGET_NAME}
-            DEPENDS ${ALL_GENERATED_FILES}
+    add_custom_target(${TARGET_NAME} ALL
+            DEPENDS ${ALL_SHADER_OUTPUTS}
     )
 endfunction()
 
@@ -40,17 +37,12 @@ function(CompileToPlatforms TARGET_NAME WORKING_DIR SHADERS GENERATED_DIR COPY_D
     set(ALL_TARGETS "")
 
     # Compile to hlsl, spv
-    set(PLATFORMS "hlsl;spv")
+    set(PLATFORMS "glsl;hlsl;spv")
     foreach (PLATFORM IN LISTS PLATFORMS)
         set(PLATFORM_TARGET "${TARGET_NAME}_${PLATFORM}")
         _CompileShaders(${PLATFORM_TARGET} ${WORKING_DIR} "${SHADERS}" ${GENERATED_DIR} ${COPY_DIR} ${PLATFORM})
         list(APPEND ALL_TARGETS ${PLATFORM_TARGET})
     endforeach ()
-
-    # Make sure to create glsl AFTER spv so dependency makes sense
-    _CompileShaders("${TARGET_NAME}_glsl" ${WORKING_DIR} "${SHADERS}" ${GENERATED_DIR} ${COPY_DIR} "glsl")
-    add_dependencies("${TARGET_NAME}_glsl" "${TARGET_NAME}_spv")
-    list(APPEND ALL_TARGETS "${TARGET_NAME}_glsl")
 
     # Final target
     add_custom_target(${TARGET_NAME}

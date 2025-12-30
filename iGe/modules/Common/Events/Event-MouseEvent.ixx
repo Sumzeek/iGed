@@ -7,6 +7,7 @@ import :KeyCodes;
 
 namespace iGe
 {
+
 export class IGE_API MouseMoveEvent : public Event {
 public:
     MouseMoveEvent(float32 x, float32 y) : m_MouseX{x}, m_MouseY{y} {}
@@ -76,4 +77,5 @@ public:
     virtual EventType GetEventType() const override { return GetStaticType(); }
     virtual const char* GetName() const override { return "MouseButtonReleased"; }
 };
+
 } // namespace iGe

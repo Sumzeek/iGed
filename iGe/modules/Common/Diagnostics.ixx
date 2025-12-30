@@ -1,25 +1,32 @@
-module;
-#include "iGeMacro.h"
-
 export module iGe.Diagnostics;
 import iGe.Types;
 import iGe.Log;
 
-#ifdef IGE_DEBUG
-    #ifdef IGE_PLATFORM_WINDOWS
+#if defined(IGE_DEBUG)
+
+    #if defined(IGE_PLATFORM_WINDOWS)
         #define IGE_DEBUGBREAK() __debugbreak()
-    #elif IGE_PLATFORM_LINUX
+
+    #elif defined(IGE_PLATFORM_LINUX)
+        #include <signal.h>
         #define IGE_DEBUGBREAK() raise(SIGTRAP)
+
+    #elif defined(IGE_PLATFORM_MACOS)
+        #define IGE_DEBUGBREAK() __builtin_trap()
+
     #else
         #error "Platform doesn't support debugbreak yet!"
     #endif
+
     #define IGE_ENABLE_ASSERTS
+
 #else
     #define IGE_DEBUGBREAK()
 #endif
 
 namespace iGe
 {
+
 export template<typename... Args>
 inline void LogTrace(std::format_string<Args...> fmt, Args&&... args) {
     Log::GetClientLogger()->trace(std::format(fmt, std::forward<Args>(args)...));
@@ -98,4 +105,5 @@ inline void Assert(bool condition, string msg, const std::source_location& loc =
     IGE_DEBUGBREAK();
 #endif
 }
+
 } // namespace iGe::Internal

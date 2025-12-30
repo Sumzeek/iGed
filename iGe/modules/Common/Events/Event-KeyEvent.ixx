@@ -7,6 +7,7 @@ import :KeyCodes;
 
 namespace iGe
 {
+
 class IGE_API KeyEvent : public Event {
 public:
     iGeKey GetKeyCode() const { return m_KeyCode; }
@@ -64,4 +65,5 @@ public:
 private:
     uint32 m_CodePoint; // Unicode Point
 };
+
 } // namespace iGe

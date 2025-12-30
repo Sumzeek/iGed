@@ -6,6 +6,7 @@ import iGe.Types;
 
 namespace iGe
 {
+
 export enum class EventType : int {
     None = 0,
     WindowClose,
@@ -68,6 +69,7 @@ private:
 // ---------------------------------- Other::Implementation ----------------------------------
 export std::ostream& operator<<(std::ostream& os, const Event& e) { return os << e.ToString(); }
 export string format_as(const Event& e) { return e.ToString(); }
+
 } // namespace iGe
 
 template<>

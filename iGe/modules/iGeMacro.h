@@ -9,3 +9,7 @@
 #else
     #error "Unsupported platform!"
 #endif
+
+#if defined(IGE_PLATFORM_WINDOWS)
+    #define NOMINMAX
+#endif

@@ -6,6 +6,7 @@ import :Event;
 
 namespace iGe
 {
+
 export class IGE_API WindowResizeEvent : public Event {
 public:
     WindowResizeEvent(uint32 width, uint32 height) : m_Width{width}, m_Height{height} {}
@@ -63,4 +64,5 @@ public:
     virtual const char* GetName() const override { return "AppRender"; }
     virtual uint32 GetCategoryFlags() const override { return EventCategoryApplication; }
 };
+
 } // namespace iGe

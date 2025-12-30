@@ -8,6 +8,7 @@ import iGe.SmartPointer;
 
 namespace iGe
 {
+
 export class IGE_API LayerStack {
 public:
     LayerStack() {}
@@ -41,4 +42,5 @@ private:
     std::vector<Ref<Layer>> m_Layers;
     uint32 m_LayerInsertIndex = 0;
 };
+
 } // namespace iGe

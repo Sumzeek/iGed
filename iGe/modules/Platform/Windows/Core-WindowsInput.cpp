@@ -1,14 +1,19 @@
 module;
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#if defined(IGE_PLATFORM_WINDOWS)
+    #define GLFW_INCLUDE_NONE
+    #include <GLFW/glfw3.h>
 
 module iGe.Core;
 import :WindowsInput;
-import iGe.Common;
 
 namespace iGe
 {
-static int iGeKeyToGlfwKey(iGeKey keycode) {
+
+// =================================================================================================
+// Static Method
+// =================================================================================================
+
+int iGeKeyToGlfwKey(iGeKey keycode) {
     switch (keycode) {
         // Mouse Buttons
         case iGeKey::MouseLeft:
@@ -242,9 +247,10 @@ static int iGeKeyToGlfwKey(iGeKey keycode) {
     }
 }
 
-/////////////////////////////////////////////////////////////////////////////
-// WindowsInput /////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////
+// =================================================================================================
+// WindowsInput
+// =================================================================================================
+
 bool WindowsInput::IsKeyPressedImpl(iGeKey keycode) {
     auto window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
     auto state = glfwGetKey(window, iGeKeyToGlfwKey(keycode));
@@ -275,4 +281,6 @@ float WindowsInput::GetMouseYImpl() {
     auto [x, y] = GetMousePosition();
     return y;
 }
+
 } // namespace iGe
+#endif

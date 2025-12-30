@@ -1,22 +1,20 @@
 struct VertexInput {
-    float3 a_Position   : POSITION;
-    float3 a_Color      : COLOR;
+    float3 a_Position : POSITION;
+    float3 a_Color : COLOR;
 };
 
 struct VertexOutput {
-    float4 v_Position   : SV_Position;
-    float3 v_Color      : COLOR;
+    float4 v_Position : SV_Position;
+    float3 v_Color : COLOR;
 };
 
-[[gl::binding(0)]]
 cbuffer SceneData {
     float4x4 u_ProjectionView;
     float4x4 u_Transform;
 };
 
 [shader("vertex")]
-VertexOutput vertexMain(VertexInput input)
-{
+VertexOutput vsMain(VertexInput input) {
     VertexOutput out;
     out.v_Position = mul(u_ProjectionView, mul(u_Transform, float4(input.a_Position, 1.0f)));
     out.v_Color = input.a_Color;
@@ -24,7 +22,4 @@ VertexOutput vertexMain(VertexInput input)
 }
 
 [shader("fragment")]
-float4 fragmentMain(VertexOutput input) : SV_Target
-{
-    return float4(input.v_Color, 1.0f);
-}
+float4 fsMain(VertexOutput input) : SV_Target { return float4(input.v_Color, 1.0f); }

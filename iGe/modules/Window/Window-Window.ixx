@@ -6,6 +6,7 @@ import iGe.Common;
 
 namespace iGe
 {
+
 export struct WindowProps {
     string Title;
     uint32 Width;
@@ -32,7 +33,9 @@ public:
     virtual bool IsVSync() const = 0;
 
     virtual void* GetNativeWindow() const = 0;
+    virtual void* GetNativeWindowHandle() const = 0;
 
     static Scope<Window> Create(const WindowProps& props = WindowProps());
 };
+
 } // namespace iGe

@@ -2,12 +2,13 @@ module;
 #include "iGeMacro.h"
 
 export module iGe.Log;
+import spdlog;
 import iGe.Types;
 import iGe.SmartPointer;
-import spdlog;
 
 namespace iGe
 {
+
 export class IGE_API Log {
 public:
     static void Init() {
@@ -26,7 +27,8 @@ private:
     Log() {}
     ~Log() {}
 
-    static Ref<spdlog::logger> m_CoreLogger;
-    static Ref<spdlog::logger> m_ClientLogger;
+    static inline Ref<spdlog::logger> m_CoreLogger = nullptr;
+    static inline Ref<spdlog::logger> m_ClientLogger = nullptr;
 };
+
 } // namespace iGe

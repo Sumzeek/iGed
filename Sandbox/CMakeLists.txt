@@ -61,3 +61,35 @@ endforeach ()
 
 add_custom_target(CopyTexturesTarget DEPENDS ${COPIED_TEXTURE_FILES})
 add_dependencies(${TARGET_NAME} CopyTexturesTarget)
+
+# Copy pipeline spec files
+file(GLOB_RECURSE PIPELINE_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/pipelines/*")
+SOURCE_GROUP("pipelines" FILES ${PIPELINE_FILES})
+
+# Create output directory if it doesn't exist
+file(MAKE_DIRECTORY "${ASSETS_OUTPUT_DIR}/pipelines")
+
+set(COPIED_PIPELINE_FILES "")
+foreach (PIPELINE_FILE ${PIPELINE_FILES})
+    # Get relative path from pipelines directory
+    file(RELATIVE_PATH RELATIVE_PATH "${ASSETS_SOURCE_DIR}/pipelines" "${PIPELINE_FILE}")
+    # Create corresponding output path
+    set(OUTPUT_FILE "${ASSETS_OUTPUT_DIR}/pipelines/${RELATIVE_PATH}")
+    list(APPEND COPIED_PIPELINE_FILES ${OUTPUT_FILE})
+
+    # Get directory of output file
+    get_filename_component(OUTPUT_DIR "${OUTPUT_FILE}" DIRECTORY)
+
+    # Add custom command to copy individual file
+    add_custom_command(
+            OUTPUT "${OUTPUT_FILE}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PIPELINE_FILE}" "${OUTPUT_FILE}"
+            DEPENDS "${PIPELINE_FILE}"
+            COMMENT "Copying pipeline: ${RELATIVE_PATH}"
+            VERBATIM
+    )
+endforeach ()
+
+add_custom_target(CopyPipelinesTarget DEPENDS ${COPIED_PIPELINE_FILES})
+add_dependencies(${TARGET_NAME} CopyPipelinesTarget)
