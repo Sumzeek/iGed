@@ -132,8 +132,8 @@ from Tessellator import DisplacementSampler, QuadTessellator, QuadTessParams, Ve
 
 
 def generate_quad_training_csv(
+        orig_mesh: str,
         baked_mesh: str,
-        limited_mesh: str,
         baked_disp_exr: str,
         resolution: int,
         max_tess_rate: int,
@@ -167,23 +167,23 @@ def generate_quad_training_csv(
     quads_csv = f"{base}_quads.csv"
     pareto_csv = f"{base}_quads_pareto.csv"
 
-    # 1. Parse baked mesh quads (geometry in baked space)
+    # 1. Reference surface (used for epsilon computation)
+    ms = pymeshlab.MeshSet()
+    if not os.path.isfile(orig_mesh):
+        logging.error(f"[NTF] Original mesh not found: {orig_mesh}")
+        return
+    ms.load_new_mesh(orig_mesh)
+    m = ms.current_mesh()
+    orig_vertices = np.array(m.vertex_matrix(), dtype=np.float32)
+    orig_indices = np.array(m.face_matrix(), dtype=np.uint32)
+    logging.info(
+        f"[NTF] Loaded original mesh {orig_mesh}, verts={orig_vertices.shape[0]}, faces={orig_indices.shape[0]}"
+    )
+
+    # 2. Parse baked mesh quads (geometry in baked space)
     verts_baked, norms_baked, uvs_baked, quads_baked = parse_quad_mesh(baked_mesh)
     num_quads = len(quads_baked)
     logging.info(f"[NTF] Parsed baked mesh {baked_mesh}, quads={num_quads}")
-
-    # 2. Limited mesh as reference surface (used for epsilon computation)
-    ms = pymeshlab.MeshSet()
-    if not os.path.isfile(limited_mesh):
-        logging.error(f"[NTF] Limited mesh not found: {limited_mesh}")
-        return
-    ms.load_new_mesh(limited_mesh)
-    m = ms.current_mesh()
-    limited_vertices = np.array(m.vertex_matrix(), dtype=np.float32)
-    limited_indices = np.array(m.face_matrix(), dtype=np.uint32)
-    logging.info(
-        f"[NTF] Loaded limited mesh {limited_mesh}, verts={limited_vertices.shape[0]}, faces={limited_indices.shape[0]}"
-    )
 
     # 3. Displacement sampler over baked_disp_exr
     if not os.path.isfile(baked_disp_exr):
@@ -281,8 +281,8 @@ def generate_quad_training_csv(
                 dirs[idx] = nor
                 idx += 1
 
-        # Reference distances on limited mesh
-        t_ref = intersect_rays_with_mesh(origins, dirs, limited_vertices, limited_indices)
+        # Reference distances on original mesh
+        t_ref = intersect_rays_with_mesh(origins, dirs, orig_vertices, orig_indices)
 
         # All full rows (one per rate combination) for this quad
         full_rows: List[Tuple[int, int, int, int, int, int, int, int, float]] = []
@@ -403,11 +403,11 @@ if __name__ == "__main__":
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
+    orig_mesh = "assets/Icosphere.obj"
     baked_mesh = "assets/Icosphere_baked.obj"
-    limited_mesh = "assets/Icosphere_baked_limited.obj"
     disp_exr = "assets/Icosphere_baked_disp.exr"
     resolution = 1024
-    sample_per_dim = 16
+    sample_per_dim = 100
     max_tess_rate = 4
 
-    generate_quad_training_csv(baked_mesh, limited_mesh, disp_exr, resolution, max_tess_rate, sample_per_dim)
+    generate_quad_training_csv(orig_mesh, baked_mesh, disp_exr, resolution, max_tess_rate, sample_per_dim)

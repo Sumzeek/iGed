@@ -4,7 +4,7 @@ module;
 
 #include "myStruct.h"
 
-module MeshBaker;
+module iGed.MeshBaker;
 import :OptixBaker;
 import std;
 

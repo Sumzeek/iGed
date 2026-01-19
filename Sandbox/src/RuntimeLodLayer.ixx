@@ -2,8 +2,9 @@ module;
 #include "iGeMacro.h"
 
 export module iGed.RuntimeLodLayer;
+import iGed.NTF;
+import iGed.MeshBaker;
 import iGe;
-import MeshBaker;
 
 export class RuntimeLodLayer : public iGe::Layer {
 public:
@@ -75,6 +76,10 @@ private:
     // Software Rasterization
     iGe::Ref<iGe::Texture2D> m_DepthBuffer;
     iGe::Ref<iGe::Buffer> m_Packed64Buffer;
+
+    // NTF
+    NTF::Model m_NTFModel;
+    NTF::Buffers m_NTFBuffers;
 
     // Camera
     iGe::PerspectiveCamera m_Camera;

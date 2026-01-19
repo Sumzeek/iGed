@@ -5,7 +5,7 @@ module;
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
-module MeshBaker;
+module iGed.MeshBaker;
 import :Mesh;
 
 namespace MeshBaker

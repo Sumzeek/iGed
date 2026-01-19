@@ -1,6 +1,6 @@
 module;
 
-export module MeshBaker:Mesh;
+export module iGed.MeshBaker:Mesh;
 import std;
 import glm;
 

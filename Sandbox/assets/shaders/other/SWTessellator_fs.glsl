@@ -1,5 +1,7 @@
 #version 460
 
+#extension GL_NV_fragment_shader_barycentric : require
+
 layout(binding = 1, std140) uniform PerFrameDataBlock_std140 {
     vec3 u_ViewPos;
     float _padding_u_ViewPos;
@@ -19,7 +21,6 @@ in PerVertexData {
     vec3 mcPosition;
     vec3 vcPosition;
     vec2 texcoord;
-    vec3 barycentric;
 } fragIn;
 
 layout(location = 0) out vec4 out_ScreenColor;
@@ -80,7 +81,7 @@ void main()
 
     // line
     const float edgeWidth = 1.5;// in pixels
-    vec3 bc = fragIn.barycentric;
+    vec3 bc = gl_BaryCoordNV;
     vec3 w  = fwidth(bc);
     vec3 a3 = smoothstep(vec3(0.0), w * edgeWidth, bc);
     float edgeFactor = min(min(a3.x, a3.y), a3.z);// 0 at edge, 1 inside

@@ -1,6 +1,6 @@
 module;
 
-module MeshBaker;
+module iGed.MeshBaker;
 import :CPUBaker;
 import std;
 import glm;

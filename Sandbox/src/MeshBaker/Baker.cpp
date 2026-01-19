@@ -11,7 +11,7 @@ module;
 #include <vcg/complex/complex.h>
 #include <vcg/space/point3.h>
 
-module MeshBaker;
+module iGed.MeshBaker;
 import :Baker;
 import :CPUBaker;
 import :OptixBaker;

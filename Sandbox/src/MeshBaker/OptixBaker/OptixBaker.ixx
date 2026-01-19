@@ -1,6 +1,6 @@
 module;
 
-export module MeshBaker:OptixBaker;
+export module iGed.MeshBaker:OptixBaker;
 import :Baker;
 import glm;
 

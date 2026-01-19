@@ -1,6 +1,6 @@
 module;
 
-export module MeshBaker:CPUBaker;
+export module iGed.MeshBaker:CPUBaker;
 import :Baker;
 import glm;
 

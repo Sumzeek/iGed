@@ -5,7 +5,7 @@ module;
 #include <backends/imgui_impl_opengl3.h>
 
 module iGed.RuntimeLodLayer;
-import MeshBaker;
+import iGed.MeshBaker;
 import std;
 import glm;
 
@@ -126,6 +126,10 @@ RuntimeLodLayer::RuntimeLodLayer()
                 m_ModelQuadIndexBuffer = iGe::Buffer::Create(reinterpret_cast<void*>(m_Model.Indices.data()),
                                                              m_Model.Indices.size() * sizeof(std::uint32_t));
             }
+
+            // NTF model
+            m_NTFModel = NTF::Model::Load("assets/ntf/Icosphere_baked.ntf");
+            m_NTFBuffers.Create(m_NTFModel);
         }
     }
 
@@ -308,6 +312,7 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
                 m_ModelNormalBuffer->Bind(6, iGe::BufferType::Storage);
                 m_ModelTexCoordBuffer->Bind(7, iGe::BufferType::Storage);
                 m_ModelQuadIndexBuffer->Bind(8, iGe::BufferType::Storage);
+                m_NTFBuffers.Bind(10, 11, 12);
                 iGe::Renderer::DispatchTask(m_MeshShaderLibrary.Get("SWTessellator"), 0, (quadSize + 31) / 32,
                                             m_ModelTransform);
             }

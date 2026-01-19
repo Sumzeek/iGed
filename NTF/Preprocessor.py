@@ -74,7 +74,6 @@ class Preprocessor:
       1. Load and decimate original mesh.
       2. Convert to quads and assign tiled UV atlas.
       3. Bake ray intersections to displacement + normal maps.
-      4. Reconstruct limited mesh from per-pixel data.
     """
     EPSILON = 1e-6
 
@@ -83,7 +82,6 @@ class Preprocessor:
         self.resolution = resolution
         base, ext = os.path.splitext(input_mesh)
         self.baked_mesh = f"{base}_baked{ext}"
-        self.limited_mesh = f"{base}_baked_limited{ext}"
         self.baked_disp_exr = f"{base}_baked_disp.exr"
         self.baked_norm_exr = f"{base}_baked_norm.exr"
 
@@ -111,10 +109,6 @@ class Preprocessor:
         # Save EXR maps only; training data is generated separately (see NTF.py / Trainer).
         self._save_exr_displacement(disp)
         self._save_exr_normal(norms_out)
-
-        # Reconstruct limited mesh for visualization / reference surface.
-        self._reconstruct_limited_mesh(disp, origins, dirs, quads_out, baked_data["vertices"])
-        logging.info("[Run] Completed all stages")
 
     # ---------- Stage 1: Quadrangulate + UV Atlas ----------
 
@@ -273,66 +267,6 @@ class Preprocessor:
 
         logging.info("[Stage 2] Baking done")
         return displacements, out_normals, origins, directions, baked["quads"]
-
-    # ---------- Stage 3: Limited Mesh Reconstruction ----------
-
-    def _reconstruct_limited_mesh(self, disp, origins, dirs, quads, baked_vertices):
-        logging.info("[Stage 3] Reconstruct limited mesh")
-        res = self.resolution
-        ms = pymeshlab.MeshSet()
-        limited_vertices: List[np.ndarray] = []
-        limited_indices: List[int] = []
-
-        def add_vertex(pos: np.ndarray) -> int:
-            limited_vertices.append(pos)
-            return len(limited_vertices) - 1
-
-        for face in quads:
-            uv = [np.array(self._uv_cache[i][:2]) for i in face.uvs]
-            px = [(int(u[0]), int(u[1])) for u in uv]
-            xs = [puv[0] for puv in px]
-            ys = [puv[1] for puv in px]
-            min_x = max(0, min(xs))
-            max_x = min(res - 1, max(xs))
-            min_y = max(0, min(ys))
-            max_y = min(res - 1, max(ys))
-
-            gw = max_x - min_x
-            gh = max_y - min_y
-            grid = np.full((gh + 1, gw + 1), -1, dtype=int)
-
-            for gy in range(gh + 1):
-                for gx in range(gw + 1):
-                    x = min_x + gx
-                    y = min_y + gy
-                    idx = y * res + x
-                    d = disp[idx]
-                    pos = origins[idx] + dirs[idx] * d
-                    grid[gy, gx] = add_vertex(pos)
-
-            for cy in range(gh):
-                for cx in range(gw):
-                    v00 = int(grid[cy, cx])
-                    v10 = int(grid[cy, cx + 1])
-                    v01 = int(grid[cy + 1, cx])
-                    v11 = int(grid[cy + 1, cx + 1])
-                    if -1 in (v00, v10, v01, v11):
-                        continue
-                    # Two triangles
-                    limited_indices.extend([v00, v10, v11])
-                    limited_indices.extend([v00, v11, v01])
-
-        if not limited_vertices:
-            logging.warning("[Stage 3] No vertices reconstructed")
-            return
-
-        mesh = pymeshlab.Mesh(
-            vertex_matrix=np.array(limited_vertices, dtype=np.float32),
-            face_matrix=np.array(limited_indices, dtype=np.uint32).reshape(-1, 3)
-        )
-        ms.add_mesh(mesh, "limited_mesh")
-        ms.save_current_mesh(self.limited_mesh, save_face_color=False, save_vertex_color=False)
-        logging.info(f"[Stage 3] Saved limited mesh={self.limited_mesh} verts={len(limited_vertices)}")
 
     # ---------- EXR Writers ----------
 

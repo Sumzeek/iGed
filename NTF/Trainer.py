@@ -384,37 +384,119 @@ if __name__ == '__main__':
     trainer = NTFTrainer(points_csv, quads_csv, ntf_cfg, trainer_cfg)
     trainer.run()
 
-    mode = "predict"
-    if mode == "predict":
-        trainer = NTFTrainer(points_csv, quads_csv, ntf_cfg, trainer_cfg)
+    # ============================================================
+    # 导出权重到二进制文件 (.ntf)，供 C++/OpenGL 使用
+    # ============================================================
+    #
+    # 文件格式 (.ntf):
+    # 1. 头部信息:
+    #    - int32: fflevels (傅里叶特征级数)
+    #    - int32: hidden_dim (隐藏层维度)
+    #    - int32: max_rate (最大细分率)
+    #    - int32: in_dim_raw (原始输入维度, 通常为13: 4*3坐标 + 1 epsilon)
+    #    - float32: epsilon_mean (epsilon 归一化均值)
+    #    - float32: epsilon_std (epsilon 归一化标准差)
+    #
+    # 2. 网络权重 (4层 MLP):
+    #    对于每一层:
+    #    - int32: in_features
+    #    - int32: out_features
+    #    - float32[out_features * in_features]: weight (row-major)
+    #    - float32[out_features]: bias
+    # ============================================================
 
-        trainer.load()
-        logging.info(f"Loaded model from: {trainer.model_path}")
-        logging.info(f"epsilon_mean={trainer.epsilon_mean:.6f}, epsilon_std={trainer.epsilon_std:.6f}")
+    import struct
 
-        num_samples = 5
-        num_quads = len(trainer.dataset)
-        rng = np.random.default_rng(seed=0)
 
-        for _ in range(num_samples):
-            idx = int(rng.integers(low=0, high=num_quads))
-            quad_idx = trainer.dataset.quads[idx]
-            quad_vertices = trainer.dataset.points[quad_idx]
-            epsilon = float(trainer.dataset.epsilons_raw[idx])
+    def export_ntf_weights(
+            model_path: str,
+            output_path: str,
+            in_dim_raw: int = 13,
+    ) -> None:
+        """导出 NTF 模型权重到二进制文件。
 
-            b, r, t, l = trainer.predict(quad_vertices, epsilon)
+        Args:
+            model_path: 训练好的模型文件路径 (.pt)
+            output_path: 输出的二进制文件路径 (.ntf)
+            in_dim_raw: 原始输入维度 (默认 13 = 4*3 + 1)
+        """
+        from NTF import NTF, NTFConfig
 
-            gt_bottom = trainer.dataset.s_bottom[idx]
-            gt_right = trainer.dataset.s_right[idx]
-            gt_top = trainer.dataset.s_top[idx]
-            gt_left = trainer.dataset.s_left[idx]
+        # 加载模型
+        checkpoint = torch.load(model_path, map_location='cpu')
 
-            print("---- Sample idx:", idx)
-            print("quad vertex ids:", quad_idx.tolist())
-            print("epsilon:", epsilon)
-            print("GT rates      (b, r, t, l):",
-                  gt_bottom, gt_right, gt_top, gt_left)
-            print("Predicted rates (b, r, t, l):",
-                  f"{b:.3f}", f"{r:.3f}", f"{t:.3f}", f"{l:.3f}")
-    else:
-        raise ValueError(f"Unknown mode: {mode}")
+        # 获取配置
+        ntf_config = NTFConfig(**checkpoint['ntf_config'])
+        epsilon_mean = checkpoint.get('epsilon_mean', 0.0)
+        epsilon_std = checkpoint.get('epsilon_std', 1.0)
+
+        # 重建模型并加载权重
+        model = NTF(in_dim_raw=in_dim_raw, config=ntf_config)
+        model.load_state_dict(checkpoint['state_dict'])
+        model.eval()
+
+        logging.info(f"[export_ntf_weights] 加载模型: {model_path}")
+        logging.info(f"  fflevels    = {ntf_config.fflevels}")
+        logging.info(f"  hidden_dim  = {ntf_config.hidden_dim}")
+        logging.info(f"  max_rate    = {ntf_config.max_rate}")
+        logging.info(f"  in_dim_raw  = {in_dim_raw}")
+        logging.info(f"  epsilon_mean= {epsilon_mean}")
+        logging.info(f"  epsilon_std = {epsilon_std}")
+
+        # 提取 MLP 层的权重
+        # model.mlp.net 是 nn.Sequential: [Linear, LeakyReLU, Linear, LeakyReLU, ...]
+        layers = []
+        for module in model.mlp.net:
+            if isinstance(module, torch.nn.Linear):
+                layers.append(module)
+
+        logging.info(f"  发现 {len(layers)} 个线性层")
+
+        with open(output_path, 'wb') as f:
+            # 写入头部信息
+            f.write(struct.pack('i', ntf_config.fflevels))
+            f.write(struct.pack('i', ntf_config.hidden_dim))
+            f.write(struct.pack('i', ntf_config.max_rate))
+            f.write(struct.pack('i', in_dim_raw))
+            f.write(struct.pack('f', float(epsilon_mean)))
+            f.write(struct.pack('f', float(epsilon_std)))
+
+            # 写入每层权重
+            for i, layer in enumerate(layers):
+                weight = layer.weight.detach().numpy()  # (out_features, in_features)
+                bias = layer.bias.detach().numpy()  # (out_features,)
+
+                in_features = weight.shape[1]
+                out_features = weight.shape[0]
+
+                logging.info(f"  Layer {i}: ({in_features}, {out_features})")
+
+                f.write(struct.pack('i', in_features))
+                f.write(struct.pack('i', out_features))
+
+                # 写入权重 (row-major, 即按 out_features 优先)
+                weight_flat = weight.flatten().astype(np.float32)
+                f.write(weight_flat.tobytes())
+
+                # 写入偏置
+                bias_flat = bias.astype(np.float32)
+                f.write(bias_flat.tobytes())
+
+        logging.info(f"[export_ntf_weights] 导出完成: {output_path}")
+
+        # 输出文件大小
+        file_size = os.path.getsize(output_path)
+        logging.info(f"  文件大小: {file_size} bytes ({file_size / 1024:.2f} KB)")
+
+
+    # 训练完成后自动导出权重
+    ntf_output_path = trainer.model_path.replace('.pt', '.ntf')
+    export_ntf_weights(
+        model_path=trainer.model_path,
+        output_path=ntf_output_path,
+        in_dim_raw=4 * 3 + 1,  # 4个顶点 * 3坐标 + 1 epsilon
+    )
+
+    logging.info(f"[Trainer] 训练和导出完成!")
+    logging.info(f"  PyTorch 模型: {trainer.model_path}")
+    logging.info(f"  二进制权重:   {ntf_output_path}")
