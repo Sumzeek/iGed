@@ -1,14 +1,16 @@
 import os
 import sys
 import logging
+import struct
+import csv
 from dataclasses import dataclass
 from typing import Tuple
-import csv
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, random_split
+from tqdm import tqdm
 
 from NTF import NTF, NTFConfig
 
@@ -245,27 +247,38 @@ class NTFTrainer:
         best_val = float('inf')
         global_step = 0
 
+        total_batches = len(self.train_loader) + len(self.val_loader)
+
         for epoch in range(1, self.config.epochs + 1):
             self.ntf.train()
             running_loss = 0.0
 
+            # 单个 epoch 的进度条，训练+验证共用，覆盖显示
+            pbar = tqdm(
+                total=total_batches,
+                desc=f"Epoch {epoch}/{self.config.epochs}",
+                leave=False,
+                unit="batch",
+                ncols=100,
+                file=sys.stdout
+            )
+
+            # 训练阶段
             for x, y in self.train_loader:
                 x = x.to(self.device)
-                y = y.to(self.device)  # (B, 4) normalized rates
+                y = y.to(self.device)
 
                 self.optimizer.zero_grad()
-                pred = self.ntf(x)  # (B, 4)
+                pred = self.ntf(x)
                 loss = self.criterion(pred, y)
                 loss.backward()
                 self.optimizer.step()
 
                 running_loss += loss.item() * x.size(0)
-
-                if global_step % self.config.log_every == 0:
-                    logging.info(
-                        f'[NTF-Trainer] epoch={epoch} step={global_step} loss={loss.item():.6f}'
-                    )
                 global_step += 1
+
+                pbar.set_postfix(phase="Train", loss=f"{loss.item():.6f}")
+                pbar.update(1)
 
             avg_train = running_loss / max(1, len(self.train_loader.dataset))
 
@@ -273,7 +286,6 @@ class NTFTrainer:
             self.ntf.eval()
             val_loss = 0.0
             total = 0
-            # accumulate mean absolute error (MAE) after denormalizing rates
             abs_err_sum = 0.0
 
             with torch.no_grad():
@@ -285,31 +297,34 @@ class NTFTrainer:
                     l = self.criterion(pred, y)
                     val_loss += l.item() * x.size(0)
 
-                    # metric: absolute error after denormalizing to real rates
                     pred_denorm = pred * float(self.config.max_rate)
                     y_denorm = y * float(self.config.max_rate)
-                    # per-sample MAE over 4 edges
                     abs_err = (pred_denorm - y_denorm).abs().mean(dim=1)
                     abs_err_sum += abs_err.sum().item()
                     total += x.size(0)
 
+                    pbar.set_postfix(phase="Val", loss=f"{l.item():.6f}")
+                    pbar.update(1)
+
             avg_val = val_loss / max(1, len(self.val_loader.dataset))
             mean_abs_err = abs_err_sum / max(1, total)
 
-            logging.info(
-                f'[NTF-Trainer] epoch={epoch}/{self.config.epochs} '
-                f'train_loss={avg_train:.6f} val_loss={avg_val:.6f} '
-                f'mean_abs_err={mean_abs_err:.3f}'
+            pbar.close()
+
+            # 每个 epoch 结束后，打印一行摘要（覆盖进度条位置）
+            print(
+                f"\rEpoch {epoch}/{self.config.epochs} | "
+                f"train_loss: {avg_train:.6f} | val_loss: {avg_val:.6f} | MAE: {mean_abs_err:.3f}",
+                end="" if epoch < self.config.epochs else "\n"
             )
 
             if avg_val < best_val:
                 best_val = avg_val
                 self._save()
-                logging.info(
-                    f'[NTF-Trainer] saved best model (val_loss={best_val:.6f}) -> {self.model_path}'
-                )
 
+        print()  # 最终换行
         logging.info('[NTF-Trainer] training finished.')
+        logging.info(f'[NTF-Trainer] Best model saved (val_loss={best_val:.6f}) -> {self.model_path}')
 
     def _save(self) -> None:
         torch.save(
@@ -365,6 +380,107 @@ class NTFTrainer:
         return b, r, t, l
 
 
+def export_ntf_weights(
+        model_path: str,
+        output_path: str,
+        in_dim_raw: int = 13,
+) -> None:
+    """Export NTF model weights to binary file.
+
+    Args:
+        model_path: Path to the trained model file (.pt)
+        output_path: Path for the output binary file (.ntf)
+        in_dim_raw: Raw input dimension (default 13 = 4*3 + 1)
+    """
+
+    # ============================================================
+    # Export weights to binary file (.ntf) for C++/OpenGL usage
+    # ============================================================
+    #
+    # File format (.ntf):
+    # 1. Header:
+    #    - int32: fflevels (Fourier feature levels)
+    #    - int32: hidden_dim (hidden layer dimension)
+    #    - int32: max_rate (maximum tessellation rate)
+    #    - int32: in_dim_raw (raw input dimension, typically 13: 4*3 coords + 1 epsilon)
+    #    - float32: epsilon_mean (epsilon normalization mean)
+    #    - float32: epsilon_std (epsilon normalization std)
+    #
+    # 2. Network weights (4-layer MLP):
+    #    For each layer:
+    #    - int32: in_features
+    #    - int32: out_features
+    #    - float32[out_features * in_features]: weight (row-major)
+    #    - float32[out_features]: bias
+    # ============================================================
+
+    # Load model
+    checkpoint = torch.load(model_path, map_location='cpu')
+
+    # Get config
+    ntf_config = NTFConfig(**checkpoint['ntf_config'])
+    epsilon_mean = checkpoint.get('epsilon_mean', 0.0)
+    epsilon_std = checkpoint.get('epsilon_std', 1.0)
+
+    # Rebuild model and load weights
+    model = NTF(in_dim_raw=in_dim_raw, config=ntf_config)
+    model.load_state_dict(checkpoint['state_dict'])
+    model.eval()
+
+    logging.info(f"[export_ntf_weights] Loading model: {model_path}")
+    logging.info(f"  fflevels    = {ntf_config.fflevels}")
+    logging.info(f"  hidden_dim  = {ntf_config.hidden_dim}")
+    logging.info(f"  max_rate    = {ntf_config.max_rate}")
+    logging.info(f"  in_dim_raw  = {in_dim_raw}")
+    logging.info(f"  epsilon_mean= {epsilon_mean}")
+    logging.info(f"  epsilon_std = {epsilon_std}")
+
+    # Extract MLP layer weights
+    # model.mlp.net is nn.Sequential: [Linear, LeakyReLU, Linear, LeakyReLU, ...]
+    layers = []
+    for module in model.mlp.net:
+        if isinstance(module, torch.nn.Linear):
+            layers.append(module)
+
+    logging.info(f"  Found {len(layers)} linear layers")
+
+    with open(output_path, 'wb') as f:
+        # Write header
+        f.write(struct.pack('i', ntf_config.fflevels))
+        f.write(struct.pack('i', ntf_config.hidden_dim))
+        f.write(struct.pack('i', ntf_config.max_rate))
+        f.write(struct.pack('i', in_dim_raw))
+        f.write(struct.pack('f', float(epsilon_mean)))
+        f.write(struct.pack('f', float(epsilon_std)))
+
+        # Write weights for each layer
+        for i, layer in enumerate(layers):
+            weight = layer.weight.detach().numpy()  # (out_features, in_features)
+            bias = layer.bias.detach().numpy()  # (out_features,)
+
+            in_features = weight.shape[1]
+            out_features = weight.shape[0]
+
+            logging.info(f"  Layer {i}: ({in_features}, {out_features})")
+
+            f.write(struct.pack('i', in_features))
+            f.write(struct.pack('i', out_features))
+
+            # Write weights (row-major, i.e., out_features first)
+            weight_flat = weight.flatten().astype(np.float32)
+            f.write(weight_flat.tobytes())
+
+            # Write bias
+            bias_flat = bias.astype(np.float32)
+            f.write(bias_flat.tobytes())
+
+    logging.info(f"[export_ntf_weights] Export completed: {output_path}")
+
+    # Output file size
+    file_size = os.path.getsize(output_path)
+    logging.info(f"  File size: {file_size} bytes ({file_size / 1024:.2f} KB)")
+
+
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.INFO,
@@ -372,131 +488,23 @@ if __name__ == '__main__':
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    points_csv = "assets/Icosphere_baked_points.csv"
-    # Use the Pareto / prefix-optimal CSV generated by generate_quad_training_csv
-    # so that for each quad and epsilon_target we have the best rate combination
-    # seen up to that epsilon.
-    quads_csv = "assets/Icosphere_baked_quads_pareto.csv"
+    points_csv = "assets/Bayon Lion_baked_points.csv"
+    quads_csv = "assets/Bayon Lion_baked_quads_pareto.csv"
 
-    ntf_cfg = NTFConfig(fflevels=8, hidden_dim=64, max_rate=4)
-    trainer_cfg = NTFTrainerConfig(max_rate=4, epochs=50, batch_size=1024, lr=5e-4)
+    ntf_cfg = NTFConfig(fflevels=8, hidden_dim=64, max_rate=8)
+    trainer_cfg = NTFTrainerConfig(max_rate=8, epochs=50, batch_size=1024, lr=5e-4)
 
     trainer = NTFTrainer(points_csv, quads_csv, ntf_cfg, trainer_cfg)
     trainer.run()
 
-    # ============================================================
-    # 导出权重到二进制文件 (.ntf)，供 C++/OpenGL 使用
-    # ============================================================
-    #
-    # 文件格式 (.ntf):
-    # 1. 头部信息:
-    #    - int32: fflevels (傅里叶特征级数)
-    #    - int32: hidden_dim (隐藏层维度)
-    #    - int32: max_rate (最大细分率)
-    #    - int32: in_dim_raw (原始输入维度, 通常为13: 4*3坐标 + 1 epsilon)
-    #    - float32: epsilon_mean (epsilon 归一化均值)
-    #    - float32: epsilon_std (epsilon 归一化标准差)
-    #
-    # 2. 网络权重 (4层 MLP):
-    #    对于每一层:
-    #    - int32: in_features
-    #    - int32: out_features
-    #    - float32[out_features * in_features]: weight (row-major)
-    #    - float32[out_features]: bias
-    # ============================================================
-
-    import struct
-
-
-    def export_ntf_weights(
-            model_path: str,
-            output_path: str,
-            in_dim_raw: int = 13,
-    ) -> None:
-        """导出 NTF 模型权重到二进制文件。
-
-        Args:
-            model_path: 训练好的模型文件路径 (.pt)
-            output_path: 输出的二进制文件路径 (.ntf)
-            in_dim_raw: 原始输入维度 (默认 13 = 4*3 + 1)
-        """
-        from NTF import NTF, NTFConfig
-
-        # 加载模型
-        checkpoint = torch.load(model_path, map_location='cpu')
-
-        # 获取配置
-        ntf_config = NTFConfig(**checkpoint['ntf_config'])
-        epsilon_mean = checkpoint.get('epsilon_mean', 0.0)
-        epsilon_std = checkpoint.get('epsilon_std', 1.0)
-
-        # 重建模型并加载权重
-        model = NTF(in_dim_raw=in_dim_raw, config=ntf_config)
-        model.load_state_dict(checkpoint['state_dict'])
-        model.eval()
-
-        logging.info(f"[export_ntf_weights] 加载模型: {model_path}")
-        logging.info(f"  fflevels    = {ntf_config.fflevels}")
-        logging.info(f"  hidden_dim  = {ntf_config.hidden_dim}")
-        logging.info(f"  max_rate    = {ntf_config.max_rate}")
-        logging.info(f"  in_dim_raw  = {in_dim_raw}")
-        logging.info(f"  epsilon_mean= {epsilon_mean}")
-        logging.info(f"  epsilon_std = {epsilon_std}")
-
-        # 提取 MLP 层的权重
-        # model.mlp.net 是 nn.Sequential: [Linear, LeakyReLU, Linear, LeakyReLU, ...]
-        layers = []
-        for module in model.mlp.net:
-            if isinstance(module, torch.nn.Linear):
-                layers.append(module)
-
-        logging.info(f"  发现 {len(layers)} 个线性层")
-
-        with open(output_path, 'wb') as f:
-            # 写入头部信息
-            f.write(struct.pack('i', ntf_config.fflevels))
-            f.write(struct.pack('i', ntf_config.hidden_dim))
-            f.write(struct.pack('i', ntf_config.max_rate))
-            f.write(struct.pack('i', in_dim_raw))
-            f.write(struct.pack('f', float(epsilon_mean)))
-            f.write(struct.pack('f', float(epsilon_std)))
-
-            # 写入每层权重
-            for i, layer in enumerate(layers):
-                weight = layer.weight.detach().numpy()  # (out_features, in_features)
-                bias = layer.bias.detach().numpy()  # (out_features,)
-
-                in_features = weight.shape[1]
-                out_features = weight.shape[0]
-
-                logging.info(f"  Layer {i}: ({in_features}, {out_features})")
-
-                f.write(struct.pack('i', in_features))
-                f.write(struct.pack('i', out_features))
-
-                # 写入权重 (row-major, 即按 out_features 优先)
-                weight_flat = weight.flatten().astype(np.float32)
-                f.write(weight_flat.tobytes())
-
-                # 写入偏置
-                bias_flat = bias.astype(np.float32)
-                f.write(bias_flat.tobytes())
-
-        logging.info(f"[export_ntf_weights] 导出完成: {output_path}")
-
-        # 输出文件大小
-        file_size = os.path.getsize(output_path)
-        logging.info(f"  文件大小: {file_size} bytes ({file_size / 1024:.2f} KB)")
-
-
-    # 训练完成后自动导出权重
-    ntf_output_path = trainer.model_path.replace('.pt', '.ntf')
+    # Automatically export weights after training
+    ntf_output_path = "assets/Bayon Lion_baked.ntf"
     export_ntf_weights(
         model_path=trainer.model_path,
         output_path=ntf_output_path,
-        in_dim_raw=4 * 3 + 1,  # 4个顶点 * 3坐标 + 1 epsilon
+        in_dim_raw=4 * 3 + 1,  # 4 vertices * 3 coords + 1 epsilon
     )
 
-    logging.info(f"[Trainer] 训练和导出完成!")
-    logging.info(f"  PyTorch 模型: {trainer.model_path}")
-    logging.info(f"  二进制权重:   {ntf_output_path}")
+    logging.info(f"[Trainer] Training and export completed!")
+    logging.info(f"  PyTorch model: {trainer.model_path}")
+    logging.info(f"  Binary weights: {ntf_output_path}")

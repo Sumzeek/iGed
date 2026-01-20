@@ -1,4 +1,5 @@
 module;
+#include "iGeMacro.h"
 #include <cstdint>
 
 export module iGed.NTF;
@@ -36,7 +37,7 @@ struct Model {
         Model model;
 
         std::ifstream fin(path, std::ios::binary);
-        if (!fin.is_open()) { throw std::runtime_error("Failed to open NTF file: " + path); }
+        if (!fin.is_open()) { IGE_ERROR("Failed to open NTF file: {}", path); }
 
         // 读取头部配置
         fin.read(reinterpret_cast<char*>(&model.config.fflevels), sizeof(int32_t));
@@ -46,14 +47,14 @@ struct Model {
         fin.read(reinterpret_cast<char*>(&model.config.epsilon_mean), sizeof(float));
         fin.read(reinterpret_cast<char*>(&model.config.epsilon_std), sizeof(float));
 
-        std::cout << "[NTF::Model::Load] 加载配置:" << std::endl;
-        std::cout << "  fflevels    = " << model.config.fflevels << std::endl;
-        std::cout << "  hidden_dim  = " << model.config.hidden_dim << std::endl;
-        std::cout << "  max_rate    = " << model.config.max_rate << std::endl;
-        std::cout << "  in_dim_raw  = " << model.config.in_dim_raw << std::endl;
-        std::cout << "  epsilon_mean= " << model.config.epsilon_mean << std::endl;
-        std::cout << "  epsilon_std = " << model.config.epsilon_std << std::endl;
-        std::cout << "  encoded_dim = " << model.config.encoded_dim() << std::endl;
+        IGE_INFO("[NTF::Model::Load] Load ntf config from {}:", path);
+        IGE_INFO("    fflevels     = {}", model.config.fflevels);
+        IGE_INFO("    hidden_dim   = {}", model.config.hidden_dim);
+        IGE_INFO("    max_rate     = {}", model.config.max_rate);
+        IGE_INFO("    in_dim_raw   = {}", model.config.in_dim_raw);
+        IGE_INFO("    epsilon_mean = {}", model.config.epsilon_mean);
+        IGE_INFO("    epsilon_std  = {}", model.config.epsilon_std);
+        IGE_INFO("    encoded_dim  = {}", model.config.encoded_dim());
 
         // 读取 4 层权重
         model.layers.resize(4);
@@ -69,13 +70,10 @@ struct Model {
 
             fin.read(reinterpret_cast<char*>(layer.weight.data()), weight_size * sizeof(float));
             fin.read(reinterpret_cast<char*>(layer.bias.data()), layer.out_features * sizeof(float));
-            std::cout << "  Layer " << i << ": (" << layer.in_features << ", " << layer.out_features << ")"
-                      << std::endl;
+            IGE_INFO("    Layer {}: ({}, {})", i, layer.in_features, layer.out_features);
         }
 
-        if (!fin.good()) { throw std::runtime_error("Error reading NTF file: " + path); }
-
-        std::cout << "[NTF::Model::Load] 加载完成: " << path << std::endl;
+        if (!fin.good()) { IGE_ERROR("Error reading NTF file: {}", path); }
         return model;
     }
 
@@ -243,10 +241,10 @@ struct Buffers {
 
         biases_ssbo = iGe::Buffer::Create(all_biases.data(), all_biases.size() * sizeof(float));
 
-        std::cout << "[NTFGLBuffers::create] 创建 OpenGL 缓冲区:" << std::endl;
-        std::cout << "  Config UBO: " << sizeof(ConfigData) << " bytes" << std::endl;
-        std::cout << "  Weights SSBO: " << all_weights.size() * sizeof(float) << " bytes" << std::endl;
-        std::cout << "  Biases SSBO: " << all_biases.size() * sizeof(float) << " bytes" << std::endl;
+        IGE_INFO("[NTF::Buffers::Create] Create OpenGL buffers:");
+        IGE_INFO("    Config UBO: {} bytes", sizeof(ConfigData));
+        IGE_INFO("    Weights SSBO: {} bytes", all_weights.size() * sizeof(float));
+        IGE_INFO("    Biases SSBO: {} bytes", all_biases.size() * sizeof(float));
     }
 
     // 绑定到 shader

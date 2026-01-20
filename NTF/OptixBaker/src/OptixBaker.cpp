@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <cstdlib>
 #include <cuda_runtime.h>
 #include <fstream>
@@ -8,7 +7,7 @@
 #include <pybind11/pybind11.h>
 #include <stdexcept>
 #include <string>
-#include <vector>
+#include <mutex>
 
 #include "myStruct.h"
 #include "optix9.h"
@@ -43,6 +42,138 @@ static std::string LoadPTX(const std::string& path) {
     if (!f) { throw std::runtime_error("Failed to open PTX file: " + path); }
     return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 }
+
+// ========== Cached OptiX Context (per-process singleton) ==========
+struct OptiXContext {
+    OptixDeviceContext context = nullptr;
+    OptixModule module = nullptr;
+    OptixPipeline pipeline = nullptr;
+    OptixProgramGroup raygenPG = nullptr;
+    OptixProgramGroup hitPG = nullptr;
+    OptixProgramGroup missPG = nullptr;
+    OptixPipelineCompileOptions pipelineCompileOptions = {};
+
+    // SBT records (device memory)
+    CUdeviceptr d_raygenRecord = 0;
+    CUdeviceptr d_hitRecord = 0;
+    CUdeviceptr d_missRecord = 0;
+
+    bool initialized = false;
+    std::mutex mutex;
+
+    ~OptiXContext() {
+        cleanup();
+    }
+
+    void cleanup() {
+        if (!initialized) return;
+
+        if (d_raygenRecord) { cudaFree(reinterpret_cast<void*>(d_raygenRecord)); d_raygenRecord = 0; }
+        if (d_hitRecord) { cudaFree(reinterpret_cast<void*>(d_hitRecord)); d_hitRecord = 0; }
+        if (d_missRecord) { cudaFree(reinterpret_cast<void*>(d_missRecord)); d_missRecord = 0; }
+        if (pipeline) { optixPipelineDestroy(pipeline); pipeline = nullptr; }
+        if (raygenPG) { optixProgramGroupDestroy(raygenPG); raygenPG = nullptr; }
+        if (hitPG) { optixProgramGroupDestroy(hitPG); hitPG = nullptr; }
+        if (missPG) { optixProgramGroupDestroy(missPG); missPG = nullptr; }
+        if (module) { optixModuleDestroy(module); module = nullptr; }
+        if (context) { optixDeviceContextDestroy(context); context = nullptr; }
+
+        initialized = false;
+    }
+
+    void initialize() {
+        if (initialized) return;
+
+        // Initialize CUDA and create OptiX context
+        CUDA_CHECK(cudaFree(0));
+        CUcontext cuCtx = 0;
+        OPTIX_CHECK(optixInit());
+        OptixDeviceContextOptions options = {};
+        options.logCallbackFunction = &ContextLogCB;
+        options.logCallbackLevel = 4;
+        OPTIX_CHECK(optixDeviceContextCreate(cuCtx, &options, &context));
+
+        // Create module from PTX
+        OptixModuleCompileOptions moduleCompileOptions = {};
+        pipelineCompileOptions.usesMotionBlur = false;
+        pipelineCompileOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
+        pipelineCompileOptions.numPayloadValues = 2;
+        pipelineCompileOptions.numAttributeValues = 2;
+        pipelineCompileOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+        pipelineCompileOptions.pipelineLaunchParamsVariableName = "params";
+
+        std::string ptx;
+        const char* ptxEnv = std::getenv("OPTIX_INTERSECT_PTX");
+        if (!ptxEnv) {
+            std::cerr << "OPTIX_INTERSECT_PTX not set!\n";
+            throw std::runtime_error("OPTIX_INTERSECT_PTX environment variable not set");
+        } else {
+            ptx = LoadPTX(ptxEnv);
+        }
+
+        char log[2048];
+        size_t logSize = sizeof(log);
+        OPTIX_CHECK(optixModuleCreate(context, &moduleCompileOptions, &pipelineCompileOptions, ptx.c_str(), ptx.size(),
+                                      log, &logSize, &module));
+
+        // Program groups
+        OptixProgramGroupOptions programGroupOptions = {};
+        logSize = sizeof(log);
+
+        OptixProgramGroupDesc raygenDesc = {};
+        raygenDesc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
+        raygenDesc.raygen.module = module;
+        raygenDesc.raygen.entryFunctionName = "__raygen__rg";
+        OPTIX_CHECK(optixProgramGroupCreate(context, &raygenDesc, 1, &programGroupOptions, log, &logSize, &raygenPG));
+
+        OptixProgramGroupDesc hitDesc = {};
+        hitDesc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        hitDesc.hitgroup.moduleCH = module;
+        hitDesc.hitgroup.entryFunctionNameCH = "__closesthit__ch";
+        OPTIX_CHECK(optixProgramGroupCreate(context, &hitDesc, 1, &programGroupOptions, log, &logSize, &hitPG));
+
+        OptixProgramGroupDesc missDesc = {};
+        missDesc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
+        missDesc.miss.module = module;
+        missDesc.miss.entryFunctionName = "__miss__ms";
+        OPTIX_CHECK(optixProgramGroupCreate(context, &missDesc, 1, &programGroupOptions, log, &logSize, &missPG));
+
+        // Pipeline
+        OptixPipelineLinkOptions linkOptions = {};
+        linkOptions.maxTraceDepth = 1;
+        logSize = sizeof(log);
+        OptixProgramGroup groups[] = {raygenPG, missPG, hitPG};
+        OPTIX_CHECK(optixPipelineCreate(context, &pipelineCompileOptions, &linkOptions, groups, 3, log, &logSize,
+                                        &pipeline));
+        OPTIX_CHECK(optixPipelineSetStackSize(pipeline,
+                                              /*directCallableStackSizeFromTraversal*/ 2 * 1024,
+                                              /*directCallableStackSizeFromState*/ 2 * 1024,
+                                              /*continuationStackSize*/ 2 * 1024,
+                                              /*maxTraversableGraphDepth*/ 1));
+
+        // Create SBT records (device memory, reusable)
+        RayGenSbtRecord rg = {};
+        OPTIX_CHECK(optixSbtRecordPackHeader(raygenPG, &rg));
+        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_raygenRecord), sizeof(RayGenSbtRecord)));
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_raygenRecord), &rg, sizeof(RayGenSbtRecord),
+                              cudaMemcpyHostToDevice));
+
+        HitSbtRecord hg = {};
+        OPTIX_CHECK(optixSbtRecordPackHeader(hitPG, &hg));
+        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_hitRecord), sizeof(HitSbtRecord)));
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_hitRecord), &hg, sizeof(HitSbtRecord), cudaMemcpyHostToDevice));
+
+        MissSbtRecord ms = {};
+        OPTIX_CHECK(optixSbtRecordPackHeader(missPG, &ms));
+        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_missRecord), sizeof(MissSbtRecord)));
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_missRecord), &ms, sizeof(MissSbtRecord), cudaMemcpyHostToDevice));
+
+        initialized = true;
+    }
+};
+
+// Global singleton (per-process)
+static OptiXContext g_optixCtx;
 
 py::array_t<int> intersect(py::array_t<float, py::array::c_style | py::array::forcecast> origins,
                            py::array_t<float, py::array::c_style | py::array::forcecast> directions,
@@ -86,8 +217,7 @@ py::array_t<int> intersect(py::array_t<float, py::array::c_style | py::array::fo
         h_vertices.resize(M * 3);
         h_indices.resize(M);
         for (size_t t = 0; t < M; ++t) {
-            // three vertices per triangle
-            const size_t baseV = t * 9; // 3 * 3 floats
+            const size_t baseV = t * 9;
             const size_t baseIdx = t * 3;
             h_vertices[baseIdx + 0] = make_float3(vptr[baseV + 0], vptr[baseV + 1], vptr[baseV + 2]);
             h_vertices[baseIdx + 1] = make_float3(vptr[baseV + 3], vptr[baseV + 4], vptr[baseV + 5]);
@@ -101,19 +231,15 @@ py::array_t<int> intersect(py::array_t<float, py::array::c_style | py::array::fo
 
     const uint32_t N = static_cast<uint32_t>(o.shape[0]);
 
-    // Initialize CUDA and create OptiX context
-    OptixDeviceContext context = nullptr;
+    // Initialize OptiX context (cached, thread-safe)
     {
-        CUDA_CHECK(cudaFree(0));
-        CUcontext cuCtx = 0;
-        OPTIX_CHECK(optixInit());
-        OptixDeviceContextOptions options = {};
-        options.logCallbackFunction = &ContextLogCB;
-        options.logCallbackLevel = 4;
-        OPTIX_CHECK(optixDeviceContextCreate(cuCtx, &options, &context));
+        std::lock_guard<std::mutex> lock(g_optixCtx.mutex);
+        if (!g_optixCtx.initialized) {
+            g_optixCtx.initialize();
+        }
     }
 
-    // Build triangle GAS
+    // Build triangle GAS (per-call, as geometry changes each time)
     OptixTraversableHandle gasHandle = {};
     CUdeviceptr d_vertices = 0;
     CUdeviceptr d_indices = 0;
@@ -152,120 +278,26 @@ py::array_t<int> intersect(py::array_t<float, py::array::c_style | py::array::fo
         buildInput.triangleArray.numSbtRecords = 1;
 
         OptixAccelBufferSizes gasBufferSizes;
-        OPTIX_CHECK(optixAccelComputeMemoryUsage(context, &accelOptions, &buildInput, 1, &gasBufferSizes));
+        OPTIX_CHECK(optixAccelComputeMemoryUsage(g_optixCtx.context, &accelOptions, &buildInput, 1, &gasBufferSizes));
 
         CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_tempBufferGas), gasBufferSizes.tempSizeInBytes));
         CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_gasOutputBuffer), gasBufferSizes.outputSizeInBytes));
 
-        OPTIX_CHECK(optixAccelBuild(context,
+        OPTIX_CHECK(optixAccelBuild(g_optixCtx.context,
                                     0, // stream
                                     &accelOptions, &buildInput, 1, d_tempBufferGas, gasBufferSizes.tempSizeInBytes,
                                     d_gasOutputBuffer, gasBufferSizes.outputSizeInBytes, &gasHandle, nullptr, 0));
     }
 
-    // Create module from PTX
-    OptixModule module = nullptr;
-    OptixPipelineCompileOptions pipelineCompileOptions = {};
-    {
-        OptixModuleCompileOptions moduleCompileOptions = {};
-        pipelineCompileOptions.usesMotionBlur = false;
-        pipelineCompileOptions.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
-        pipelineCompileOptions.numPayloadValues = 2;
-        pipelineCompileOptions.numAttributeValues = 2;
-        pipelineCompileOptions.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
-        pipelineCompileOptions.pipelineLaunchParamsVariableName = "params";
-
-        std::string ptx;
-        const char* ptxEnv = std::getenv("OPTIX_INTERSECT_PTX");
-        if (!ptxEnv) {
-            std::cerr << "OPTIX_INTERSECT_PTX not set!\n";
-        } else {
-            ptx = LoadPTX(ptxEnv);
-        }
-
-        char log[2048];
-        size_t logSize = sizeof(log);
-        OPTIX_CHECK(optixModuleCreate(context, &moduleCompileOptions, &pipelineCompileOptions, ptx.c_str(), ptx.size(),
-                                      log, &logSize, &module));
-    }
-
-    // Program groups
-    OptixProgramGroup raygenPG = nullptr;
-    OptixProgramGroup hitPG = nullptr;
-    OptixProgramGroup missPG = nullptr;
-    {
-        OptixProgramGroupOptions programGroupOptions = {};
-        char log[2048];
-        size_t logSize = sizeof(log);
-
-        OptixProgramGroupDesc raygenDesc = {};
-        raygenDesc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
-        raygenDesc.raygen.module = module;
-        raygenDesc.raygen.entryFunctionName = "__raygen__rg";
-        OPTIX_CHECK(optixProgramGroupCreate(context, &raygenDesc, 1, &programGroupOptions, log, &logSize, &raygenPG));
-
-        OptixProgramGroupDesc hitDesc = {};
-        hitDesc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
-        hitDesc.hitgroup.moduleCH = module;
-        hitDesc.hitgroup.entryFunctionNameCH = "__closesthit__ch";
-        OPTIX_CHECK(optixProgramGroupCreate(context, &hitDesc, 1, &programGroupOptions, log, &logSize, &hitPG));
-
-        OptixProgramGroupDesc missDesc = {};
-        missDesc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
-        missDesc.miss.module = module;
-        missDesc.miss.entryFunctionName = "__miss__ms";
-        OPTIX_CHECK(optixProgramGroupCreate(context, &missDesc, 1, &programGroupOptions, log, &logSize, &missPG));
-    }
-
-    // Pipeline
-    OptixPipeline pipeline = nullptr;
-    {
-        OptixPipelineLinkOptions linkOptions = {};
-        linkOptions.maxTraceDepth = 1;
-        char log[2048];
-        size_t logSize = sizeof(log);
-        OptixProgramGroup groups[] = {raygenPG, missPG, hitPG};
-        OPTIX_CHECK(optixPipelineCreate(context, &pipelineCompileOptions, &linkOptions, groups, 3, log, &logSize,
-                                        &pipeline));
-        // Conservative stack sizes for simple trace
-        OPTIX_CHECK(optixPipelineSetStackSize(pipeline,
-                                              /*directCallableStackSizeFromTraversal*/ 2 * 1024,
-                                              /*directCallableStackSizeFromState*/ 2 * 1024,
-                                              /*continuationStackSize*/ 2 * 1024,
-                                              /*maxTraversableGraphDepth*/ 1));
-    }
-
-    // SBT
+    // Setup SBT (using cached device memory)
     OptixShaderBindingTable sbt = {};
-    {
-        CUdeviceptr d_raygenRecord = 0;
-        RayGenSbtRecord rg = {};
-        OPTIX_CHECK(optixSbtRecordPackHeader(raygenPG, &rg));
-        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_raygenRecord), sizeof(RayGenSbtRecord)));
-        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_raygenRecord), &rg, sizeof(RayGenSbtRecord),
-                              cudaMemcpyHostToDevice));
-
-        CUdeviceptr d_hitRecord = 0;
-        HitSbtRecord hg = {};
-        OPTIX_CHECK(optixSbtRecordPackHeader(hitPG, &hg));
-        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_hitRecord), sizeof(HitSbtRecord)));
-        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_hitRecord), &hg, sizeof(HitSbtRecord), cudaMemcpyHostToDevice));
-
-        CUdeviceptr d_missRecord = 0;
-        MissSbtRecord ms = {};
-        OPTIX_CHECK(optixSbtRecordPackHeader(missPG, &ms));
-        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_missRecord), sizeof(MissSbtRecord)));
-        CUDA_CHECK(
-                cudaMemcpy(reinterpret_cast<void*>(d_missRecord), &ms, sizeof(MissSbtRecord), cudaMemcpyHostToDevice));
-
-        sbt.raygenRecord = d_raygenRecord;
-        sbt.hitgroupRecordBase = d_hitRecord;
-        sbt.hitgroupRecordStrideInBytes = sizeof(HitSbtRecord);
-        sbt.hitgroupRecordCount = 1;
-        sbt.missRecordBase = d_missRecord;
-        sbt.missRecordStrideInBytes = sizeof(MissSbtRecord);
-        sbt.missRecordCount = 1;
-    }
+    sbt.raygenRecord = g_optixCtx.d_raygenRecord;
+    sbt.hitgroupRecordBase = g_optixCtx.d_hitRecord;
+    sbt.hitgroupRecordStrideInBytes = sizeof(HitSbtRecord);
+    sbt.hitgroupRecordCount = 1;
+    sbt.missRecordBase = g_optixCtx.d_missRecord;
+    sbt.missRecordStrideInBytes = sizeof(MissSbtRecord);
+    sbt.missRecordCount = 1;
 
     // Launch
     py::array_t<int> result(N);
@@ -302,7 +334,7 @@ py::array_t<int> intersect(py::array_t<float, py::array::c_style | py::array::fo
         CUstream stream;
         CUDA_CHECK(cudaStreamCreate(&stream));
         OPTIX_CHECK(
-                optixLaunch(pipeline, stream, d_params, sizeof(LaunchParams), &sbt, params.Width, params.Height, 1));
+                optixLaunch(g_optixCtx.pipeline, stream, d_params, sizeof(LaunchParams), &sbt, params.Width, params.Height, 1));
         CUDA_CHECK(cudaStreamSynchronize(stream));
 
         // Copy back
@@ -319,26 +351,35 @@ py::array_t<int> intersect(py::array_t<float, py::array::c_style | py::array::fo
         CUDA_CHECK(cudaStreamDestroy(stream));
     }
 
-    // Cleanup static allocations & OptiX constructs
+    // Cleanup per-call GAS allocations
     CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_vertices)));
     CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_indices)));
     CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_tempBufferGas)));
     CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_gasOutputBuffer)));
-    CUDA_CHECK(cudaFree(reinterpret_cast<void*>(sbt.raygenRecord)));
-    CUDA_CHECK(cudaFree(reinterpret_cast<void*>(sbt.hitgroupRecordBase)));
-    CUDA_CHECK(cudaFree(reinterpret_cast<void*>(sbt.missRecordBase)));
-    optixPipelineDestroy(pipeline);
-    optixProgramGroupDestroy(raygenPG);
-    optixProgramGroupDestroy(hitPG);
-    optixProgramGroupDestroy(missPG);
-    optixModuleDestroy(module);
-    optixDeviceContextDestroy(context);
 
     return result;
+}
+
+// Explicit cleanup function (optional, for manual control)
+void cleanup_optix() {
+    std::lock_guard<std::mutex> lock(g_optixCtx.mutex);
+    g_optixCtx.cleanup();
 }
 
 PYBIND11_MODULE(optixbaker, m) {
     m.doc() = "OptiX triangle intersection module";
     m.def("intersect", &intersect, py::arg("origins"), py::arg("directions"), py::arg("vertices"), py::arg("indices"),
-          R"doc(Return primitive indices for ray-triangle intersections using NVIDIA OptiX.\n\nParameters:\n  origins: (N,3) float array of ray origins\n  directions: (N,3) float array of ray directions\n  triangles: (M,3,3) float array of triangle vertices\nReturns:\n  (N,) int array of primitive indices; -1 indicates a miss.\n\nEnvironment:\n  Set OPTIX_INTERSECT_PTX to override the path to optix_kernel.ptx if needed.)doc");
+          R"doc(Return primitive indices for ray-triangle intersections using NVIDIA OptiX.
+
+Parameters:
+  origins: (N,3) float array of ray origins
+  directions: (N,3) float array of ray directions
+  vertices: (V,3) float array of vertices OR (M,3,3) array of triangle vertices
+  indices: (T,3) uint array of triangle indices (when vertices is (V,3))
+Returns:
+  (N,) int array of primitive indices; -1 indicates a miss.
+
+Environment:
+  Set OPTIX_INTERSECT_PTX to override the path to optix_kernel.ptx if needed.)doc");
+    m.def("cleanup", &cleanup_optix, "Explicitly cleanup OptiX resources.");
 }

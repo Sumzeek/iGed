@@ -25,11 +25,11 @@ RuntimeLodLayer::RuntimeLodLayer()
     // Load model
     {
         // Bake
-        auto oriMesh = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
+        // auto oriMesh = MeshBaker::LoadObjFile("assets/models/Icosphere.obj");
         // auto bakedMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_baked.obj");
         // MeshBaker::BakeTest(bakedMesh, oriMesh, 1024);
 
-        m_OriginModel = oriMesh;
+        m_OriginModel = MeshBaker::LoadObjFile("assets/models/Bayon Lion.obj");
         {
             auto vertices = m_OriginModel.Vertices;
             auto indices = m_OriginModel.Indices;
@@ -47,7 +47,7 @@ RuntimeLodLayer::RuntimeLodLayer()
             m_OriginModelVertexArray->SetIndexBuffer(indexBuffer);
         }
 
-        m_Model = MeshBaker::LoadObjFile("assets/models/Icosphere_baked.obj");
+        m_Model = MeshBaker::LoadObjFile("assets/models/Bayon Lion_baked.obj");
         {
             // Model displace map
             {
@@ -65,9 +65,6 @@ RuntimeLodLayer::RuntimeLodLayer()
                 m_ModelDisplaceMap = iGe::Texture2D::Create(displaceMapSpec);
                 m_ModelDisplaceMap->SetData(displaces.data(), displaces.size() * sizeof(float));
                 m_ModelDisplaceMap->Bind(3);
-
-                // // Fill curvature data
-                // FillCurvature(m_Model, w, h, displaces);
             }
 
             // Model normal map
@@ -128,8 +125,20 @@ RuntimeLodLayer::RuntimeLodLayer()
             }
 
             // NTF model
-            m_NTFModel = NTF::Model::Load("assets/ntf/Icosphere_baked.ntf");
+            m_NTFModel = NTF::Model::Load("assets/ntfs/Bayon Lion_baked.ntf");
             m_NTFBuffers.Create(m_NTFModel);
+
+            // Build quad edge mapping for edge-based tessellation factors
+            auto quadCount = m_Model.Indices.size() / 4;
+            m_QuadEdgeMapping = m_Model.BuildQuadEdgeMapping();
+            m_EdgeCount = m_QuadEdgeMapping.EdgeCount;
+
+            // Create buffer for quad-to-edge ID mapping (uvec4 per quad)
+            m_QuadEdgeIdBuffer = iGe::Buffer::Create(reinterpret_cast<void*>(m_QuadEdgeMapping.QuadEdgeIds.data()),
+                                                     m_QuadEdgeMapping.QuadEdgeIds.size() * sizeof(glm::uvec4));
+
+            // Create buffer for per-edge accumulated tessellation factors (uint per edge)
+            m_EdgeTessFactorBuffer = iGe::Buffer::Create(nullptr, m_EdgeCount * sizeof(std::uint32_t));
         }
     }
 
@@ -212,6 +221,7 @@ RuntimeLodLayer::RuntimeLodLayer()
     // m_ComputeShaderLibrary.Load("SWRasterizer", "assets/shaders/glsl/SWRasterizer.json");
 
     m_MeshShaderLibrary.Load("SWTessellator", "assets/shaders/other/SWTessellator.json");
+    m_ComputeShaderLibrary.Load("TFCalculator", "assets/shaders/other/TFCalculator.json");
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -306,15 +316,37 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
                 m_ModelDisplaceMap->Bind(3);
                 m_ModelNormalMap->Bind(4);
 
-                // iGe::Renderer::SubmitPatches(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray, 4,
-                //                              m_ModelTransform);
-                m_ModelPositionBuffer->Bind(5, iGe::BufferType::Storage);
-                m_ModelNormalBuffer->Bind(6, iGe::BufferType::Storage);
-                m_ModelTexCoordBuffer->Bind(7, iGe::BufferType::Storage);
-                m_ModelQuadIndexBuffer->Bind(8, iGe::BufferType::Storage);
-                m_NTFBuffers.Bind(10, 11, 12);
-                iGe::Renderer::DispatchTask(m_MeshShaderLibrary.Get("SWTessellator"), 0, (quadSize + 31) / 32,
-                                            m_ModelTransform);
+                // HW Tessellation and rendering
+                {
+                    // iGe::Renderer::SubmitPatches(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray, 4,
+                    //                              m_ModelTransform);
+                }
+
+
+                // Software tessellation and rendering
+                {
+                    m_ModelPositionBuffer->Bind(5, iGe::BufferType::Storage);
+                    m_ModelNormalBuffer->Bind(6, iGe::BufferType::Storage);
+                    m_ModelTexCoordBuffer->Bind(7, iGe::BufferType::Storage);
+                    m_ModelQuadIndexBuffer->Bind(8, iGe::BufferType::Storage);
+
+                    // Bind edge-based tessellation factor buffers
+                    m_QuadEdgeIdBuffer->Bind(9, iGe::BufferType::Storage);      // Quad-to-edge ID mapping
+                    m_EdgeTessFactorBuffer->Bind(10, iGe::BufferType::Storage); // Per-edge accumulated tess factors
+
+                    // Clear edge tessellation factor buffer before accumulation
+                    std::vector<std::uint32_t> zeroData(m_EdgeCount, 0);
+                    m_EdgeTessFactorBuffer->SetData(zeroData.data(), m_EdgeCount * sizeof(std::uint32_t));
+
+                    // NTF - Precompute tessellation factor (accumulates to per-edge buffer)
+                    m_NTFBuffers.Bind(11, 12, 13);
+                    iGe::Renderer::Dispatch(m_ComputeShaderLibrary.Get("TFCalculator"),
+                                            glm::vec3{(quadSize + 31) / 32, 1, 1}, m_ModelTransform);
+
+                    // Mesh shader tessellation and rendering
+                    iGe::Renderer::DispatchTask(m_MeshShaderLibrary.Get("SWTessellator"), 0, (quadSize + 31) / 32,
+                                                m_ModelTransform);
+                }
             }
         }
 

@@ -147,3 +147,35 @@ endforeach ()
 
 add_custom_target(CopyPtxsTarget DEPENDS ${COPIED_PTX_FILES})
 add_dependencies(${TARGET_NAME} CopyPtxsTarget)
+
+# Copy ntf files
+file(GLOB_RECURSE NTF_FILES CONFIGURE_DEPENDS "${ASSETS_SOURCE_DIR}/ntfs/*")
+SOURCE_GROUP("ntfs" FILES ${NTF_FILES})
+
+# Create output directory if it doesn't exist
+file(MAKE_DIRECTORY "${ASSETS_OUTPUT_DIR}/ntfs")
+
+set(COPIED_NTF_FILES "")
+foreach (NTF_FILE ${NTF_FILES})
+    # Get relative path from ntfs directory
+    file(RELATIVE_PATH RELATIVE_PATH "${ASSETS_SOURCE_DIR}/ntfs" "${NTF_FILE}")
+    # Create corresponding output path
+    set(OUTPUT_FILE "${ASSETS_OUTPUT_DIR}/ntfs/${RELATIVE_PATH}")
+    list(APPEND COPIED_NTF_FILES ${OUTPUT_FILE})
+
+    # Get directory of output file
+    get_filename_component(OUTPUT_DIR "${OUTPUT_FILE}" DIRECTORY)
+
+    # Add custom command to copy individual file
+    add_custom_command(
+            OUTPUT "${OUTPUT_FILE}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NTF_FILE}" "${OUTPUT_FILE}"
+            DEPENDS "${NTF_FILE}"
+            COMMENT "Copying NTF: ${RELATIVE_PATH}"
+            VERBATIM
+    )
+endforeach ()
+
+add_custom_target(CopyNtfsTarget DEPENDS ${COPIED_NTF_FILES})
+add_dependencies(${TARGET_NAME} CopyNtfsTarget)

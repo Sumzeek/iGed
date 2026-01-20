@@ -118,7 +118,7 @@ class Preprocessor:
         ms.load_new_mesh(self.input_mesh)
 
         original_faces = ms.current_mesh().face_number()
-        target_faces = max(1, original_faces // 1000)
+        target_faces = min(2000, original_faces // 1000)
         logging.info(f"[Stage 1] Original faces={original_faces} target={target_faces}")
 
         ms.meshing_decimation_quadric_edge_collapse(targetfacenum=target_faces, qualitythr=1.0)
@@ -358,7 +358,7 @@ if __name__ == '__main__':
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
-    input_mesh = "assets/Icosphere.obj"
+    input_mesh = "assets/Bayon Lion.obj"
     resolution = 1024
 
     preprocessor = Preprocessor(input_mesh, resolution)

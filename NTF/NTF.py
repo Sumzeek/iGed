@@ -6,6 +6,8 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Optional, Tuple, List
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
 
 import numpy as np
 import torch
@@ -128,7 +130,236 @@ class NTF(nn.Module):
 # ---------- Training Data Generation ----------
 from OptixBaker import import_optixbaker
 from Preprocessor import parse_quad_mesh
-from Tessellator import DisplacementSampler, QuadTessellator, QuadTessParams, Vertex
+from Tessellator import DisplacementSampler, QuadTessellator, QuadTessellatorFast, QuadTessParams, Vertex
+
+
+# ========== 多进程共享数据结构 ==========
+@dataclass
+class QuadProcessingContext:
+    """Context data shared across all worker processes."""
+    quads_baked: list
+    verts_baked: list
+    norms_baked: list
+    uvs_baked: list
+    orig_vertices: np.ndarray
+    orig_indices: np.ndarray
+    sample_us: np.ndarray
+    sample_vs: np.ndarray
+    samples_per_dim: int
+    max_tess_rate: int
+    disp_exr_path: str
+    resolution: int
+
+
+# 全局变量，用于在子进程中存储上下文
+_worker_context: Optional[QuadProcessingContext] = None
+_worker_disp_sampler: Optional[DisplacementSampler] = None
+_worker_optix = None
+
+
+def _worker_initializer(context: QuadProcessingContext) -> None:
+    """Initialize worker process with shared context."""
+    global _worker_context, _worker_disp_sampler, _worker_optix
+    _worker_context = context
+    # 每个子进程独立加载 DisplacementSampler 和 optix
+    _worker_disp_sampler = DisplacementSampler(context.disp_exr_path, context.resolution)
+    _worker_optix = import_optixbaker()
+
+
+def _bilinear(p: List[np.ndarray], u: float, v: float) -> np.ndarray:
+    """Bilinear interpolation of four points."""
+    w00 = (1 - u) * (1 - v)
+    w10 = u * (1 - v)
+    w01 = u * v
+    w11 = (1 - u) * v
+    return w00 * p[0] + w10 * p[1] + w01 * p[2] + w11 * p[3]
+
+
+def _bilinear_batch(p: List[np.ndarray], us: np.ndarray, vs: np.ndarray) -> np.ndarray:
+    """Vectorized bilinear interpolation for multiple (u, v) pairs.
+
+    Args:
+        p: List of 4 corner points, each shape (3,)
+        us: array of u values, shape (N,)
+        vs: array of v values, shape (N,)
+
+    Returns:
+        Interpolated points, shape (N, 3)
+    """
+    w00 = ((1 - us) * (1 - vs))[:, None]
+    w10 = (us * (1 - vs))[:, None]
+    w01 = (us * vs)[:, None]
+    w11 = ((1 - us) * vs)[:, None]
+    return w00 * p[0] + w10 * p[1] + w01 * p[2] + w11 * p[3]
+
+
+def _intersect_rays_with_mesh(origins, dirs, vertices, indices):
+    """Ray/mesh intersection using Optix - vectorized t calculation."""
+    global _worker_optix
+    hits = _worker_optix.intersect(origins, dirs, vertices, indices)
+    hits = np.asarray(hits, dtype=np.int32)
+
+    num_rays = origins.shape[0]
+    t_out = np.full(num_rays, -1.0, dtype=np.float32)
+
+    # Find valid hits
+    valid_mask = hits >= 0
+    valid_indices = np.where(valid_mask)[0]
+
+    if len(valid_indices) == 0:
+        return t_out
+
+    # Get triangle data for all valid hits at once
+    valid_tri_ids = hits[valid_indices]
+    tri_v_indices = indices[valid_tri_ids]  # shape: (N_valid, 3)
+
+    # Gather triangle vertices
+    v0 = vertices[tri_v_indices[:, 0]]  # shape: (N_valid, 3)
+    v1 = vertices[tri_v_indices[:, 1]]
+    v2 = vertices[tri_v_indices[:, 2]]
+
+    # Gather ray data
+    ori = origins[valid_indices]
+    d = dirs[valid_indices]
+
+    # Vectorized Möller–Trumbore intersection
+    e1 = v1 - v0
+    e2 = v2 - v0
+    pvec = np.cross(d, e2)
+    det = np.einsum('ij,ij->i', e1, pvec)
+
+    # Handle near-zero determinants
+    valid_det_mask = np.abs(det) > 1e-8
+
+    # Only compute for valid determinants
+    sub_indices = valid_indices[valid_det_mask]
+    if len(sub_indices) == 0:
+        return t_out
+
+    inv_det = 1.0 / det[valid_det_mask]
+    tvec = ori[valid_det_mask] - v0[valid_det_mask]
+    qvec = np.cross(tvec, e1[valid_det_mask])
+    t = np.einsum('ij,ij->i', e2[valid_det_mask], qvec) * inv_det
+
+    t_out[sub_indices] = np.abs(t)
+    return t_out
+
+
+def _rate_score(sb: int, sr: int, st: int, sl: int) -> Tuple[float, float]:
+    """Return (sum, variance) score; smaller is better."""
+    rates = np.array([sb, sr, st, sl], dtype=np.float32)
+    return float(rates.sum()), float(rates.var())
+
+
+def process_single_quad(qid: int):
+    """Process a single quad - designed to run in a worker process.
+
+    Optimized version with:
+    - Vectorized ray generation
+    - Pre-created quad vertices (reused across all rate combinations)
+    - Efficient numpy operations
+    """
+    global _worker_context, _worker_disp_sampler
+    ctx = _worker_context
+
+    face = ctx.quads_baked[qid]
+    p = [np.asarray(ctx.verts_baked[i], dtype=np.float32) for i in face.verts]
+    n = [np.asarray(ctx.norms_baked[i], dtype=np.float32) for i in face.norms]
+    uv_px = [np.asarray(ctx.uvs_baked[i][:2], dtype=np.float32) for i in face.uvs]
+
+    S = ctx.samples_per_dim
+    num_rays = S * S
+
+    # Vectorized ray generation - use meshgrid and batch bilinear
+    us_grid, vs_grid = np.meshgrid(ctx.sample_us, ctx.sample_vs)
+    us_flat = us_grid.ravel().astype(np.float32)
+    vs_flat = vs_grid.ravel().astype(np.float32)
+
+    # Batch bilinear interpolation
+    origins = _bilinear_batch(p, us_flat, vs_flat)
+    dirs = _bilinear_batch(n, us_flat, vs_flat)
+
+    # Normalize directions
+    norms = np.linalg.norm(dirs, axis=1, keepdims=True)
+    dirs = dirs / (norms + 1e-8)
+
+    # Offset origins slightly along normals
+    origins = origins - 1e-6 * dirs
+
+    # Reference distances on original mesh
+    t_ref = _intersect_rays_with_mesh(origins, dirs, ctx.orig_vertices, ctx.orig_indices)
+
+    # Pre-compute valid mask for reference
+    t_ref_valid = t_ref > 0
+
+    # Pre-create quad vertices once (they don't change across rate combinations)
+    quad_verts = [
+        Vertex(position=tuple(p[0].tolist()),
+               normal=tuple(n[0].tolist()),
+               uv=tuple(uv_px[0].tolist())),
+        Vertex(position=tuple(p[1].tolist()),
+               normal=tuple(n[1].tolist()),
+               uv=tuple(uv_px[1].tolist())),
+        Vertex(position=tuple(p[2].tolist()),
+               normal=tuple(n[2].tolist()),
+               uv=tuple(uv_px[2].tolist())),
+        Vertex(position=tuple(p[3].tolist()),
+               normal=tuple(n[3].tolist()),
+               uv=tuple(uv_px[3].tolist())),
+    ]
+
+    # All full rows (one per rate combination) for this quad
+    full_rows: List[Tuple[int, int, int, int, int, int, int, int, float]] = []
+
+    v0, v1, v2, v3 = face.verts
+    max_tess_rate = ctx.max_tess_rate
+
+    # Generate all rate combinations using itertools for efficiency
+    from itertools import product
+    rate_range = range(1, max_tess_rate + 1)
+
+    for s_bottom, s_right, s_top, s_left in product(rate_range, repeat=4):
+        params = QuadTessParams(
+            edge=(s_bottom, s_right, s_top, s_left),
+            inner=((s_bottom + s_top) // 2, (s_right + s_left) // 2),
+            disp_sampler=_worker_disp_sampler,
+        )
+
+        # Use fast tessellator with direct numpy array output
+        tessellator = QuadTessellatorFast(params)
+        mesh_vertices, mesh_indices = tessellator.tessellate_arrays(quad_verts)
+
+        t_tess = _intersect_rays_with_mesh(origins, dirs, mesh_vertices, mesh_indices)
+
+        # Compute epsilon efficiently
+        mask = t_ref_valid & (t_tess > 0)
+        if not np.any(mask):
+            epsilon = -1.0
+        else:
+            epsilon = float(np.max(np.abs(t_ref[mask] - t_tess[mask])))
+
+        full_rows.append((qid, v0, v1, v2, v3,
+                          s_bottom, s_right, s_top, s_left, epsilon))
+
+    # Sort and build Pareto frontier
+    full_rows_sorted = sorted(full_rows, key=lambda r: r[-1])
+
+    pareto_rows: List[Tuple[int, int, int, int, float, int, int, int, int]] = []
+    best_score: Optional[Tuple[float, float]] = None
+    best_rates: Optional[Tuple[int, int, int, int]] = None
+
+    for (qid_, v0_, v1_, v2_, v3_, sb, sr, st, sl, eps) in full_rows_sorted:
+        if not np.isfinite(eps) or eps < 0.0:
+            continue
+        cur_score = _rate_score(sb, sr, st, sl)
+        if best_score is None or cur_score < best_score:
+            best_score = cur_score
+            best_rates = (sb, sr, st, sl)
+
+        pareto_rows.append((qid_, v0_, v1_, v2_, v3_, eps,
+                            best_rates[0], best_rates[1], best_rates[2], best_rates[3]))
+
+    return full_rows, pareto_rows
 
 
 def generate_quad_training_csv(
@@ -185,56 +416,17 @@ def generate_quad_training_csv(
     num_quads = len(quads_baked)
     logging.info(f"[NTF] Parsed baked mesh {baked_mesh}, quads={num_quads}")
 
-    # 3. Displacement sampler over baked_disp_exr
+    # 3. Check displacement EXR exists
     if not os.path.isfile(baked_disp_exr):
         logging.error(f"[NTF] Displacement EXR not found: {baked_disp_exr}")
         return
-    disp_sampler = DisplacementSampler(baked_disp_exr, resolution)
 
     # 4. Precompute sample grid on [0,1]^2
     S = samples_per_dim
     sample_us = np.linspace(0.0, 1.0, S, dtype=np.float32)
     sample_vs = np.linspace(0.0, 1.0, S, dtype=np.float32)
 
-    # 5. Helper: bilinear interpolation of four points/normals
-    def bilinear(p: List[np.ndarray], u: float, v: float) -> np.ndarray:
-        w00 = (1 - u) * (1 - v)
-        w10 = u * (1 - v)
-        w01 = u * v
-        w11 = (1 - u) * v
-        return w00 * p[0] + w10 * p[1] + w01 * p[2] + w11 * p[3]
-
-    # 6. Ray/mesh intersection helper (Möller–Trumbore) using Optix hits
-    optix = import_optixbaker()
-
-    def intersect_rays_with_mesh(origins, dirs, vertices, indices):
-        hits = optix.intersect(origins, dirs, vertices, indices)
-        t_out = np.full(origins.shape[0], -1.0, dtype=np.float32)
-        for i, tri_id in enumerate(hits):
-            if tri_id < 0:
-                continue
-            i0, i1, i2 = indices[tri_id]
-            v0 = vertices[i0]
-            v1 = vertices[i1]
-            v2 = vertices[i2]
-            ori = origins[i]
-            d = dirs[i]
-            e1 = v1 - v0
-            e2 = v2 - v0
-            pvec = np.cross(d, e2)
-            det = np.dot(e1, pvec)
-            if abs(det) < 1e-8:
-                continue
-            inv_det = 1.0 / det
-            tvec = ori - v0
-            u = np.dot(tvec, pvec) * inv_det
-            qvec = np.cross(tvec, e1)
-            v = np.dot(d, qvec) * inv_det
-            t = np.dot(e2, qvec) * inv_det
-            t_out[i] = abs(t)
-        return t_out
-
-    # 7. Write points.csv from baked mesh vertices
+    # 5. Write points.csv from baked mesh vertices
     logging.info(f"[NTF] Writing points CSV to {points_csv}")
     with open(points_csv, "w", newline="", encoding="utf-8") as f_pts:
         writer = csv.writer(f_pts)
@@ -242,124 +434,26 @@ def generate_quad_training_csv(
         for pid, (x, y, z) in enumerate(verts_baked):
             writer.writerow([pid, float(x), float(y), float(z)])
 
-    # 8. Per-quad epsilon computation: write full quads.csv and, in memory,
-    #    build a per-quad Pareto-compressed view used for quads_pareto.csv.
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import collections
+    # 6. Create context for worker processes
+    context = QuadProcessingContext(
+        quads_baked=quads_baked,
+        verts_baked=verts_baked,
+        norms_baked=norms_baked,
+        uvs_baked=uvs_baked,
+        orig_vertices=orig_vertices,
+        orig_indices=orig_indices,
+        sample_us=sample_us,
+        sample_vs=sample_vs,
+        samples_per_dim=S,
+        max_tess_rate=max_tess_rate,
+        disp_exr_path=baked_disp_exr,
+        resolution=resolution,
+    )
 
     logging.info(f"[NTF] Writing quad CSV to {quads_csv}, max_rate={max_tess_rate}, samples_per_quad={S * S}")
 
-    def rate_score(sb: int, sr: int, st: int, sl: int) -> Tuple[float, float]:
-        """Return (sum, variance) score; smaller is better.
-
-        We first minimize the sum of the 4 rates (cheaper overall tessellation),
-        and in case of ties we minimize the variance to prefer more uniform
-        distributions such as (2,2,2,2) over (1,4,4,1).
-        """
-        rates = np.array([sb, sr, st, sl], dtype=np.float32)
-        return float(rates.sum()), float(rates.var())
-
-    def process_single_quad(qid: int):
-        face = quads_baked[qid]
-        p = [np.asarray(verts_baked[i], dtype=np.float32) for i in face.verts]
-        n = [np.asarray(norms_baked[i], dtype=np.float32) for i in face.norms]
-        uv_px = [np.asarray(uvs_baked[i][:2], dtype=np.float32) for i in face.uvs]
-
-        num_rays = S * S
-        origins = np.zeros((num_rays, 3), dtype=np.float32)
-        dirs = np.zeros((num_rays, 3), dtype=np.float32)
-
-        idx = 0
-        for vi in range(S):
-            v_ = float(sample_vs[vi])
-            for ui in range(S):
-                u_ = float(sample_us[ui])
-                pos = bilinear(p, u_, v_)
-                nor = bilinear(n, u_, v_)
-                nor = nor / (np.linalg.norm(nor) + 1e-8)
-                origins[idx] = pos - 1e-6 * nor
-                dirs[idx] = nor
-                idx += 1
-
-        # Reference distances on original mesh
-        t_ref = intersect_rays_with_mesh(origins, dirs, orig_vertices, orig_indices)
-
-        # All full rows (one per rate combination) for this quad
-        full_rows: List[Tuple[int, int, int, int, int, int, int, int, float]] = []
-
-        # Per-quad Pareto frontier records (local to this quad only)
-        pareto_rows: List[Tuple[int, int, int, int, float, int, int, int, int]] = []
-        best_score: Optional[Tuple[float, float]] = None
-        best_rates: Optional[Tuple[int, int, int, int]] = None
-
-        v0, v1, v2, v3 = face.verts
-
-        for s_bottom in range(1, max_tess_rate + 1):
-            for s_right in range(1, max_tess_rate + 1):
-                for s_top in range(1, max_tess_rate + 1):
-                    for s_left in range(1, max_tess_rate + 1):
-                        quad_verts = [
-                            Vertex(position=(float(p[0][0]), float(p[0][1]), float(p[0][2])),
-                                   normal=(float(n[0][0]), float(n[0][1]), float(n[0][2])),
-                                   uv=(float(uv_px[0][0]), float(uv_px[0][1]))),
-                            Vertex(position=(float(p[1][0]), float(p[1][1]), float(p[1][2])),
-                                   normal=(float(n[1][0]), float(n[1][1]), float(n[1][2])),
-                                   uv=(float(uv_px[1][0]), float(uv_px[1][1]))),
-                            Vertex(position=(float(p[2][0]), float(p[2][1]), float(p[2][2])),
-                                   normal=(float(n[2][0]), float(n[2][1]), float(n[2][2])),
-                                   uv=(float(uv_px[2][0]), float(uv_px[2][1]))),
-                            Vertex(position=(float(p[3][0]), float(p[3][1]), float(p[3][2])),
-                                   normal=(float(n[3][0]), float(n[3][1]), float(n[3][2])),
-                                   uv=(float(uv_px[3][0]), float(uv_px[3][1]))),
-                        ]
-
-                        params = QuadTessParams(
-                            edge=(s_bottom, s_right, s_top, s_left),
-                            inner=((s_bottom + s_top) // 2, (s_right + s_left) // 2),
-                            disp_sampler=disp_sampler,
-                        )
-
-                        tessellator = QuadTessellator(params)
-                        verts_tess, tris_tess = tessellator.tessellate(quad_verts)
-
-                        mesh_vertices = np.array([v.position for v in verts_tess], dtype=np.float32)
-                        mesh_indices = np.array(tris_tess, dtype=np.uint32)
-
-                        t_tess = intersect_rays_with_mesh(origins, dirs, mesh_vertices, mesh_indices)
-
-                        mask = (t_ref > 0) & (t_tess > 0)
-                        if not np.any(mask):
-                            epsilon = -1.0
-                        else:
-                            epsilon = float(np.max(np.abs(t_ref[mask] - t_tess[mask])))
-
-                        full_rows.append((qid, v0, v1, v2, v3,
-                                          s_bottom, s_right, s_top, s_left, epsilon))
-
-        # For this quad, sort full_rows by epsilon ascending and build a
-        # local prefix-optimal frontier over rate combinations.
-        # For each epsilon (after sorting ascending), we maintain the
-        # best rate combination seen so far (using rate_score) and emit
-        # one record. This means each valid epsilon has a corresponding
-        # best rate, and later (worse) combinations are effectively
-        # replaced by earlier, cheaper/more-uniform ones.
-        full_rows_sorted = sorted(full_rows, key=lambda r: r[-1])
-        for (qid_, v0_, v1_, v2_, v3_, sb, sr, st, sl, eps) in full_rows_sorted:
-            if not np.isfinite(eps) or eps < 0.0:
-                continue
-            cur_score = rate_score(sb, sr, st, sl)
-            if best_score is None or cur_score < best_score:
-                best_score = cur_score
-                best_rates = (sb, sr, st, sl)
-
-            # Always emit the current best rates for this epsilon
-            pareto_rows.append((qid_, v0_, v1_, v2_, v3_, eps,
-                                best_rates[0], best_rates[1], best_rates[2], best_rates[3]))
-
-        return full_rows, pareto_rows
-
-    max_workers = min(8, os.cpu_count() or 4)
-    logging.info(f"[NTF] Using ThreadPoolExecutor with max_workers={max_workers}")
+    max_workers = min(60, int(os.cpu_count() * 0.5))
+    logging.info(f"[NTF] Using ProcessPoolExecutor with max_workers={max_workers}")
 
     with open(quads_csv, "w", newline="", encoding="utf-8") as f_q, \
             open(pareto_csv, "w", newline="", encoding="utf-8") as f_p:
@@ -376,7 +470,11 @@ def generate_quad_training_csv(
             "sample_rate_bottom", "sample_rate_right", "sample_rate_top", "sample_rate_left",
         ])
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ProcessPoolExecutor(
+                max_workers=max_workers,
+                initializer=_worker_initializer,
+                initargs=(context,)
+        ) as executor:
             futures = {executor.submit(process_single_quad, qid): qid for qid in range(num_quads)}
             completed = 0
             for future in as_completed(futures):
@@ -390,24 +488,28 @@ def generate_quad_training_csv(
                 writer_full.writerows(full_rows)
                 writer_pareto.writerows(pareto_rows)
                 completed += 1
-                logging.info(f"[NTF] Completed {completed}/{num_quads} quads")
+                if completed % 10 == 0 or completed == num_quads:
+                    logging.info(f"[NTF] Completed {completed}/{num_quads} quads")
 
     logging.info(
         f"[NTF] Quad training data generation finished.\n  points_csv={points_csv}\n  quads_csv={quads_csv}\n  pareto_csv={pareto_csv}")
 
 
 if __name__ == "__main__":
+    # Windows multi-process must use freeze_support
+    mp.freeze_support()
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
-    orig_mesh = "assets/Icosphere.obj"
-    baked_mesh = "assets/Icosphere_baked.obj"
-    disp_exr = "assets/Icosphere_baked_disp.exr"
+    orig_mesh = "assets/Bayon Lion.obj"
+    baked_mesh = "assets/Bayon Lion_baked.obj"
+    disp_exr = "assets/Bayon Lion_baked_disp.exr"
     resolution = 1024
     sample_per_dim = 100
-    max_tess_rate = 4
+    max_tess_rate = 8
 
     generate_quad_training_csv(orig_mesh, baked_mesh, disp_exr, resolution, max_tess_rate, sample_per_dim)

@@ -228,7 +228,7 @@ void OpenGLComputeShader::Unbind() const { glUseProgram(0); }
 void OpenGLComputeShader::Dispatch(std::uint32_t groupX, std::uint32_t groupY, std::uint32_t groupZ) {
     glUseProgram(m_RendererID);
     glDispatchCompute(groupX, groupY, groupZ);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 const std::string& OpenGLComputeShader::GetName() const { return m_Name; }

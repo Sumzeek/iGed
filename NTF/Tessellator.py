@@ -49,6 +49,44 @@ class DisplacementSampler:
 
         return float(displacement)
 
+    def sample_batch(self, u_px: np.ndarray, v_px: np.ndarray) -> np.ndarray:
+        """
+        Vectorized batch sampling of displacement values using bilinear interpolation.
+
+        Args:
+            u_px: U coordinates in pixel space, shape (N,)
+            v_px: V coordinates in pixel space, shape (N,)
+
+        Returns:
+            Interpolated displacement values, shape (N,)
+        """
+        H, W = self.disp.shape
+
+        # Compute integer pixel coordinates and fractional offsets
+        base_u = np.floor(u_px).astype(np.int32)
+        base_v = np.floor(v_px).astype(np.int32)
+        f_u = u_px - base_u
+        f_v = v_px - base_v
+
+        # Clamp coordinates to valid range
+        base_u = np.clip(base_u, 0, W - 1)
+        base_v = np.clip(base_v, 0, H - 1)
+        u1 = np.minimum(base_u + 1, W - 1)
+        v1 = np.minimum(base_v + 1, H - 1)
+
+        # Sample displacement values from the four neighboring texels
+        s00 = self.disp[base_v, base_u]
+        s10 = self.disp[base_v, u1]
+        s01 = self.disp[v1, base_u]
+        s11 = self.disp[v1, u1]
+
+        # Perform bilinear interpolation
+        sx0 = s00 + (s10 - s00) * f_u
+        sx1 = s01 + (s11 - s01) * f_u
+        displacement = sx0 + (sx1 - sx0) * f_v
+
+        return displacement
+
     def _load_exr(self, path: str):
         exr = OpenEXR.InputFile(path)
         header = exr.header()
@@ -326,6 +364,288 @@ class QuadTessellator:
         else:
             idx = base + (1 if prefer_up else 0)
         return int(QuadTessellator._clamp(idx, lo, hi))
+
+
+class QuadTessellatorFast:
+    """
+    Optimized QuadTessellator using NumPy vectorization.
+
+    This version first collects all unique (u, v) coordinates, then performs
+    batch bilinear interpolation and batch displacement sampling.
+    Returns numpy arrays directly for better integration with ray tracing.
+    """
+
+    def __init__(self, params: QuadTessParams):
+        # compute lift values
+        if params.lift is None:
+            iu, iv = params.inner
+            e_bottom, e_right, e_top, e_left = params.edge
+            denom = e_bottom + e_right + e_top + e_left + 2 * (iu + iv)
+            if denom <= 0:
+                lift = 0.0
+            else:
+                t = (iu * iv * 2) / denom
+                lift = (1 - math.sqrt(max(0.0, 1 - 1 / (t + 1)))) / 2
+            params.lift = (lift, lift, lift, lift)
+
+        self.params = params
+
+    def tessellate_arrays(self, quad) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Tessellate and return numpy arrays directly.
+
+        Args:
+            quad: List/tuple of 4 Vertex objects
+
+        Returns:
+            vertices: np.ndarray of shape (N, 3) - vertex positions
+            triangles: np.ndarray of shape (M, 3) - triangle indices
+        """
+        e_bottom, e_right, e_top, e_left = self.params.edge
+        iu, iv = self.params.inner
+        bottom, right, top, left = self.params.lift
+
+        du = (1.0 - left - right) / iu if iu > 0 else 0.0
+        dv = (1.0 - bottom - top) / iv if iv > 0 else 0.0
+
+        # Collect all (u, v) coordinates first
+        uv_list = []
+        tri_uv_indices = []  # Will store indices into uv_list for each triangle
+        uv_to_idx: Dict[Tuple[float, float], int] = {}
+
+        def add_uv(u: float, v: float) -> int:
+            """Add a (u,v) coordinate and return its index."""
+            u = max(0.0, min(1.0, u))
+            v = max(0.0, min(1.0, v))
+            key = (round(u, 9), round(v, 9))
+            idx = uv_to_idx.get(key)
+            if idx is not None:
+                return idx
+            idx = len(uv_list)
+            uv_list.append((u, v))
+            uv_to_idx[key] = idx
+            return idx
+
+        tris = []
+
+        # Inner grid
+        if iu > 0 and iv > 0:
+            for jv in range(iv):
+                v0 = bottom + jv * dv
+                v1 = bottom + (jv + 1) * dv
+                for ju in range(iu):
+                    u0 = left + ju * du
+                    u1 = left + (ju + 1) * du
+                    a = add_uv(u0, v0)
+                    b = add_uv(u1, v0)
+                    c = add_uv(u0, v1)
+                    d = add_uv(u1, v1)
+                    tris.append((a, b, c))
+                    tris.append((b, d, c))
+
+        # Bottom edge
+        if e_bottom > 0 and iu > 0 and bottom > 0:
+            edge_samples = self._generate_boundary_samples_fast(e_bottom, 0.0, 1.0)
+            p = len(edge_samples) - 1
+            q = iu
+            inner_us = np.array([left + j * du for j in range(q + 1)])
+
+            for k in range(p):
+                t_mid = (edge_samples[k] + edge_samples[k + 1]) * 0.5
+                r = self._nearest_index_fast((t_mid - left) / du, 0, q, True) if du > 1e-12 else 0
+                a = add_uv(edge_samples[k], 0.0)
+                b = add_uv(edge_samples[k + 1], 0.0)
+                c = add_uv(inner_us[r], bottom)
+                tris.append((a, b, c))
+
+            for j in range(q):
+                t_mid = left + (j + 0.5) * du
+                k = self._nearest_index_fast(e_bottom * t_mid, 0, e_bottom, False)
+                t_k = max(0.0, min(1.0, k / e_bottom))
+                a = add_uv(inner_us[j + 1], bottom)
+                b = add_uv(inner_us[j], bottom)
+                c = add_uv(t_k, 0.0)
+                tris.append((a, b, c))
+
+        # Top edge
+        if e_top > 0 and iu > 0 and top > 0:
+            edge_samples = self._generate_boundary_samples_fast(e_top, 0.0, 1.0)
+            p = len(edge_samples) - 1
+            q = iu
+            inner_us = np.array([left + j * du for j in range(q + 1)])
+
+            for k in range(p):
+                t_mid = (edge_samples[k] + edge_samples[k + 1]) * 0.5
+                r = self._nearest_index_fast((t_mid - left) / du, 0, q, True) if du > 1e-12 else 0
+                a = add_uv(edge_samples[k + 1], 1.0)
+                b = add_uv(edge_samples[k], 1.0)
+                c = add_uv(inner_us[r], 1.0 - top)
+                tris.append((a, b, c))
+
+            for j in range(q):
+                t_mid = left + (j + 0.5) * du
+                k = self._nearest_index_fast(e_top * t_mid, 0, e_top, False)
+                t_k = max(0.0, min(1.0, k / e_top))
+                a = add_uv(inner_us[j], 1.0 - top)
+                b = add_uv(inner_us[j + 1], 1.0 - top)
+                c = add_uv(t_k, 1.0)
+                tris.append((a, b, c))
+
+        # Right edge
+        if e_right > 0 and iv > 0 and right > 0:
+            edge_samples = self._generate_boundary_samples_fast(e_right, 0.0, 1.0)
+            p = len(edge_samples) - 1
+            q = iv
+            inner_vs = np.array([bottom + j * dv for j in range(q + 1)])
+
+            for k in range(p):
+                t_mid = (edge_samples[k] + edge_samples[k + 1]) * 0.5
+                r = self._nearest_index_fast((t_mid - bottom) / dv, 0, q, True) if dv > 1e-12 else 0
+                a = add_uv(1.0, edge_samples[k + 1])
+                b = add_uv(1.0, edge_samples[k])
+                c = add_uv(1.0 - right, inner_vs[r])
+                tris.append((a, b, c))
+
+            for j in range(q):
+                t_mid = bottom + (j + 0.5) * dv
+                k = self._nearest_index_fast(e_right * t_mid, 0, e_right, False)
+                t_k = max(0.0, min(1.0, k / e_right))
+                a = add_uv(1.0 - right, inner_vs[j])
+                b = add_uv(1.0 - right, inner_vs[j + 1])
+                c = add_uv(1.0, t_k)
+                tris.append((a, b, c))
+
+        # Left edge
+        if e_left > 0 and iv > 0 and left > 0:
+            edge_samples = self._generate_boundary_samples_fast(e_left, 0.0, 1.0)
+            p = len(edge_samples) - 1
+            q = iv
+            inner_vs = np.array([bottom + j * dv for j in range(q + 1)])
+
+            for k in range(p):
+                t_mid = (edge_samples[k] + edge_samples[k + 1]) * 0.5
+                r = self._nearest_index_fast((t_mid - bottom) / dv, 0, q, True) if dv > 1e-12 else 0
+                a = add_uv(0.0, edge_samples[k])
+                b = add_uv(0.0, edge_samples[k + 1])
+                c = add_uv(left, inner_vs[r])
+                tris.append((a, b, c))
+
+            for j in range(q):
+                t_mid = bottom + (j + 0.5) * dv
+                k = self._nearest_index_fast(e_left * t_mid, 0, e_left, False)
+                t_k = max(0.0, min(1.0, k / e_left))
+                a = add_uv(left, inner_vs[j + 1])
+                b = add_uv(left, inner_vs[j])
+                c = add_uv(0.0, t_k)
+                tris.append((a, b, c))
+
+        if len(uv_list) == 0:
+            return np.zeros((0, 3), dtype=np.float32), np.zeros((0, 3), dtype=np.uint32)
+
+        # Convert to numpy arrays
+        uv_arr = np.array(uv_list, dtype=np.float32)  # (N, 2)
+        us = uv_arr[:, 0]
+        vs = uv_arr[:, 1]
+
+        # Extract quad corner data as numpy arrays for vectorized computation
+        v0, v1, v2, v3 = quad
+        pos0 = np.array(v0.position, dtype=np.float32)
+        pos1 = np.array(v1.position, dtype=np.float32)
+        pos2 = np.array(v2.position, dtype=np.float32)
+        pos3 = np.array(v3.position, dtype=np.float32)
+
+        norm0 = np.array(v0.normal, dtype=np.float32)
+        norm1 = np.array(v1.normal, dtype=np.float32)
+        norm2 = np.array(v2.normal, dtype=np.float32)
+        norm3 = np.array(v3.normal, dtype=np.float32)
+
+        uv0 = np.array(v0.uv, dtype=np.float32)
+        uv1 = np.array(v1.uv, dtype=np.float32)
+        uv2 = np.array(v2.uv, dtype=np.float32)
+        uv3 = np.array(v3.uv, dtype=np.float32)
+
+        # Compute bilinear weights
+        w00 = ((1 - us) * (1 - vs))[:, None]  # (N, 1)
+        w10 = (us * (1 - vs))[:, None]
+        w11 = (us * vs)[:, None]
+        w01 = ((1 - us) * vs)[:, None]
+
+        # Batch bilinear interpolation for positions
+        positions = w00 * pos0 + w10 * pos1 + w11 * pos2 + w01 * pos3  # (N, 3)
+
+        # Batch bilinear interpolation for normals
+        normals = w00 * norm0 + w10 * norm1 + w11 * norm2 + w01 * norm3  # (N, 3)
+
+        # Normalize normals
+        norms_len = np.linalg.norm(normals, axis=1, keepdims=True)
+        normals = normals / (norms_len + 1e-8)
+
+        # Batch bilinear interpolation for UVs
+        uvs = w00[:, :1].squeeze(-1)[:, None] * uv0 + \
+              w10[:, :1].squeeze(-1)[:, None] * uv1 + \
+              w11[:, :1].squeeze(-1)[:, None] * uv2 + \
+              w01[:, :1].squeeze(-1)[:, None] * uv3
+        # Fix: recalculate properly
+        w00_2d = ((1 - us) * (1 - vs))[:, None]
+        w10_2d = (us * (1 - vs))[:, None]
+        w11_2d = (us * vs)[:, None]
+        w01_2d = ((1 - us) * vs)[:, None]
+        uvs = w00_2d * uv0 + w10_2d * uv1 + w11_2d * uv2 + w01_2d * uv3  # (N, 2)
+
+        # Apply displacement if sampler is available
+        if self.params.disp_sampler is not None:
+            displacements = self.params.disp_sampler.sample_batch(uvs[:, 0], uvs[:, 1])  # (N,)
+            positions = positions + displacements[:, None] * normals
+
+        # Convert triangles to numpy array
+        triangles = np.array(tris, dtype=np.uint32)  # (M, 3)
+
+        return positions.astype(np.float32), triangles
+
+    def tessellate(self, quad) -> Tuple[List[Vertex], List[Triangle]]:
+        """
+        Tessellate and return Vertex objects (for backward compatibility).
+
+        Note: Use tessellate_arrays() for better performance.
+        """
+        positions, triangles = self.tessellate_arrays(quad)
+
+        # Convert back to Vertex objects (slower, for compatibility)
+        verts = []
+        for i in range(positions.shape[0]):
+            v = Vertex(
+                position=tuple(positions[i].tolist()),
+                normal=(0.0, 0.0, 1.0),  # Note: normals not preserved in this conversion
+                uv=(0.0, 0.0)
+            )
+            verts.append(v)
+
+        tris = [tuple(triangles[i].tolist()) for i in range(triangles.shape[0])]
+        return verts, tris
+
+    @staticmethod
+    def _generate_boundary_samples_fast(rate: int, t_min: float, t_max: float) -> np.ndarray:
+        if rate <= 0:
+            return np.array([], dtype=np.float32)
+        k0 = int(np.ceil(rate * t_min - 1e-9))
+        k1 = int(np.floor(rate * t_max + 1e-9))
+        k0 = max(0, min(rate, k0))
+        k1 = max(0, min(rate, k1))
+        if k1 < k0:
+            return np.array([], dtype=np.float32)
+        return np.arange(k0, k1 + 1, dtype=np.float32) / rate
+
+    @staticmethod
+    def _nearest_index_fast(x: float, lo: int, hi: int, prefer_up: bool, eps: float = 1e-12) -> int:
+        base = int(np.floor(x))
+        frac = x - base
+        if frac > 0.5 + eps:
+            idx = base + 1
+        elif frac < 0.5 - eps:
+            idx = base
+        else:
+            idx = base + (1 if prefer_up else 0)
+        return max(lo, min(hi, idx))
 
 
 def show(verts: List[Vertex], tris: List[Triangle]):

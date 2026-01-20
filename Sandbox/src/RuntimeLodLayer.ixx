@@ -81,6 +81,12 @@ private:
     NTF::Model m_NTFModel;
     NTF::Buffers m_NTFBuffers;
 
+    // Edge-based tessellation factor buffers
+    MeshBaker::QuadEdgeMapping m_QuadEdgeMapping;
+    iGe::Ref<iGe::Buffer> m_QuadEdgeIdBuffer;     // Maps each quad's 4 edges to global edge IDs (uvec4 per quad)
+    iGe::Ref<iGe::Buffer> m_EdgeTessFactorBuffer; // Accumulated tessellation factors per edge (uint per edge)
+    std::uint32_t m_EdgeCount = 0;
+
     // Camera
     iGe::PerspectiveCamera m_Camera;
     glm::vec3 m_CameraPosition;
