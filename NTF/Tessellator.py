@@ -137,6 +137,52 @@ class QuadTessellator:
             res = (lift, lift, lift, lift)
             params.lift = res
 
+            # # 1. 提取基础参数 (Segments Count)
+            # iu, iv = params.inner
+            # eb, er, et, el = params.edge
+            #
+            # # 2. 统计各区域三角形数量 (Triangle Counts)
+            # # 中间矩形区 (每个格子2个三角形)
+            # tris_center = 2 * iu * iv
+            #
+            # # 垂直方向的梯形带 (下梯形 + 上梯形)
+            # # 下梯形三角形数 = u方向段数 + 增加的边数
+            # tris_v_band = (iu + eb) + (iu + et)
+            #
+            # # 水平方向的梯形带 (右梯形 + 左梯形)
+            # tris_h_band = (iv + er) + (iv + el)
+            #
+            # # 3. 计算总数与目标几何特征
+            # total_tris = tris_center + tris_v_band + tris_h_band
+            #
+            # # [关键点] 目标内部矩形的面积 = 内部三角形数 / 总三角形数
+            # # 因为总面积是1，且要求单位三角形面积密度一致
+            # target_inner_area = tris_center / total_tris
+            #
+            # # 宽与高的差值 (Width - Height)
+            # # 由 (垂直带总数 - 水平带总数) / 总数 决定
+            # diff_wh = (tris_v_band - tris_h_band) / total_tris
+            #
+            # # 4. 解方程求内部矩形尺寸 (Solving quadratic equation)
+            # # h^2 + diff * h - area = 0
+            # inner_h = (-diff_wh + math.sqrt(diff_wh ** 2 + 4 * target_inner_area)) / 2
+            # inner_w = inner_h + diff_wh
+            #
+            # # 5. 计算四周留白 (Margins/Lifts)
+            # # 垂直剩余空间分配给下、上
+            # margin_v = 1.0 - inner_h
+            # # 分母即为垂直带的总三角形数 (tris_v_band)
+            # val_x = margin_v * (iu + eb) / tris_v_band  # Bottom
+            # val_z = margin_v * (iu + et) / tris_v_band  # Top
+            #
+            # # 水平剩余空间分配给右、左
+            # margin_h = 1.0 - inner_w
+            # # 分母即为水平带的总三角形数 (tris_h_band)
+            # val_y = margin_h * (iv + er) / tris_h_band  # Right
+            # val_w = margin_h * (iv + el) / tris_h_band  # Left
+            #
+            # params.lift = (val_x, val_y, val_z, val_w)
+
         self.params = params
 
     def tessellate(self, quad) -> Tuple[List[Vertex], List[Triangle]]:
@@ -728,8 +774,8 @@ if __name__ == "__main__":
         Vertex((1, 1, 0), (0, 0, 1), (10, 10)),
         Vertex((0, 1, 0), (0, 0, 1), (0, 10)),
     )
-    params = QuadTessParams(edge=(1, 1, 1, 1), inner=(1, 1),
-                            disp_sampler=DisplacementSampler("assets/Icosphere_baked_disp.exr", 1024))
+    params = QuadTessParams(edge=(2, 3, 4, 5), inner=(3, 4),
+                            disp_sampler=DisplacementSampler("assets/Bayon Lion_baked_disp.exr", 1024))
     tessellator = QuadTessellator(params)
     verts, tris = tessellator.tessellate(quad)
 

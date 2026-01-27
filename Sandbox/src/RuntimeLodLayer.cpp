@@ -29,7 +29,7 @@ RuntimeLodLayer::RuntimeLodLayer()
         // auto bakedMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_baked.obj");
         // MeshBaker::BakeTest(bakedMesh, oriMesh, 1024);
 
-        m_OriginModel = MeshBaker::LoadObjFile("assets/models/Bayon Lion.obj");
+        m_OriginModel = MeshBaker::LoadObjFile("assets/models/Asian Dragon.obj");
         {
             auto vertices = m_OriginModel.Vertices;
             auto indices = m_OriginModel.Indices;
@@ -47,7 +47,7 @@ RuntimeLodLayer::RuntimeLodLayer()
             m_OriginModelVertexArray->SetIndexBuffer(indexBuffer);
         }
 
-        m_Model = MeshBaker::LoadObjFile("assets/models/Bayon Lion_baked.obj");
+        m_Model = MeshBaker::LoadObjFile("assets/models/Asian Dragon_baked.obj");
         {
             // Model displace map
             {
@@ -125,7 +125,7 @@ RuntimeLodLayer::RuntimeLodLayer()
             }
 
             // NTF model
-            m_NTFModel = NTF::Model::Load("assets/ntfs/Bayon Lion_baked.ntf");
+            m_NTFModel = NTF::Model::Load("assets/ntfs/Asian Dragon_baked.ntf");
             m_NTFBuffers.Create(m_NTFModel);
 
             // Build quad edge mapping for edge-based tessellation factors

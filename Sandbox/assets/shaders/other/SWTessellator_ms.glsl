@@ -82,8 +82,8 @@ struct VertexData {
     vec2 texcoord;
 };
 
-shared VertexData sVertices[MAX_VERTEX_COUNT];
-shared uvec3      sIndices[MAX_PRIMITIVE_COUNT];
+void EmitVertex(uint vertexId, VertexData vertex);
+void EmitPrimitive(uint primitiveId, uvec3 indices);
 
 VertexData GetInputVertex(uint vertexId);
 uint GetNearestIndexI0(float lo, float hi, uint rate, float x);
@@ -126,6 +126,18 @@ void main()
     float topLift    = lift;
     float leftLift   = lift;
 
+    // float nv = 2 * inner_u + e_bottom + e_top;
+    // float nh = 2 * inner_v + e_right + e_left;
+    // float count = nv + nh + 2 * inner_u * inner_v;
+    // float delta = (nv - nh) / count;
+    // float h_in = (-delta + sqrt(delta * delta + 8 * inner_u * inner_v / count)) / 2;
+    // float w_in = h_in + delta;
+    //
+    // float bottomLift = (1 - h_in) * (e_bottom + inner_u) / nv;
+    // float rightLift  = (1 - w_in) * (e_right + inner_v) / nh;
+    // float topLift    = (1 - h_in) * (e_top + inner_u) / nv;
+    // float leftLift   = (1 - w_in) * (e_left + inner_v) / nh;
+
     float du = (1.0 - leftLift - rightLift) / float(inner_u);
     float dv = (1.0 - bottomLift - topLift) / float(inner_v);
 
@@ -138,7 +150,7 @@ void main()
         float u = leftLift + float(ju) * du;
         float v = bottomLift + float(jv) * dv;
 
-        sVertices[i] = GetDisplacedVertex(quadVerts, u, v);
+        EmitVertex(i, GetDisplacedVertex(quadVerts, u, v));
     }
 
     uint inner_tcnt = inner_u * inner_v * 2;
@@ -158,9 +170,9 @@ void main()
 
         // CCW
         if (tri_id == 0u) {
-            sIndices[i] = uvec3(v00, v10, v11);
+            EmitPrimitive(i, uvec3(v00, v10, v11));
         } else {
-            sIndices[i] = uvec3(v00, v11, v01);
+            EmitPrimitive(i, uvec3(v00, v11, v01));
         }
     }
 
@@ -188,7 +200,7 @@ void main()
             v = 1.0 - float(local) / float(e_left);
         }
 
-        sVertices[inner_vcnt + i] = GetDisplacedVertex(quadVerts, u, v);
+        EmitVertex(inner_vcnt + i, GetDisplacedVertex(quadVerts, u, v));
     }
 
     // I0: edge as base, apex on inner line
@@ -223,7 +235,7 @@ void main()
             j2 = (inner_u + 1u) * (inner_v - id);
         }
 
-        sIndices[inner_tcnt + i] = uvec3(j0, j1, j2);
+        EmitPrimitive(inner_tcnt + i, uvec3(j0, j1, j2));
     }
 
     // I1: inner line as base, apex on edge
@@ -268,39 +280,33 @@ void main()
             j2 = inner_vcnt + e_bottom + e_right + e_top + id;
         }
 
-        sIndices[inner_tcnt + edge_tcnt0 + i] = uvec3(j2, j1, j0);
-    }
-
-    // Synchronize all threads before reading from shared memory
-    barrier();
-
-    // ---------- write mesh outputs ----------
-    uint vcnt = inner_vcnt + edge_vcnt;
-    for (uint i = gtid; i < vcnt; i += WORKGROUP_SIZE) {
-        VertexData vd = sVertices[i];
-
-        vec4 worldPos = SceneData.u_Transform * vec4(vd.position, 1.0);
-        vec4 viewPos = SceneData.u_View * worldPos;
-        vec4 clipPos  = SceneData.u_Projection * viewPos;
-
-        gl_MeshVerticesNV[i].gl_Position = clipPos;
-
-        v_out[i].mcPosition  = worldPos.xyz;
-        v_out[i].vcPosition  = viewPos.xyz;
-        v_out[i].texcoord    = vd.texcoord;
-    }
-
-    uint tcnt = inner_tcnt + edge_tcnt0 + edge_tcnt1;
-    for (uint i = gtid; i < tcnt; i += WORKGROUP_SIZE) {
-        gl_PrimitiveIndicesNV[3u * i + 0u] = sIndices[i].x;
-        gl_PrimitiveIndicesNV[3u * i + 1u] = sIndices[i].y;
-        gl_PrimitiveIndicesNV[3u * i + 2u] = sIndices[i].z;
+        EmitPrimitive(inner_tcnt + edge_tcnt0 + i, uvec3(j2, j1, j0));
     }
 
     // Set the primitive count (only thread 0 needs to do this)
+    uint vcnt = inner_vcnt + edge_vcnt;
+    uint tcnt = inner_tcnt + edge_tcnt0 + edge_tcnt1;
     if (gtid == 0u) {
         gl_PrimitiveCountNV = tcnt;
     }
+}
+
+void EmitVertex(uint vertexId, VertexData vd) {
+    vec4 worldPos = SceneData.u_Transform * vec4(vd.position, 1.0);
+    vec4 viewPos = SceneData.u_View * worldPos;
+    vec4 clipPos  = SceneData.u_Projection * viewPos;
+
+    gl_MeshVerticesNV[vertexId].gl_Position = clipPos;
+
+    v_out[vertexId].mcPosition  = worldPos.xyz;
+    v_out[vertexId].vcPosition  = viewPos.xyz;
+    v_out[vertexId].texcoord    = vd.texcoord;
+}
+
+void EmitPrimitive(uint primitiveId, uvec3 indices) {
+    gl_PrimitiveIndicesNV[3u * primitiveId + 0u] = indices.x;
+    gl_PrimitiveIndicesNV[3u * primitiveId + 1u] = indices.y;
+    gl_PrimitiveIndicesNV[3u * primitiveId + 2u] = indices.z;
 }
 
 VertexData GetInputVertex(uint vertexId) {

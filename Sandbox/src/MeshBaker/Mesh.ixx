@@ -11,7 +11,7 @@ export struct Vertex {
     glm::vec3 Position;
     glm::vec3 Normal;
     glm::vec2 TexCoord;
-    // float Curvature;
+    // glm::vec3 Color;
     // glm::vec3 Tangent;
     // glm::vec3 BiTangent;
 };
@@ -32,9 +32,7 @@ export struct Edge {
 
     static bool Equal(const glm::vec3& a, const glm::vec3& b) {
         constexpr float eps = 1e-6f;
-        return std::abs(a.x - b.x) <= eps &&
-               std::abs(a.y - b.y) <= eps &&
-               std::abs(a.z - b.z) <= eps;
+        return std::abs(a.x - b.x) <= eps && std::abs(a.y - b.y) <= eps && std::abs(a.z - b.z) <= eps;
     }
 
     Edge(const glm::vec3& a, const glm::vec3& b) {
@@ -48,18 +46,14 @@ export struct Edge {
         }
     }
 
-    bool operator==(const Edge& other) const {
-        return Equal(p0, other.p0) && Equal(p1, other.p1);
-    }
+    bool operator==(const Edge& other) const { return Equal(p0, other.p0) && Equal(p1, other.p1); }
 };
 
 // Hash function for Edge (position-based)
 export struct EdgeHash {
     std::size_t operator()(const Edge& e) const {
         // Quantize positions to avoid floating point hash issues
-        auto quantize = [](float v) -> std::int64_t {
-            return static_cast<std::int64_t>(std::round(v * 1e5));
-        };
+        auto quantize = [](float v) -> std::int64_t { return static_cast<std::int64_t>(std::round(v * 1e5)); };
 
         std::size_t h = 0;
         // Hash p0
@@ -83,8 +77,7 @@ export struct QuadEdgeMapping {
     // Assumes indices are organized as quads: [v0, v1, v2, v3] per quad
     // Quad vertex order: v0(bottom-left), v1(bottom-right), v2(top-right), v3(top-left)
     // Edge order: bottom(v0-v1), right(v1-v2), top(v2-v3), left(v3-v0)
-    static QuadEdgeMapping Build(const std::vector<std::uint32_t>& indices,
-                                  const std::vector<Vertex>& vertices) {
+    static QuadEdgeMapping Build(const std::vector<std::uint32_t>& indices, const std::vector<Vertex>& vertices) {
         QuadEdgeMapping mapping;
         std::uint32_t quadCount = static_cast<std::uint32_t>(indices.size() / 4);
         mapping.QuadEdgeIds.resize(quadCount);
