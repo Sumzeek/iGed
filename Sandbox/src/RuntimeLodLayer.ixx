@@ -1,8 +1,10 @@
 module;
+#include "glad/gl.h"
 #include "iGeMacro.h"
 
 export module iGed.RuntimeLodLayer;
 import iGed.NTF;
+import iGed.LUT;
 import iGed.MeshBaker;
 import iGe;
 
@@ -24,6 +26,7 @@ private:
 
     void ModelRotation();
     void ViewTranslation();
+    void SaveScreenshot(const std::string& filename);
 
     iGe::ShaderLibrary<iGe::GraphicsShader> m_GraphicsShaderLibrary;
     iGe::ShaderLibrary<iGe::ComputeShader> m_ComputeShaderLibrary;
@@ -54,13 +57,35 @@ private:
 
     std::uint32_t m_TargetTessFactor = 5;
     bool m_LineOption = false;
-    bool m_OriginModelOption = false;
+    bool m_EpsilonOption = false;
+    int m_TessellationMode = 0;
+
+    float m_MinDist = 0.0;
+    float m_MaxDist = 100.0;
+    float m_TargetPixel = 4.0;
+    float m_MaxCurvature = 0.25;
+    float m_EpsilonCoefficient = 1.0;
+    bool m_LockCameraPosition = false;
+    bool m_ReStartCountTime = false;
 
     // Software Tessellation
     struct TessellatorData {
         glm::uvec2 ScreenSize;
-        std::uint32_t QuadSize;
+        std::uint32_t TessellationMode;
+        std::uint32_t TargetTessFactor;
         std::uint32_t LineOption;
+        std::uint32_t EpsilonOption;
+        std::uint32_t QuadSize;
+        float MinDist;
+        float MaxDist;
+        float TargetPixel;
+        float MaxCurvature;
+        float EpsilonCoefficient;
+        glm::vec3 ViewPos;
+        float _padding_ViewPos;
+        glm::mat4 Model;
+        glm::mat4 View;
+        glm::mat4 Projection;
     };
     iGe::Scope<TessellatorData> m_TessellatorData;
 
@@ -81,10 +106,15 @@ private:
     NTF::Model m_NTFModel;
     NTF::Buffers m_NTFBuffers;
 
+    // LUT (Lookup Table for ablation study)
+    LUT::LUTData m_LUTData;
+    LUT::Buffers m_LUTBuffers;
+
     // Edge-based tessellation factor buffers
     MeshBaker::QuadEdgeMapping m_QuadEdgeMapping;
     iGe::Ref<iGe::Buffer> m_QuadEdgeIdBuffer;     // Maps each quad's 4 edges to global edge IDs (uvec4 per quad)
     iGe::Ref<iGe::Buffer> m_EdgeTessFactorBuffer; // Accumulated tessellation factors per edge (uint per edge)
+    iGe::Ref<iGe::Buffer> m_InnerTessFactorBuffer;
     std::uint32_t m_EdgeCount = 0;
 
     // Camera
@@ -100,4 +130,6 @@ private:
     glm::mat4 m_ModelTransform = glm::mat4{1.0f};
 
     glm::vec2 m_LastMousePosition = glm::vec2{0.0f};
+
+    std::array<GLuint, 2> m_QueryIDs;
 };

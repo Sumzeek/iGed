@@ -1,5 +1,5 @@
 {
-    "amplification": "SWTessellator_as.glsl",
-    "mesh": "SWTessellator_ms.glsl",
-    "fragment": "SWTessellator_fs.glsl"
+  "amplification": "SWTessellator_as.glsl",
+  "mesh": "SWTessellator_ms.glsl",
+  "fragment": "SWTessellator_fs.glsl"
 }

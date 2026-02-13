@@ -1,0 +1,4 @@
+{
+  "vertex": "NormalLighting_vs.glsl",
+  "fragment": "NormalLighting_fs.glsl"
+}

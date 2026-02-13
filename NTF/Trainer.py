@@ -4,7 +4,7 @@ import logging
 import struct
 import csv
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
 import torch
@@ -23,7 +23,6 @@ class NTFTrainerConfig:
     via `build_ntf_training_data` in NTF.py.
     """
 
-    max_rate: int = 16
     epochs: int = 50
     batch_size: int = 512
     lr: float = 1e-3
@@ -35,27 +34,23 @@ class NTFTrainerConfig:
 class QuadNTFDataset(Dataset):
     """Dataset reading per-quad features derived from two CSV files.
 
-    Targets are 4 continuous edge rates; we normalize to [0,1]
-    by dividing by `max_rate`. Epsilon is standardized using mean/std
-    computed over the whole dataset so that its scale is comparable to
-    positions before being fed into the positional encoder.
+    Targets are 2 continuous rate values (inner_rate, outter_rate).
+    Both coordinates and epsilon are normalized:
+    - Coordinates: normalized to [-1, 1] using global min/max
+    - Epsilon: standardized using mean/std computed over the whole dataset
     """
 
     def __init__(
             self,
             points: np.ndarray,
             quads: np.ndarray,
-            s_bottom,
-            s_right,
-            s_top,
-            s_left,
+            inner_rate,
+            outter_rate,
             epsilon,
-            max_rate: int,
     ):
         super().__init__()
         self.points = points.astype(np.float32)
         self.quads = quads.astype(np.int64)
-        self.max_rate = max_rate
 
         Q = self.quads.shape[0]
 
@@ -67,23 +62,25 @@ class QuadNTFDataset(Dataset):
                 raise ValueError(f"{name} length {x_arr.shape[0]} != num quads {Q}")
             return x_arr.astype(np.float32)
 
-        def _to_float_array(x, name: str):
-            arr = np.asarray(x, dtype=np.float32)
-            if arr.shape == ():
-                arr = np.full((Q,), float(arr), dtype=np.float32)
-            if arr.shape[0] != Q:
-                raise ValueError(f"{name} length {arr.shape[0]} != num quads {Q}")
-            return arr
-
-        self.s_bottom = _to_float_array(s_bottom, "sample_rate_bottom")
-        self.s_right = _to_float_array(s_right, "sample_rate_right")
-        self.s_top = _to_float_array(s_top, "sample_rate_top")
-        self.s_left = _to_float_array(s_left, "sample_rate_left")
+        # 存储 rate 值（浮点数，用于回归）
+        self.inner_rate = _broadcast_to_array(inner_rate, "inner_rate")
+        self.outter_rate = _broadcast_to_array(outter_rate, "outter_rate")
 
         # store raw epsilon and compute normalization stats
         self.epsilons_raw = _broadcast_to_array(epsilon, "epsilon")
         self.epsilon_mean = float(self.epsilons_raw.mean())
         self.epsilon_std = float(self.epsilons_raw.std() + 1e-8)
+        self.epsilon_min = float(self.epsilons_raw.min())
+        self.epsilon_max = float(self.epsilons_raw.max())
+
+        # Coordinate normalization: compute global min/max for all coordinates
+        # Normalize to [-1, 1] range
+        self.coord_min = self.points.min(axis=0)  # (3,) - min for x, y, z
+        self.coord_max = self.points.max(axis=0)  # (3,) - max for x, y, z
+        self.coord_center = (self.coord_min + self.coord_max) / 2.0  # (3,)
+        self.coord_scale = (self.coord_max - self.coord_min) / 2.0  # (3,)
+        # Avoid division by zero for flat dimensions
+        self.coord_scale = np.maximum(self.coord_scale, 1e-8)
 
         if self.quads.ndim != 2 or self.quads.shape[1] != 4:
             raise ValueError(f"quads must have shape (Q,4), got {self.quads.shape}")
@@ -96,31 +93,84 @@ class QuadNTFDataset(Dataset):
 
     def __getitem__(self, idx: int):
         v_ids = self.quads[idx]
-        verts = self.points[v_ids]
+        verts = self.points[v_ids]  # (4, 3)
         eps_raw = float(self.epsilons_raw[idx])
+
+        # Coordinate normalization: (coord - center) / scale -> [-1, 1]
+        verts_norm = (verts - self.coord_center) / self.coord_scale
 
         # epsilon normalization: standardize using dataset-level mean/std
         eps_norm = (eps_raw - self.epsilon_mean) / self.epsilon_std
 
-        # build input feature: 4*3 coords + 1 normalized epsilon
-        geom = verts.astype(np.float32).reshape(-1)
+        # build input feature: 4*3 normalized coords + 1 normalized epsilon
+        geom = verts_norm.astype(np.float32).reshape(-1)
         feat = np.concatenate([geom, np.array([eps_norm], dtype=np.float32)], axis=0)
         x = torch.from_numpy(feat)
 
-        # continuous target rates, normalized to [0,1] by max_rate
-        rates = np.array([
-            self.s_bottom[idx],
-            self.s_right[idx],
-            self.s_top[idx],
-            self.s_left[idx],
-        ], dtype=np.float32)
-        y = torch.from_numpy(rates / float(self.max_rate))
+        # 2个连续rate值作为目标（inner_rate, outter_rate）
+        y = torch.tensor([
+            self.inner_rate[idx],
+            self.outter_rate[idx],
+        ], dtype=torch.float32)
 
         return x, y
 
 
+class NTFRegressor(nn.Module):
+    """NTF Regressor: outputs 2 continuous rate values (inner_rate, outter_rate).
+
+    Uses regression (MSELoss) instead of classification.
+    """
+
+    def __init__(self, in_dim_raw: int, config: NTFConfig) -> None:
+        super().__init__()
+        self.config = config
+
+        # 使用 NTF 的 encoder
+        from NTF import PositionalEncoder
+        self.encoder = PositionalEncoder(in_dim=in_dim_raw, levels=config.fflevels)
+
+        # MLP 输出 2 个连续值 (2层隐藏层 + 1层输出层)
+        self.net = nn.Sequential(
+            nn.Linear(self.encoder.out_dim, config.hidden_dim),
+            nn.LeakyReLU(),
+            nn.Linear(config.hidden_dim, config.hidden_dim),
+            nn.LeakyReLU(),
+            nn.Linear(config.hidden_dim, 2),  # 2 rates: inner_rate, outter_rate
+        )
+
+        logging.info("Instantiated NTFRegressor with:")
+        logging.info(f"  in_dim_raw   = {in_dim_raw}")
+        logging.info(f"  enc_out_dim  = {self.encoder.out_dim}")
+        logging.info(f"  fflevels     = {config.fflevels}")
+        logging.info(f"  hidden_dim   = {config.hidden_dim}")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: tensor of shape (B, in_dim_raw)
+        Returns:
+            rates: tensor of shape (B, 2) with continuous rate values
+                   (inner_rate, outter_rate)
+        """
+        enc = self.encoder(x)
+        return self.net(enc)  # (B, 2)
+
+    def predict_rates(self, x: torch.Tensor) -> torch.Tensor:
+        """Return predicted rate values for inner and outter.
+
+        Returns:
+            rates: tensor of shape (B, 2) with (inner_rate, outter_rate)
+        """
+        self.eval()
+        with torch.no_grad():
+            rates = self.forward(x)  # (B, 2)
+        return rates
+
+
 class NTFTrainer:
-    """Trainer using two CSVs -> NTF training data.
+    """Trainer using two CSVs -> NTF training data (Regression mode).
 
     Usage:
       python Trainer.py <points_csv> <quads_csv>
@@ -141,7 +191,7 @@ class NTFTrainer:
         # Build arrays directly from two CSVs (points + Pareto quads).
         # points_csv: generated by generate_quad_training_csv, columns: point_id,x,y,z
         # quads_csv:  Pareto/prefix-optimal CSV, columns:
-        #   quad_id,v0,v1,v2,v3,epsilon_target,sample_rate_bottom,sample_rate_right,sample_rate_top,sample_rate_left
+        #   quad_id,v0,v1,v2,v3,epsilon_target,inner_rate,outter_rate
 
         # Load points
         pts_list = []
@@ -152,72 +202,115 @@ class NTFTrainer:
         points = np.array(pts_list, dtype=np.float32)
 
         # Load quads and per-quad rates/epsilon
-        quads = []
-        s_bottom = []
-        s_right = []
-        s_top = []
-        s_left = []
-        eps = []
+        # We also collect quad_id to identify and filter "bad quads"
+        raw_data = []  # List of (quad_id, v0, v1, v2, v3, epsilon, inner_rate, outter_rate)
 
         with open(quads_csv, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            # Support both epsilon_target (Pareto CSV) and epsilon (full CSV) column names.
-            has_eps_target = "epsilon_target" in (reader.fieldnames or [])
-            has_eps = "epsilon" in (reader.fieldnames or [])
-            if not (has_eps_target or has_eps):
-                raise KeyError("quads CSV must have either 'epsilon_target' or 'epsilon' column")
+            # Peek at first line to determine if CSV has a header
+            first_line = f.readline().strip()
+            f.seek(0)  # Reset to beginning
 
-            for row in reader:
-                v0 = int(row["v0"])
-                v1 = int(row["v1"])
-                v2 = int(row["v2"])
-                v3 = int(row["v3"])
-                quads.append((v0, v1, v2, v3))
+            # Check if the first line looks like a header (contains letters)
+            # or data (all numeric/comma separated)
+            first_fields = first_line.split(',')
+            has_header = any(not field.replace('.', '').replace('-', '').replace('e', '').replace('+', '').isdigit()
+                             for field in first_fields if field.strip())
 
-                sb = int(row["sample_rate_bottom"])
-                sr = int(row["sample_rate_right"])
-                st = int(row["sample_rate_top"])
-                sl = int(row["sample_rate_left"])
+            if has_header:
+                # Use DictReader for header-based CSV
+                reader = csv.DictReader(f)
+                # Support both epsilon_target (Pareto CSV) and epsilon (full CSV) column names.
+                has_eps_target = "epsilon_target" in (reader.fieldnames or [])
+                has_eps = "epsilon" in (reader.fieldnames or [])
+                if not (has_eps_target or has_eps):
+                    raise KeyError("quads CSV must have either 'epsilon_target' or 'epsilon' column")
 
-                # Clamp to [1, max_rate] just in case
-                max_r = self.config.max_rate
-                sb = max(1, min(max_r, sb))
-                sr = max(1, min(max_r, sr))
-                st = max(1, min(max_r, st))
-                sl = max(1, min(max_r, sl))
+                for row in reader:
+                    qid = int(row.get("quad_id", 0))
+                    v0 = int(row["v0"])
+                    v1 = int(row["v1"])
+                    v2 = int(row["v2"])
+                    v3 = int(row["v3"])
 
-                s_bottom.append(sb)
-                s_right.append(sr)
-                s_top.append(st)
-                s_left.append(sl)
+                    ir = float(row["inner_rate"])
+                    ot = float(row["outter_rate"])
 
-                if has_eps_target:
-                    eps_val = float(row["epsilon_target"])
-                else:
-                    eps_val = float(row["epsilon"])
-                eps.append(eps_val)
+                    if has_eps_target:
+                        eps_val = float(row["epsilon_target"])
+                    else:
+                        eps_val = float(row["epsilon"])
+
+                    raw_data.append((qid, v0, v1, v2, v3, eps_val, ir, ot))
+
+                logging.info(f"[NTFTrainer] Loaded quads CSV with header: {reader.fieldnames}")
+            else:
+                # No header: expect columns by index
+                # Format: quad_id, v0, v1, v2, v3, epsilon, inner_rate, outter_rate
+                reader = csv.reader(f)
+                for row in reader:
+                    if len(row) < 8:
+                        continue  # Skip malformed rows
+
+                    qid = int(row[0])
+                    v0 = int(row[1])
+                    v1 = int(row[2])
+                    v2 = int(row[3])
+                    v3 = int(row[4])
+                    eps_val = float(row[5])
+                    ir = float(row[6])
+                    ot = float(row[7])
+
+                    raw_data.append((qid, v0, v1, v2, v3, eps_val, ir, ot))
+
+                logging.info(f"[NTFTrainer] Loaded quads CSV without header (columns by index)")
+
+        logging.info(f"[NTFTrainer] Raw data loaded: {len(raw_data)} samples")
+
+        # ============================================================
+        # NOTE: Filtering and augmentation is now handled by DataAugmentor.py
+        # The input CSV should already be pre-processed (filtered + augmented)
+        # ============================================================
+
+        # Extract arrays from raw_data (no filtering here)
+        filtered_data = raw_data
+        quads = []
+        inner_rate = []
+        outter_rate = []
+        eps = []
+
+        for row in filtered_data:
+            _, v0, v1, v2, v3, eps_val, ir, ot = row
+            quads.append((v0, v1, v2, v3))
+            eps.append(eps_val)
+            inner_rate.append(ir)
+            outter_rate.append(ot)
 
         quads = np.array(quads, dtype=np.int64)
-        s_bottom = np.array(s_bottom, dtype=np.int64)
-        s_right = np.array(s_right, dtype=np.int64)
-        s_top = np.array(s_top, dtype=np.int64)
-        s_left = np.array(s_left, dtype=np.int64)
+        inner_rate = np.array(inner_rate, dtype=np.float32)
+        outter_rate = np.array(outter_rate, dtype=np.float32)
         eps = np.array(eps, dtype=np.float32)
 
         self.dataset = QuadNTFDataset(
             points=points,
             quads=quads,
-            s_bottom=s_bottom,
-            s_right=s_right,
-            s_top=s_top,
-            s_left=s_left,
-            epsilon=eps,
-            max_rate=self.config.max_rate,
+            inner_rate=inner_rate,
+            outter_rate=outter_rate,
+            epsilon=eps
         )
 
         # save epsilon normalization stats from dataset for later use (e.g., prediction)
         self.epsilon_mean = self.dataset.epsilon_mean
         self.epsilon_std = self.dataset.epsilon_std
+        self.epsilon_min = self.dataset.epsilon_min
+        self.epsilon_max = self.dataset.epsilon_max
+
+        # save coordinate normalization stats
+        self.coord_center = self.dataset.coord_center  # (3,)
+        self.coord_scale = self.dataset.coord_scale  # (3,)
+
+        logging.info(f"[NTFTrainer] Coordinate normalization:")
+        logging.info(f"  coord_center = {self.coord_center}")
+        logging.info(f"  coord_scale  = {self.coord_scale}")
 
         # Split dataset
         val_len = int(len(self.dataset) * self.config.val_split)
@@ -233,9 +326,9 @@ class NTFTrainer:
 
         # Raw feature: 4*3 coords + 1 epsilon
         in_dim_raw = 4 * 3 + 1
-        self.ntf = NTF(in_dim_raw=in_dim_raw, config=self.ntf_config).to(self.device)
+        self.ntf = NTFRegressor(in_dim_raw=in_dim_raw, config=self.ntf_config).to(self.device)
 
-        # Regression over 4 normalized edge rates
+        # 使用 MSELoss 进行回归
         self.criterion = nn.MSELoss()
         self.optimizer = torch.optim.Adam(self.ntf.parameters(), lr=self.config.lr)
 
@@ -266,11 +359,14 @@ class NTFTrainer:
             # 训练阶段
             for x, y in self.train_loader:
                 x = x.to(self.device)
-                y = y.to(self.device)
+                y = y.to(self.device)  # (B, 2) 连续rate值
 
                 self.optimizer.zero_grad()
-                pred = self.ntf(x)
+                pred = self.ntf(x)  # (B, 2)
+
+                # MSE损失
                 loss = self.criterion(pred, y)
+
                 loss.backward()
                 self.optimizer.step()
 
@@ -286,35 +382,39 @@ class NTFTrainer:
             self.ntf.eval()
             val_loss = 0.0
             total = 0
-            abs_err_sum = 0.0
+            mae_inner = 0.0
+            mae_outter = 0.0
 
             with torch.no_grad():
                 for x, y in self.val_loader:
                     x = x.to(self.device)
                     y = y.to(self.device)
 
-                    pred = self.ntf(x)
-                    l = self.criterion(pred, y)
-                    val_loss += l.item() * x.size(0)
+                    pred = self.ntf(x)  # (B, 2)
 
-                    pred_denorm = pred * float(self.config.max_rate)
-                    y_denorm = y * float(self.config.max_rate)
-                    abs_err = (pred_denorm - y_denorm).abs().mean(dim=1)
-                    abs_err_sum += abs_err.sum().item()
+                    # 计算MSE损失
+                    loss = self.criterion(pred, y)
+                    val_loss += loss.item() * x.size(0)
+
+                    # 计算MAE
+                    mae_inner += torch.abs(pred[:, 0] - y[:, 0]).sum().item()
+                    mae_outter += torch.abs(pred[:, 1] - y[:, 1]).sum().item()
                     total += x.size(0)
 
-                    pbar.set_postfix(phase="Val", loss=f"{l.item():.6f}")
+                    pbar.set_postfix(phase="Val", loss=f"{loss.item():.6f}")
                     pbar.update(1)
 
             avg_val = val_loss / max(1, len(self.val_loader.dataset))
-            mean_abs_err = abs_err_sum / max(1, total)
+            avg_mae_inner = mae_inner / max(1, total)
+            avg_mae_outter = mae_outter / max(1, total)
 
             pbar.close()
 
             # 每个 epoch 结束后，打印一行摘要（覆盖进度条位置）
             print(
                 f"\rEpoch {epoch}/{self.config.epochs} | "
-                f"train_loss: {avg_train:.6f} | val_loss: {avg_val:.6f} | MAE: {mean_abs_err:.3f}",
+                f"train_loss: {avg_train:.6f} | val_loss: {avg_val:.6f} | "
+                f"MAE_in: {avg_mae_inner:.3f} | MAE_out: {avg_mae_outter:.3f}",
                 end="" if epoch < self.config.epochs else "\n"
             )
 
@@ -335,6 +435,12 @@ class NTFTrainer:
                 # save epsilon normalization so prediction can reuse it
                 'epsilon_mean': self.epsilon_mean,
                 'epsilon_std': self.epsilon_std,
+                # save epsilon range for clamping during inference
+                'epsilon_min': self.epsilon_min,
+                'epsilon_max': self.epsilon_max,
+                # save coordinate normalization for inference
+                'coord_center': self.coord_center.tolist(),  # (3,)
+                'coord_scale': self.coord_scale.tolist(),  # (3,)
             },
             self.model_path,
         )
@@ -350,15 +456,15 @@ class NTFTrainer:
 
         # re-create NTF with saved config
         ntf_cfg = NTFConfig(**data['ntf_config'])
-        self.ntf = NTF(in_dim_raw=4 * 3 + 1, config=ntf_cfg).to(self.device)
+        self.ntf = NTFRegressor(in_dim_raw=4 * 3 + 1, config=ntf_cfg).to(self.device)
         self.ntf.load_state_dict(data['state_dict'])
         self.ntf.eval()
 
-    def predict(self, quad_vertices: np.ndarray, epsilon: float) -> Tuple[float, float, float, float]:
-        """Predict four continuous edge rates for a single quad.
+    def predict(self, quad_vertices: np.ndarray, epsilon: float) -> Tuple[float, float]:
+        """Predict inner_rate and outter_rate for a single quad.
 
-        Returns (bottom, right, top, left) as floats in [1, max_rate] after
-        denormalization and clamping.
+        Returns (inner_rate, outter_rate) as float values.
+        The caller can round/clamp these as needed.
         """
         if not hasattr(self, 'ntf') or self.ntf is None:
             self.load()
@@ -371,13 +477,9 @@ class NTFTrainer:
         x = torch.from_numpy(feat).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
-            pred_norm = self.ntf(x)[0]  # (4,)
+            rates = self.ntf.predict_rates(x)[0]  # (2,)
 
-        # denormalize and clamp to [1, max_rate]
-        rates = pred_norm * float(self.config.max_rate)
-        rates = torch.clamp(rates, 1.0, float(self.config.max_rate))
-        b, r, t, l = rates.tolist()
-        return b, r, t, l
+        return float(rates[0].item()), float(rates[1].item())
 
 
 def export_ntf_weights(
@@ -385,7 +487,7 @@ def export_ntf_weights(
         output_path: str,
         in_dim_raw: int = 13,
 ) -> None:
-    """Export NTF model weights to binary file.
+    """Export NTF regressor weights to binary file.
 
     Args:
         model_path: Path to the trained model file (.pt)
@@ -397,16 +499,19 @@ def export_ntf_weights(
     # Export weights to binary file (.ntf) for C++/OpenGL usage
     # ============================================================
     #
-    # File format (.ntf):
+    # File format (.ntf) - Regression mode (v2 with coordinate normalization):
     # 1. Header:
     #    - int32: fflevels (Fourier feature levels)
     #    - int32: hidden_dim (hidden layer dimension)
-    #    - int32: max_rate (maximum tessellation rate)
     #    - int32: in_dim_raw (raw input dimension, typically 13: 4*3 coords + 1 epsilon)
     #    - float32: epsilon_mean (epsilon normalization mean)
     #    - float32: epsilon_std (epsilon normalization std)
+    #    - float32: epsilon_min (epsilon clamping min)
+    #    - float32: epsilon_max (epsilon clamping max)
+    #    - float32[3]: coord_center (coordinate normalization center, x/y/z)
+    #    - float32[3]: coord_scale (coordinate normalization scale, x/y/z)
     #
-    # 2. Network weights (4-layer MLP):
+    # 2. Network weights (3-layer MLP):
     #    For each layer:
     #    - int32: in_features
     #    - int32: out_features
@@ -421,24 +526,32 @@ def export_ntf_weights(
     ntf_config = NTFConfig(**checkpoint['ntf_config'])
     epsilon_mean = checkpoint.get('epsilon_mean', 0.0)
     epsilon_std = checkpoint.get('epsilon_std', 1.0)
+    epsilon_min = checkpoint.get('epsilon_min', 0.0)
+    epsilon_max = checkpoint.get('epsilon_max', 1.0)
+
+    # Get coordinate normalization (default to no normalization if not present)
+    coord_center = checkpoint.get('coord_center', [0.0, 0.0, 0.0])
+    coord_scale = checkpoint.get('coord_scale', [1.0, 1.0, 1.0])
 
     # Rebuild model and load weights
-    model = NTF(in_dim_raw=in_dim_raw, config=ntf_config)
+    model = NTFRegressor(in_dim_raw=in_dim_raw, config=ntf_config)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
 
     logging.info(f"[export_ntf_weights] Loading model: {model_path}")
-    logging.info(f"  fflevels    = {ntf_config.fflevels}")
-    logging.info(f"  hidden_dim  = {ntf_config.hidden_dim}")
-    logging.info(f"  max_rate    = {ntf_config.max_rate}")
-    logging.info(f"  in_dim_raw  = {in_dim_raw}")
-    logging.info(f"  epsilon_mean= {epsilon_mean}")
-    logging.info(f"  epsilon_std = {epsilon_std}")
+    logging.info(f"  fflevels     = {ntf_config.fflevels}")
+    logging.info(f"  hidden_dim   = {ntf_config.hidden_dim}")
+    logging.info(f"  in_dim_raw   = {in_dim_raw}")
+    logging.info(f"  epsilon_mean = {epsilon_mean}")
+    logging.info(f"  epsilon_std  = {epsilon_std}")
+    logging.info(f"  epsilon_min  = {epsilon_min}")
+    logging.info(f"  epsilon_max  = {epsilon_max}")
+    logging.info(f"  coord_center = {coord_center}")
+    logging.info(f"  coord_scale  = {coord_scale}")
 
     # Extract MLP layer weights
-    # model.mlp.net is nn.Sequential: [Linear, LeakyReLU, Linear, LeakyReLU, ...]
     layers = []
-    for module in model.mlp.net:
+    for module in model.net:
         if isinstance(module, torch.nn.Linear):
             layers.append(module)
 
@@ -448,10 +561,17 @@ def export_ntf_weights(
         # Write header
         f.write(struct.pack('i', ntf_config.fflevels))
         f.write(struct.pack('i', ntf_config.hidden_dim))
-        f.write(struct.pack('i', ntf_config.max_rate))
         f.write(struct.pack('i', in_dim_raw))
         f.write(struct.pack('f', float(epsilon_mean)))
         f.write(struct.pack('f', float(epsilon_std)))
+        f.write(struct.pack('f', float(epsilon_min)))
+        f.write(struct.pack('f', float(epsilon_max)))
+
+        # Write coordinate normalization parameters (6 floats)
+        for i in range(3):
+            f.write(struct.pack('f', float(coord_center[i])))
+        for i in range(3):
+            f.write(struct.pack('f', float(coord_scale[i])))
 
         # Write weights for each layer
         for i, layer in enumerate(layers):
@@ -489,10 +609,10 @@ if __name__ == '__main__':
     )
 
     points_csv = "assets/Bayon Lion_baked_points.csv"
-    quads_csv = "assets/Bayon Lion_baked_quads_pareto.csv"
+    quads_csv = "assets/Bayon Lion_baked_quads_augmented.csv"
 
-    ntf_cfg = NTFConfig(fflevels=8, hidden_dim=64, max_rate=8)
-    trainer_cfg = NTFTrainerConfig(max_rate=8, epochs=50, batch_size=1024, lr=5e-4)
+    ntf_cfg = NTFConfig(fflevels=2, hidden_dim=16)
+    trainer_cfg = NTFTrainerConfig(epochs=20, batch_size=1024, lr=5e-4)
 
     trainer = NTFTrainer(points_csv, quads_csv, ntf_cfg, trainer_cfg)
     trainer.run()

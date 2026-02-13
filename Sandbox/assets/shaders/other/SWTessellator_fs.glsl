@@ -10,8 +10,21 @@ layout(binding = 1, std140) uniform PerFrameDataBlock_std140 {
 
 layout(binding = 2, std140) uniform TessellatorDataBlock_std140 {
     uvec2 u_ScreenSize;
-    uint u_QuadSize;
+    uint u_TessllationMode;
+    uint u_TargetTessFactor;
     uint u_LineOption;
+    uint u_EpsilonOption;
+    uint u_QuadSize;
+    float u_MinDist;
+    float u_MaxDist;
+    float u_TargetPixel;
+    float u_MaxCurvature;
+    float u_EpsilonCoefficient;
+    vec3 u_ViewPos;
+    float _padding_u_ViewPos;
+    mat4 u_Model;
+    mat4 u_View;
+    mat4 u_Projection;
 } TessellatorData;
 
 layout(binding = 3) uniform sampler2D u_DisplaceMap;
@@ -21,6 +34,7 @@ in PerVertexData {
     vec3 mcPosition;
     vec3 vcPosition;
     vec2 texcoord;
+    float height;
 } fragIn;
 
 layout(location = 0) out vec4 out_ScreenColor;
@@ -70,6 +84,32 @@ void main()
 
     if (dot(normal, fragIn.vcPosition) > 0.0f) {
         normal = -1.0f * normal;
+    }
+
+    if (TessellatorData.u_EpsilonOption == 1u) {
+        ivec2 base = ivec2(floor(fragIn.texcoord));
+        vec2 f = fract(fragIn.texcoord);
+
+        float s00 = texelFetch(u_DisplaceMap, base, 0).r;
+        float s10 = texelFetch(u_DisplaceMap, base + ivec2(1, 0), 0).r;
+        float s01 = texelFetch(u_DisplaceMap, base + ivec2(0, 1), 0).r;
+        float s11 = texelFetch(u_DisplaceMap, base + ivec2(1, 1), 0).r;
+
+        float sx0 = mix(s00, s10, f.x);
+        float sx1 = mix(s01, s11, f.x);
+        float disp = mix(sx0, sx1, f.y);
+
+        float epsilon = fragIn.height - disp;
+
+        float maxEpsilon = 0.1;
+        float absEpsilon = abs(epsilon);
+        float t = clamp(absEpsilon / maxEpsilon, 0.0, 1.0);
+
+        if (t < 0.5) {
+            baseColor = mix(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0), t * 2.0);
+        } else {
+            baseColor = mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), (t - 0.5) * 2.0);
+        }
     }
 
     // ambient

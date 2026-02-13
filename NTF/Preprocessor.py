@@ -118,10 +118,19 @@ class Preprocessor:
         ms.load_new_mesh(self.input_mesh)
 
         original_faces = ms.current_mesh().face_number()
-        target_faces = min(2000, original_faces // 1000)
+        target_faces = original_faces // 100
         logging.info(f"[Stage 1] Original faces={original_faces} target={target_faces}")
 
         ms.meshing_decimation_quadric_edge_collapse(targetfacenum=target_faces, qualitythr=1.0)
+        # # Use decimation with topology preservation to avoid losing geometry
+        # ms.meshing_decimation_quadric_edge_collapse(
+        #     targetfacenum=target_faces,
+        #     qualitythr=0.3,  # Lower quality threshold
+        #     preservetopology=True,  # IMPORTANT: preserve topology to avoid holes
+        #     preserveboundary=True,  # Preserve boundary
+        #     optimalplacement=True,  # Better vertex placement
+        #     planarquadric=True  # Better handling of planar regions
+        # )
         ms.meshing_repair_non_manifold_edges()
         ms.meshing_tri_to_quad_by_smart_triangle_pairing()
 

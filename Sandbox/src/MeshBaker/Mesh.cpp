@@ -29,6 +29,9 @@ Mesh LoadObjFile(const std::filesystem::path& filepath) {
     // assuming the file has only one grid
     aiMesh* aiMesh = scene->mMeshes[0];
 
+    // Check if we need to generate smooth normals
+    bool needGenerateNormals = !aiMesh->HasNormals();
+
     auto& vertices = mesh.Vertices;
     for (uint32_t v = 0; v < aiMesh->mNumVertices; ++v) {
         Vertex vertex{};
@@ -36,7 +39,7 @@ Mesh LoadObjFile(const std::filesystem::path& filepath) {
         if (aiMesh->HasNormals()) {
             vertex.Normal = {aiMesh->mNormals[v].x, aiMesh->mNormals[v].y, aiMesh->mNormals[v].z};
         } else {
-            vertex.Normal = {0.0f, 0.0f, 0.0f};
+            vertex.Normal = {0.0f, 0.0f, 0.0f}; // Will be computed later
         }
         if (aiMesh->mTextureCoords[0]) {
             vertex.TexCoord = {aiMesh->mTextureCoords[0][v].x, aiMesh->mTextureCoords[0][v].y};
@@ -58,6 +61,40 @@ Mesh LoadObjFile(const std::filesystem::path& filepath) {
     for (unsigned int i = 0; i < aiMesh->mNumFaces; i++) {
         aiFace face = aiMesh->mFaces[i];
         for (unsigned int j = 0; j < face.mNumIndices; j++) { indices.push_back(face.mIndices[j]); }
+    }
+
+    // Generate smooth normals if the mesh doesn't have normals
+    if (needGenerateNormals) {
+        // Step 1: Accumulate face normals to each vertex
+        for (size_t i = 0; i < indices.size(); i += 3) {
+            uint32_t i0 = indices[i + 0];
+            uint32_t i1 = indices[i + 1];
+            uint32_t i2 = indices[i + 2];
+
+            glm::vec3 p0 = vertices[i0].Position;
+            glm::vec3 p1 = vertices[i1].Position;
+            glm::vec3 p2 = vertices[i2].Position;
+
+            // Compute face normal (not normalized, weighted by area)
+            glm::vec3 edge1 = p1 - p0;
+            glm::vec3 edge2 = p2 - p0;
+            glm::vec3 faceNormal = glm::cross(edge1, edge2);
+
+            // Accumulate to each vertex
+            vertices[i0].Normal += faceNormal;
+            vertices[i1].Normal += faceNormal;
+            vertices[i2].Normal += faceNormal;
+        }
+
+        // Step 2: Normalize all vertex normals
+        for (auto& vertex: vertices) {
+            float len = glm::length(vertex.Normal);
+            if (len > 1e-6f) {
+                vertex.Normal /= len;
+            } else {
+                vertex.Normal = glm::vec3(0.0f, 1.0f, 0.0f); // Default up direction
+            }
+        }
     }
 
     // update bounding-box

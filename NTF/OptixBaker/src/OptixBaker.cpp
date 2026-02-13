@@ -175,6 +175,223 @@ struct OptiXContext {
 // Global singleton (per-process)
 static OptiXContext g_optixCtx;
 
+// ========== Cached Geometry Acceleration Structure ==========
+struct CachedGAS {
+    OptixTraversableHandle handle = 0;
+    CUdeviceptr d_vertices = 0;
+    CUdeviceptr d_indices = 0;
+    CUdeviceptr d_gasOutputBuffer = 0;
+    size_t numVertices = 0;
+    size_t numTriangles = 0;
+    bool valid = false;
+    std::mutex mutex;
+
+    void cleanup() {
+        if (!valid) return;
+        if (d_vertices) { cudaFree(reinterpret_cast<void*>(d_vertices)); d_vertices = 0; }
+        if (d_indices) { cudaFree(reinterpret_cast<void*>(d_indices)); d_indices = 0; }
+        if (d_gasOutputBuffer) { cudaFree(reinterpret_cast<void*>(d_gasOutputBuffer)); d_gasOutputBuffer = 0; }
+        handle = 0;
+        numVertices = 0;
+        numTriangles = 0;
+        valid = false;
+    }
+
+    ~CachedGAS() {
+        cleanup();
+    }
+};
+
+// Global cached GAS for large meshes
+static CachedGAS g_cachedGAS;
+
+// Build and cache GAS for a mesh (call once for large meshes)
+void build_cached_gas(py::array_t<float, py::array::c_style | py::array::forcecast> vertices,
+                      py::array_t<unsigned int, py::array::c_style | py::array::forcecast> indices) {
+    std::lock_guard<std::mutex> lock(g_cachedGAS.mutex);
+
+    // Cleanup existing cached GAS
+    g_cachedGAS.cleanup();
+
+    // Initialize OptiX context if needed
+    {
+        std::lock_guard<std::mutex> ctxLock(g_optixCtx.mutex);
+        if (!g_optixCtx.initialized) {
+            g_optixCtx.initialize();
+        }
+    }
+
+    // Parse vertices and indices
+    auto vinfo = vertices.request();
+    auto iinfo = indices.request();
+
+    std::vector<float3> h_vertices;
+    std::vector<uint3> h_indices;
+
+    if (vinfo.ndim == 2) {
+        if (vinfo.shape[1] != 3) throw std::invalid_argument("vertices must have shape (V,3)");
+        const size_t V = static_cast<size_t>(vinfo.shape[0]);
+        const float* vptr = static_cast<const float*>(vinfo.ptr);
+        h_vertices.resize(V);
+        for (size_t i = 0; i < V; ++i) {
+            h_vertices[i] = make_float3(vptr[3 * i + 0], vptr[3 * i + 1], vptr[3 * i + 2]);
+        }
+        if (iinfo.ndim != 2 || iinfo.shape[1] != 3) {
+            throw std::invalid_argument("indices must have shape (T,3)");
+        }
+        const size_t T = static_cast<size_t>(iinfo.shape[0]);
+        const unsigned int* iptr = static_cast<const unsigned int*>(iinfo.ptr);
+        h_indices.resize(T);
+        for (size_t t = 0; t < T; ++t) {
+            h_indices[t] = make_uint3(iptr[3 * t + 0], iptr[3 * t + 1], iptr[3 * t + 2]);
+        }
+    } else {
+        throw std::invalid_argument("vertices must have shape (V,3) for cached GAS");
+    }
+
+    // Upload geometry to GPU (persistent)
+    const size_t verticesSize = h_vertices.size() * sizeof(float3);
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&g_cachedGAS.d_vertices), verticesSize));
+    CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(g_cachedGAS.d_vertices), h_vertices.data(), verticesSize,
+                          cudaMemcpyHostToDevice));
+
+    const size_t indicesSize = h_indices.size() * sizeof(uint3);
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&g_cachedGAS.d_indices), indicesSize));
+    CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(g_cachedGAS.d_indices), h_indices.data(), indicesSize,
+                          cudaMemcpyHostToDevice));
+
+    // Build GAS
+    OptixAccelBuildOptions accelOptions = {};
+    accelOptions.buildFlags = OPTIX_BUILD_FLAG_ALLOW_COMPACTION | OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+    accelOptions.operation = OPTIX_BUILD_OPERATION_BUILD;
+
+    OptixBuildInput buildInput = {};
+    buildInput.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
+    buildInput.triangleArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
+    buildInput.triangleArray.vertexStrideInBytes = sizeof(float3);
+    buildInput.triangleArray.numVertices = static_cast<unsigned int>(h_vertices.size());
+    buildInput.triangleArray.vertexBuffers = &g_cachedGAS.d_vertices;
+
+    buildInput.triangleArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
+    buildInput.triangleArray.indexStrideInBytes = sizeof(uint3);
+    buildInput.triangleArray.numIndexTriplets = static_cast<unsigned int>(h_indices.size());
+    buildInput.triangleArray.indexBuffer = g_cachedGAS.d_indices;
+
+    uint32_t triangleInputFlags = OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT;
+    buildInput.triangleArray.flags = &triangleInputFlags;
+    buildInput.triangleArray.numSbtRecords = 1;
+
+    OptixAccelBufferSizes gasBufferSizes;
+    OPTIX_CHECK(optixAccelComputeMemoryUsage(g_optixCtx.context, &accelOptions, &buildInput, 1, &gasBufferSizes));
+
+    CUdeviceptr d_tempBufferGas = 0;
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_tempBufferGas), gasBufferSizes.tempSizeInBytes));
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&g_cachedGAS.d_gasOutputBuffer), gasBufferSizes.outputSizeInBytes));
+
+    OPTIX_CHECK(optixAccelBuild(g_optixCtx.context,
+                                0, // stream
+                                &accelOptions, &buildInput, 1, d_tempBufferGas, gasBufferSizes.tempSizeInBytes,
+                                g_cachedGAS.d_gasOutputBuffer, gasBufferSizes.outputSizeInBytes,
+                                &g_cachedGAS.handle, nullptr, 0));
+
+    // Cleanup temp buffer (GAS output buffer is kept)
+    CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_tempBufferGas)));
+
+    g_cachedGAS.numVertices = h_vertices.size();
+    g_cachedGAS.numTriangles = h_indices.size();
+    g_cachedGAS.valid = true;
+
+    std::cerr << "[optixbaker] Cached GAS built: " << g_cachedGAS.numVertices << " vertices, "
+              << g_cachedGAS.numTriangles << " triangles" << std::endl;
+}
+
+// Intersect using cached GAS (fast path for large meshes)
+py::array_t<int> intersect_cached(py::array_t<float, py::array::c_style | py::array::forcecast> origins,
+                                   py::array_t<float, py::array::c_style | py::array::forcecast> directions) {
+    // Check cached GAS is valid
+    if (!g_cachedGAS.valid) {
+        throw std::runtime_error("No cached GAS available. Call build_cached_gas() first.");
+    }
+
+    // Validate inputs
+    auto o = origins.request();
+    auto d = directions.request();
+    if (o.ndim != 2 || d.ndim != 2 || o.shape[1] != 3 || d.shape[1] != 3 || o.shape[0] != d.shape[0]) {
+        throw std::invalid_argument("origins and directions must be (N,3) arrays with the same N");
+    }
+
+    const uint32_t N = static_cast<uint32_t>(o.shape[0]);
+
+    // Setup SBT (using cached device memory)
+    OptixShaderBindingTable sbt = {};
+    sbt.raygenRecord = g_optixCtx.d_raygenRecord;
+    sbt.hitgroupRecordBase = g_optixCtx.d_hitRecord;
+    sbt.hitgroupRecordStrideInBytes = sizeof(HitSbtRecord);
+    sbt.hitgroupRecordCount = 1;
+    sbt.missRecordBase = g_optixCtx.d_missRecord;
+    sbt.missRecordStrideInBytes = sizeof(MissSbtRecord);
+    sbt.missRecordCount = 1;
+
+    // Launch
+    py::array_t<int> result(N);
+    {
+        // Build rays buffer
+        const float* optr = static_cast<const float*>(o.ptr);
+        const float* dptr = static_cast<const float*>(d.ptr);
+        std::vector<Ray> h_rays(N);
+        for (uint32_t i = 0; i < N; ++i) {
+            float3 ro = make_float3(optr[3 * i + 0], optr[3 * i + 1], optr[3 * i + 2]);
+            float3 rd = make_float3(dptr[3 * i + 0], dptr[3 * i + 1], dptr[3 * i + 2]);
+            h_rays[i] = {ro, rd};
+        }
+
+        CUdeviceptr d_rays = 0;
+        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_rays), sizeof(Ray) * N));
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_rays), h_rays.data(), sizeof(Ray) * N, cudaMemcpyHostToDevice));
+
+        CUdeviceptr d_vis = 0;
+        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_vis), sizeof(uint32_t) * N));
+
+        LaunchParams params = {};
+        params.Handle = g_cachedGAS.handle;  // Use cached GAS handle
+        params.Rays = reinterpret_cast<Ray*>(d_rays);
+        params.VisBuffer = reinterpret_cast<uint32_t*>(d_vis);
+        params.Width = N;
+        params.Height = 1;
+
+        CUdeviceptr d_params = 0;
+        CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_params), sizeof(LaunchParams)));
+        CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_params), &params, sizeof(LaunchParams), cudaMemcpyHostToDevice));
+
+        CUstream stream;
+        CUDA_CHECK(cudaStreamCreate(&stream));
+        OPTIX_CHECK(optixLaunch(g_optixCtx.pipeline, stream, d_params, sizeof(LaunchParams), &sbt, params.Width, params.Height, 1));
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+
+        // Copy back
+        std::vector<uint32_t> h_vis(N);
+        CUDA_CHECK(cudaMemcpy(h_vis.data(), reinterpret_cast<void const*>(d_vis), sizeof(uint32_t) * N,
+                              cudaMemcpyDeviceToHost));
+        auto r = result.mutable_unchecked<1>();
+        for (uint32_t i = 0; i < N; ++i) { r(i) = (h_vis[i] == 0xFFFFFFFFu) ? -1 : static_cast<int>(h_vis[i]); }
+
+        // Cleanup launch buffers
+        CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_rays)));
+        CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_vis)));
+        CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_params)));
+        CUDA_CHECK(cudaStreamDestroy(stream));
+    }
+
+    return result;
+}
+
+// Cleanup cached GAS
+void cleanup_cached_gas() {
+    std::lock_guard<std::mutex> lock(g_cachedGAS.mutex);
+    g_cachedGAS.cleanup();
+    std::cerr << "[optixbaker] Cached GAS cleaned up" << std::endl;
+}
+
 py::array_t<int> intersect(py::array_t<float, py::array::c_style | py::array::forcecast> origins,
                            py::array_t<float, py::array::c_style | py::array::forcecast> directions,
                            py::array_t<float, py::array::c_style | py::array::forcecast> vertices,
@@ -381,5 +598,30 @@ Returns:
 
 Environment:
   Set OPTIX_INTERSECT_PTX to override the path to optix_kernel.ptx if needed.)doc");
+
+    m.def("build_cached_gas", &build_cached_gas, py::arg("vertices"), py::arg("indices"),
+          R"doc(Build and cache a GAS (Geometry Acceleration Structure) for a mesh.
+
+Call this once for large meshes that will be queried multiple times.
+The cached GAS persists until cleanup_cached_gas() is called or the module is unloaded.
+
+Parameters:
+  vertices: (V,3) float array of vertices
+  indices: (T,3) uint array of triangle indices)doc");
+
+    m.def("intersect_cached", &intersect_cached, py::arg("origins"), py::arg("directions"),
+          R"doc(Ray-triangle intersection using the cached GAS (fast path).
+
+Must call build_cached_gas() first to set up the cached geometry.
+
+Parameters:
+  origins: (N,3) float array of ray origins
+  directions: (N,3) float array of ray directions
+Returns:
+  (N,) int array of primitive indices; -1 indicates a miss.)doc");
+
+    m.def("cleanup_cached_gas", &cleanup_cached_gas,
+          "Cleanup the cached GAS to free GPU memory.");
+
     m.def("cleanup", &cleanup_optix, "Explicitly cleanup OptiX resources.");
 }

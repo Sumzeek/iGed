@@ -24,6 +24,8 @@ cbuffer TessellatorData {
     uint2 u_ScreenSize;
     uint u_TargetTessFactor;
     uint u_LineOption;
+    uint u_EpsilonOption;
+    uint u_QuadSize;
 };
 
 [[gl::binding(3)]]
@@ -110,7 +112,7 @@ struct TessEvalOutput {
     float3 te_WorldPos : POSITION;
     float3 te_Normal : NORMAL;
     float2 te_TexCoord : TEXCOORD;
-    float te_T;
+    float te_Height : HEIGHT;
 };
 
 [shader("tesseval")]
@@ -156,17 +158,16 @@ TessEvalOutput tesMain(float2 uv: SV_DomainLocation, const OutputPatch<TessContr
     // Perform bilinear interpolation
     float sx0 = lerp(s00, s10, f.x);
     float sx1 = lerp(s01, s11, f.x);
-    float displacement = lerp(sx0, sx1, f.y);
+    float disp = lerp(sx0, sx1, f.y);
 
     // Offset the vertex along its normal by the displacement value
-    float3 position = interpolatedPosition + displacement * interpolatedNormal;
-    ;
+    float3 position = interpolatedPosition + disp * interpolatedNormal;
 
     out.te_Position = mul(u_ProjectionView, mul(u_Transform, float4(position, 1.0f)));
     out.te_WorldPos = mul(u_Transform, float4(position, 1.0f)).xyz;
     out.te_Normal = interpolatedNormal;
     out.te_TexCoord = interpolatedTexCoord;
-    out.te_T = displacement;
+    out.te_Height = disp;
 
     return out;
 }
@@ -177,7 +178,7 @@ struct GeometryOutput {
     float3 g_Normal : NORMAL;
     float2 g_TexCoord : TEXCOORD;
     float3 g_Barycentric : BARYCENTRIC;
-    float3 g_T;
+    float g_Height : HEIGHT;
 };
 
 [shader("geometry")]
@@ -193,7 +194,7 @@ void gsMain(triangle TessEvalOutput input[3], inout TriangleStream<GeometryOutpu
         outputVertex.g_Normal = input[i].te_Normal;
         outputVertex.g_Barycentric = barycentrics[i];
         outputVertex.g_TexCoord = input[i].te_TexCoord;
-        outputVertex.g_T = input[i].te_T;
+        outputVertex.g_Height = input[i].te_Height;
         outputStream.Append(outputVertex);
     }
 }
@@ -220,6 +221,30 @@ float4 fsMain(GeometryOutput input) : SV_Target {
 
     float3 viewPosition = mul(u_View, float4(input.g_WorldPos, 1.0f)).xyz;
     if (dot(normal, viewPosition) > 0.0f) { normal = -1.0f * normal; }
+
+    if (u_EpsilonOption == 1) {
+        int2 base = int2(floor(input.g_TexCoord));
+        float2 f = frac(input.g_TexCoord);
+        float s00 = u_DisplaceMap.Load(int3(base, 0)).r;
+        float s10 = u_DisplaceMap.Load(int3(base + int2(1, 0), 0)).r;
+        float s01 = u_DisplaceMap.Load(int3(base + int2(0, 1), 0)).r;
+        float s11 = u_DisplaceMap.Load(int3(base + int2(1, 1), 0)).r;
+        float sx0 = lerp(s00, s10, f.x);
+        float sx1 = lerp(s01, s11, f.x);
+        float disp = lerp(sx0, sx1, f.y);
+
+        float epsilon = input.g_Height - disp;
+
+        float maxEpsilon = 0.1;
+        float absEpsilon = abs(epsilon);
+        float t = clamp(absEpsilon / maxEpsilon, 0.0, 1.0);
+
+        if (t < 0.5) {
+            baseColor = lerp(float3(0.0, 0.0, 1.0), float3(0.0, 1.0, 0.0), t * 2.0);
+        } else {
+            baseColor = lerp(float3(0.0, 1.0, 0.0), float3(1.0, 0.0, 0.0), (t - 0.5) * 2.0);
+        }
+    }
 
     // ambient
     color += ambient * baseColor;

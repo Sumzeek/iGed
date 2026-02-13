@@ -1,11 +1,16 @@
 module;
+#include "glad/gl.h"
 #include "iGeMacro.h"
 
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 module iGed.RuntimeLodLayer;
 import iGed.MeshBaker;
+import iGed.LUT;
 import std;
 import glm;
 
@@ -13,7 +18,7 @@ import glm;
 // RuntimeLodLayer //////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////
 RuntimeLodLayer::RuntimeLodLayer()
-    : Layer{"RuntimeLod"}, m_Camera{45.0f, 1280.0f / 720.0f, 0.01f, 1000.f}, m_CameraPosition{0.0f} {
+    : Layer{"RuntimeLod"}, m_Camera{60.0f, 1280.0f / 720.0f, 0.01f, 1000.f}, m_CameraPosition{0.0f} {
     // Create empty VAO
     {
         m_EmptyVertexArray = iGe::VertexArray::Create();
@@ -29,7 +34,7 @@ RuntimeLodLayer::RuntimeLodLayer()
         // auto bakedMesh = MeshBaker::LoadObjFile("assets/models/" + oriMesh.Name + "_baked.obj");
         // MeshBaker::BakeTest(bakedMesh, oriMesh, 1024);
 
-        m_OriginModel = MeshBaker::LoadObjFile("assets/models/Asian Dragon.obj");
+        m_OriginModel = MeshBaker::LoadObjFile("assets/models/Bayon Lion.obj");
         {
             auto vertices = m_OriginModel.Vertices;
             auto indices = m_OriginModel.Indices;
@@ -47,7 +52,7 @@ RuntimeLodLayer::RuntimeLodLayer()
             m_OriginModelVertexArray->SetIndexBuffer(indexBuffer);
         }
 
-        m_Model = MeshBaker::LoadObjFile("assets/models/Asian Dragon_baked.obj");
+        m_Model = MeshBaker::LoadObjFile("assets/models/Bayon Lion_baked.obj");
         {
             // Model displace map
             {
@@ -125,8 +130,12 @@ RuntimeLodLayer::RuntimeLodLayer()
             }
 
             // NTF model
-            m_NTFModel = NTF::Model::Load("assets/ntfs/Asian Dragon_baked.ntf");
+            m_NTFModel = NTF::Model::Load("assets/ntfs/Bayon Lion_baked.ntf");
             m_NTFBuffers.Create(m_NTFModel);
+
+            // LUT data (for ablation study)
+            m_LUTData = LUT::LoadFromCSV("assets/luts/Bayon Lion_baked_quads_lut.csv");
+            m_LUTBuffers.Create(m_LUTData);
 
             // Build quad edge mapping for edge-based tessellation factors
             auto quadCount = m_Model.Indices.size() / 4;
@@ -139,6 +148,7 @@ RuntimeLodLayer::RuntimeLodLayer()
 
             // Create buffer for per-edge accumulated tessellation factors (uint per edge)
             m_EdgeTessFactorBuffer = iGe::Buffer::Create(nullptr, m_EdgeCount * sizeof(std::uint32_t));
+            m_InnerTessFactorBuffer = iGe::Buffer::Create(nullptr, quadCount * sizeof(glm::uvec2));
         }
     }
 
@@ -204,13 +214,12 @@ RuntimeLodLayer::RuntimeLodLayer()
     // Set Model bbx
     m_ModelCenter = m_Model.Center;
     m_ModelRadius = m_Model.Radius;
-    m_CameraPosition = m_ModelCenter + glm::vec3{0.0f, 0.0f, 3 * m_ModelRadius};
+    m_CameraPosition = m_ModelCenter + glm::vec3{0.0f, 0.0f, 2 * m_ModelRadius};
 
     // Create camera data uniform
     m_PerFrameData = iGe::CreateScope<PerFrameData>();
     m_PerFrameDataUniform = iGe::Buffer::Create(nullptr, sizeof(PerFrameData));
 
-    m_GraphicsShaderLibrary.Load("Test", "assets/shaders/glsl/Test.json");
     m_GraphicsShaderLibrary.Load("Lighting", "assets/shaders/glsl/Lighting.json");
     m_GraphicsShaderLibrary.Load("FullScreen", "assets/shaders/glsl/FullScreen.json");
     m_GraphicsShaderLibrary.Load("HWTessellator", "assets/shaders/glsl/HWTessellator.json");
@@ -220,8 +229,12 @@ RuntimeLodLayer::RuntimeLodLayer()
     // m_ComputeShaderLibrary.Load("ClearDepth", "assets/shaders/glsl/ClearDepth.json");
     // m_ComputeShaderLibrary.Load("SWRasterizer", "assets/shaders/glsl/SWRasterizer.json");
 
-    m_MeshShaderLibrary.Load("SWTessellator", "assets/shaders/other/SWTessellator.json");
+    m_GraphicsShaderLibrary.Load("NormalLighting", "assets/shaders/other/NormalLighting.json");
     m_ComputeShaderLibrary.Load("TFCalculator", "assets/shaders/other/TFCalculator.json");
+    m_ComputeShaderLibrary.Load("TFCalculatorLUT", "assets/shaders/other/TFCalculatorLUT.json");
+    m_MeshShaderLibrary.Load("SWTessellator", "assets/shaders/other/SWTessellator.json");
+
+    glGenQueries(2, m_QueryIDs.data());
 }
 
 void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
@@ -234,7 +247,8 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
         }
     }
 
-    iGe::RenderCommand::SetClearColor(glm::vec4{225.0f / 255.0f, 245.0f / 255.0f, 220.0f / 255.0f, 1.0f});
+    // iGe::RenderCommand::SetClearColor(glm::vec4{225.0f / 255.0f, 245.0f / 255.0f, 220.0f / 255.0f, 1.0f});
+    iGe::RenderCommand::SetClearColor(glm::vec4{1.0f, 1.0f, 1.0f, 1.0f});
     iGe::RenderCommand::Clear();
 
     m_Camera.SetPosition(m_CameraPosition);
@@ -304,49 +318,157 @@ void RuntimeLodLayer::OnUpdate(iGe::Timestep ts) {
 
         // Draw model
         {
-            if (m_OriginModelOption) {
-                iGe::Renderer::SubmitTris(m_GraphicsShaderLibrary.Get("Lighting"), m_OriginModelVertexArray,
+            if (m_TessellationMode == 0) {
+                iGe::Renderer::SubmitTris(m_GraphicsShaderLibrary.Get("NormalLighting"), m_OriginModelVertexArray,
                                           m_ModelTransform);
             } else {
+                m_MaxDist = m_ModelRadius * 4.0f;
                 m_TessellatorData->ScreenSize = glm::uvec2{(std::uint32_t) width, (std::uint32_t) height};
-                m_TessellatorData->QuadSize = quadSize;
+                m_TessellatorData->TessellationMode = m_TessellationMode;
+                m_TessellatorData->TargetTessFactor = m_TargetTessFactor;
                 m_TessellatorData->LineOption = m_LineOption ? 1 : 0;
+                m_TessellatorData->EpsilonOption = m_EpsilonOption ? 1 : 0;
+                m_TessellatorData->QuadSize = quadSize;
+                m_TessellatorData->MinDist = m_MinDist;
+                m_TessellatorData->MaxDist = m_MaxDist;
+                m_TessellatorData->TargetPixel = m_TargetPixel;
+                m_TessellatorData->MaxCurvature = m_MaxCurvature;
+                m_TessellatorData->EpsilonCoefficient = m_EpsilonCoefficient;
+                if (!m_LockCameraPosition) {
+                    m_TessellatorData->ViewPos = m_Camera.GetPosition();
+                    m_TessellatorData->Model = m_ModelTransform;
+                    m_TessellatorData->View = m_Camera.GetViewMatrix();
+                    m_TessellatorData->Projection = m_Camera.GetProjectionMatrix();
+                }
                 m_TessellatorDataUniform->SetData(m_TessellatorData.get(), sizeof(TessellatorData));
                 m_TessellatorDataUniform->Bind(2, iGe::BufferType::Uniform);
                 m_ModelDisplaceMap->Bind(3);
                 m_ModelNormalMap->Bind(4);
 
-                // HW Tessellation and rendering
-                {
-                    // iGe::Renderer::SubmitPatches(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray, 4,
-                    //                              m_ModelTransform);
-                }
+                // // Hardware tessellation and rendering
+                // iGe::Renderer::SubmitPatches(m_GraphicsShaderLibrary.Get("HWTessellator"), m_ModelVertexArray, 4,
+                //                              m_ModelTransform);
 
+                m_ModelPositionBuffer->Bind(5, iGe::BufferType::Storage);
+                m_ModelNormalBuffer->Bind(6, iGe::BufferType::Storage);
+                m_ModelTexCoordBuffer->Bind(7, iGe::BufferType::Storage);
+                m_ModelQuadIndexBuffer->Bind(8, iGe::BufferType::Storage);
 
-                // Software tessellation and rendering
-                {
-                    m_ModelPositionBuffer->Bind(5, iGe::BufferType::Storage);
-                    m_ModelNormalBuffer->Bind(6, iGe::BufferType::Storage);
-                    m_ModelTexCoordBuffer->Bind(7, iGe::BufferType::Storage);
-                    m_ModelQuadIndexBuffer->Bind(8, iGe::BufferType::Storage);
+                m_QuadEdgeIdBuffer->Bind(9, iGe::BufferType::Storage);
+                m_EdgeTessFactorBuffer->Bind(10, iGe::BufferType::Storage);
+                m_InnerTessFactorBuffer->Bind(11, iGe::BufferType::Storage);
 
-                    // Bind edge-based tessellation factor buffers
-                    m_QuadEdgeIdBuffer->Bind(9, iGe::BufferType::Storage);      // Quad-to-edge ID mapping
-                    m_EdgeTessFactorBuffer->Bind(10, iGe::BufferType::Storage); // Per-edge accumulated tess factors
+                std::vector<std::uint32_t> zeroData(m_EdgeCount, 0);
+                m_EdgeTessFactorBuffer->SetData(zeroData.data(), m_EdgeCount * sizeof(std::uint32_t));
 
-                    // Clear edge tessellation factor buffer before accumulation
-                    std::vector<std::uint32_t> zeroData(m_EdgeCount, 0);
-                    m_EdgeTessFactorBuffer->SetData(zeroData.data(), m_EdgeCount * sizeof(std::uint32_t));
+                if (m_TessellationMode == 4) {
+                    // NTF (Neural Tessellation Factor) mode
+                    m_NTFBuffers.Bind(12, 13, 14);
 
-                    // NTF - Precompute tessellation factor (accumulates to per-edge buffer)
-                    m_NTFBuffers.Bind(11, 12, 13);
+                    static double totalTime = 0.0;
+                    static int loop = 0;
+                    if (!m_ReStartCountTime) {
+                        totalTime = 0.0;
+                        loop = 0;
+                    }
+
+                    GLuint64 timeElapsed = 0;
+                    glBeginQuery(GL_TIME_ELAPSED, m_QueryIDs[0]);
                     iGe::Renderer::Dispatch(m_ComputeShaderLibrary.Get("TFCalculator"),
                                             glm::vec3{(quadSize + 31) / 32, 1, 1}, m_ModelTransform);
+                    glEndQuery(GL_TIME_ELAPSED);
+                    glGetQueryObjectui64v(m_QueryIDs[0], GL_QUERY_RESULT, &timeElapsed);
+                    double time = timeElapsed / 1000000.0;
 
-                    // Mesh shader tessellation and rendering
-                    iGe::Renderer::DispatchTask(m_MeshShaderLibrary.Get("SWTessellator"), 0, (quadSize + 31) / 32,
+                    if (m_ReStartCountTime) {
+                        totalTime += time;
+                        loop += 1;
+                    }
+
+                    std::cout << std::format("Mode {}: Neural Network GPU Time: {} ms", m_TessellationMode,
+                                             totalTime / loop)
+                              << std::endl;
+                } else if (m_TessellationMode == 5) {
+                    // LUT (Lookup Table) mode - for ablation study
+                    m_LUTBuffers.Bind(15, 16);
+
+                    static double totalTimeLUT = 0.0;
+                    static int loopLUT = 0;
+                    if (!m_ReStartCountTime) {
+                        totalTimeLUT = 0.0;
+                        loopLUT = 0;
+                    }
+
+                    GLuint64 timeElapsed = 0;
+                    glBeginQuery(GL_TIME_ELAPSED, m_QueryIDs[0]);
+                    iGe::Renderer::Dispatch(m_ComputeShaderLibrary.Get("TFCalculatorLUT"),
+                                            glm::vec3{(quadSize + 31) / 32, 1, 1}, m_ModelTransform);
+                    glEndQuery(GL_TIME_ELAPSED);
+                    glGetQueryObjectui64v(m_QueryIDs[0], GL_QUERY_RESULT, &timeElapsed);
+                    double time = timeElapsed / 1000000.0;
+
+                    if (m_ReStartCountTime) {
+                        totalTimeLUT += time;
+                        loopLUT += 1;
+                    }
+
+                    std::cout << std::format("Mode {}: LUT Lookup GPU Time: {} ms", m_TessellationMode,
+                                             totalTimeLUT / loopLUT)
+                              << std::endl;
+                }
+
+                // Software Tessellation
+                static double totalTime = 0.0;
+                static int loop = 0;
+                if (!m_ReStartCountTime) {
+                    totalTime = 0.0;
+                    loop = 0;
+                }
+
+                GLuint64 timeElapsed = 0;
+                glBeginQuery(GL_TIME_ELAPSED, m_QueryIDs[0]);
+                {
+                    iGe::Renderer::DispatchTask(m_MeshShaderLibrary.Get("SWTessellator"), 0, quadSize,
                                                 m_ModelTransform);
                 }
+                glEndQuery(GL_TIME_ELAPSED);
+                glGetQueryObjectui64v(m_QueryIDs[0], GL_QUERY_RESULT, &timeElapsed);
+                double time = timeElapsed / 1000000.0;
+
+                if (m_ReStartCountTime) {
+                    totalTime += time;
+                    loop += 1;
+                }
+
+                std::cout << std::format("Mode {}: Tessellation GPU Time: {} ms", m_TessellationMode, totalTime / loop)
+                          << std::endl;
+
+                // Triangle count
+                std::vector<std::uint32_t> edgeBuffer(m_EdgeCount);
+                m_EdgeTessFactorBuffer->GetData(edgeBuffer.data(), m_EdgeCount * sizeof(std::uint32_t));
+                std::vector<glm::uvec2> innerBuffer(quadSize);
+                m_InnerTessFactorBuffer->GetData(innerBuffer.data(), quadSize * sizeof(glm::uvec2));
+                std::uint32_t totalTriCount = 0;
+                for (int i = 0; i < quadSize; ++i) {
+                    auto edgeIds = m_QuadEdgeMapping.QuadEdgeIds[i];
+                    auto eBottom = static_cast<std::uint32_t>(std::round(edgeBuffer[edgeIds.x] / 2.0f));
+                    auto eRight = static_cast<std::uint32_t>(std::round(edgeBuffer[edgeIds.y] / 2.0f));
+                    auto eTop = static_cast<std::uint32_t>(std::round(edgeBuffer[edgeIds.z] / 2.0f));
+                    auto eLeft = static_cast<std::uint32_t>(std::round(edgeBuffer[edgeIds.w] / 2.0f));
+                    auto innerU = innerBuffer[i].x;
+                    auto innerV = innerBuffer[i].y;
+                    totalTriCount += innerU * innerV * 2;
+                    totalTriCount += (innerU + innerV) * 2;
+                    totalTriCount += eBottom + eRight + eTop + eLeft;
+                    // std::cout << std::format(
+                    //                      "Quad {}: Edge Tess Factors: ({}, {}, {}, {}), Inner Tess Factors: ({}, "
+                    //                      "{}), Tri Count: {}",
+                    //                      i, eBottom, eRight, eTop, eLeft, innerU, innerV,
+                    //                      innerU * innerV * 2 + (innerU + innerV) * 2 + eBottom + eRight + eTop +
+                    //                              eLeft)
+                    //           << std::endl;
+                }
+                std::cout << std::format("Total Triangle Count: {}", totalTriCount) << std::endl;
             }
         }
 
@@ -379,9 +501,63 @@ void RuntimeLodLayer::OnImGuiRender() {
 
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::Text("Display Origin Model");
+            ImGui::Text("Display Epsilon");
             ImGui::TableSetColumnIndex(1);
-            ImGui::Checkbox("##DisplayOriginModel", &m_OriginModelOption);
+            ImGui::Checkbox("##DisplayEpsilon", &m_EpsilonOption);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Tessellation Mode");
+            ImGui::TableSetColumnIndex(1);
+            static const char* options[] = {"Original",
+                                            "Distance-Based Tessellation",
+                                            "Screen-Space Tessellation",
+                                            "Normal-Based Tessellation",
+                                            "NTF Tessellation",
+                                            "LUT Tessellation (Ablation)"};
+            ImGui::Combo("##TessellationMode", &m_TessellationMode, options, IM_ARRAYSIZE(options));
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Min Distance");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::InputFloat("##MinDistance", reinterpret_cast<float*>(&m_MinDist));
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Max Distance");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::InputFloat("##MaxDistance", reinterpret_cast<float*>(&m_MaxDist));
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Target Pixel");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::InputFloat("##TargetPixel", reinterpret_cast<float*>(&m_TargetPixel));
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Max Curvature");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::InputFloat("##MaxCurvature", reinterpret_cast<float*>(&m_MaxCurvature));
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Epsilon Coefficient");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::InputFloat("##EpsilonCoefficient", reinterpret_cast<float*>(&m_EpsilonCoefficient));
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Lock Camera Position");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Checkbox("##LockCameraPosition", &m_LockCameraPosition);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Restart Count Time");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Checkbox("##ReStartCountTime", &m_ReStartCountTime);
 
             ImGui::EndTable();
         }
@@ -398,6 +574,9 @@ void RuntimeLodLayer::OnEvent(iGe::Event& event) {
     dispatcher.Dispatch<iGe::WindowResizeEvent>(
             std::bind(&RuntimeLodLayer::OnWindowResizeEvent, this, std::placeholders::_1));
 
+    dispatcher.Dispatch<iGe::KeyPressedEvent>(
+            std::bind(&RuntimeLodLayer::OnKeyPressedEvent, this, std::placeholders::_1));
+
     dispatcher.Dispatch<iGe::MouseScrolledEvent>(
             std::bind(&RuntimeLodLayer::OnMouseScrolledEvent, this, std::placeholders::_1));
 
@@ -413,7 +592,7 @@ bool RuntimeLodLayer::OnWindowResizeEvent(iGe::WindowResizeEvent& event) {
 
     // Resize camera
     float aspectRatio = float(window.GetWidth()) / float(window.GetHeight());
-    m_Camera.SetProjection(45.0f, aspectRatio, 0.01f, 1000.0f);
+    m_Camera.SetProjection(60.0f, aspectRatio, 0.01f, 1000.0f);
 
     // Resize viewport
     iGe::Renderer::OnWindowResize(window.GetWidth(), window.GetHeight());
@@ -558,4 +737,50 @@ void RuntimeLodLayer::ViewTranslation() {
     glm::vec3 translation = modelCenter - glm::vec3{offsetWorld};
     m_CameraMoveSpeed = glm::length(glm::vec2{translation}) / glm::length(mouseDelta);
     m_CameraPosition += glm::vec3{-mouseDelta.x * m_CameraMoveSpeed, mouseDelta.y * m_CameraMoveSpeed, 0.0f};
+}
+
+bool RuntimeLodLayer::OnKeyPressedEvent(iGe::KeyPressedEvent& event) {
+    // F12 - Screenshot
+    if (event.GetKeyCode() == iGeKey::F12) {
+        // Generate filename with timestamp using C++20 chrono
+        auto now = std::chrono::system_clock::now();
+        auto timePoint = std::chrono::floor<std::chrono::seconds>(now);
+
+        std::string filename = std::format("screenshots/screenshot_{:%Y%m%d_%H%M%S}.png", timePoint);
+
+        SaveScreenshot(filename);
+        return true;
+    }
+    return false;
+}
+
+void RuntimeLodLayer::SaveScreenshot(const std::string& filename) {
+    auto& window = iGe::Application::Get().GetWindow();
+    int width = window.GetWidth();
+    int height = window.GetHeight();
+
+    // Create screenshots directory if it doesn't exist
+    std::filesystem::path filepath(filename);
+    if (filepath.has_parent_path()) { std::filesystem::create_directories(filepath.parent_path()); }
+
+    // Allocate buffer for pixel data (RGBA)
+    std::vector<unsigned char> pixels(width * height * 4);
+
+    // Read pixels from framebuffer
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+    // Flip image vertically (OpenGL origin is bottom-left)
+    std::vector<unsigned char> flippedPixels(width * height * 4);
+    for (int y = 0; y < height; ++y) {
+        std::memcpy(flippedPixels.data() + y * width * 4, pixels.data() + (height - 1 - y) * width * 4, width * 4);
+    }
+
+    // Save as PNG using stb_image_write
+    int result = stbi_write_png(filename.c_str(), width, height, 4, flippedPixels.data(), width * 4);
+
+    if (result) {
+        IGE_INFO("Screenshot saved: {}", filename);
+    } else {
+        IGE_ERROR("Failed to save screenshot: {}", filename);
+    }
 }
