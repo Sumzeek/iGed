@@ -124,6 +124,8 @@ export struct RHIVertexInputAttributeDescription {
     uint32 Binding;
     RHIFormat Format;
     uint32 Offset;
+    std::string SemanticName;   // DX12: HLSL semantic (POSITION, COLOR, etc.)
+    uint32 SemanticIndex = 0;   // DX12: semantic index for repeated semantics
 };
 
 export struct RHIPipelineVertexInputState {

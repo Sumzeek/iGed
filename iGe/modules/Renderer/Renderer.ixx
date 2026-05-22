@@ -4,4 +4,5 @@ export import glm;
 export import iGe.RHI;
 
 export import :OrthographicCamera;
+export import :ShaderPackage;
 export import :PipelineParser;

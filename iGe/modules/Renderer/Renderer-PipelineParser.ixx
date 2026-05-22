@@ -13,7 +13,7 @@ namespace iGe
 // =================================================================================================
 
 export using ShaderLoader = std::function<Scope<RHIShader>(
-        RHIShaderStage stage, const std::filesystem::path& shaderPath, const std::string& entryPoint)>;
+        RHIShaderStage stage, const std::string& shaderName, const std::string& entryPoint)>;
 
 // =================================================================================================
 // PipelineParser
@@ -21,7 +21,7 @@ export using ShaderLoader = std::function<Scope<RHIShader>(
 
 export class IGE_API PipelineParser {
 public:
-    static Scope<RHIGraphicsPipeline> CreateGraphicsPipeline(const std::filesystem::path& jsonContent,
+    static Scope<RHIGraphicsPipeline> CreateGraphicsPipeline(const std::filesystem::path& jsonPath,
                                                              ShaderLoader shaderLoader,
                                                              const RHIRenderPass* pRenderPass = nullptr,
                                                              const RHIPipelineLayout* pPipelineLayout = nullptr);

@@ -96,6 +96,7 @@ export struct RHIBarrierBatch {
 
     // Dependency flags
     bool ByRegion = false; // VK_DEPENDENCY_BY_REGION_BIT
+
 };
 
 // =================================================================================================

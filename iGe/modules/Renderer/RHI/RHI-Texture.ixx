@@ -156,8 +156,7 @@ export struct RHITextureCreateInfo {
     RHIMemoryUsage MemoryUsage = RHIMemoryUsage::GpuOnly;
 
     // Initial data (optional, for immutable textures)
-    const void* pInitialData = nullptr;
-    uint64 InitialDataSize = 0;
+    std::span<const std::byte> InitialData = {};
 };
 
 // =================================================================================================

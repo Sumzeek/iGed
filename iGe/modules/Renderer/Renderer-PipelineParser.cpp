@@ -4,6 +4,7 @@ module;
 
 module iGe.Renderer;
 import :PipelineParser;
+import :ShaderPackage;
 
 namespace iGe
 {
@@ -101,19 +102,6 @@ JSON_TO_ENUM(str, RHILogicOp, Copy)
 JSON_TO_ENUM(str, RHILogicOp, NoOp)
 END_ENUM_MAP(RHILogicOp::Copy)
 
-BEGIN_ENUM_MAP(RHIVertexInputRate)
-JSON_TO_ENUM(str, RHIVertexInputRate, Vertex)
-JSON_TO_ENUM(str, RHIVertexInputRate, Instance)
-END_ENUM_MAP(RHIVertexInputRate::Vertex)
-
-BEGIN_ENUM_MAP(RHIFormat)
-JSON_TO_ENUM(str, RHIFormat, R32G32B32SFloat)
-JSON_TO_ENUM(str, RHIFormat, R32G32SFloat)
-JSON_TO_ENUM(str, RHIFormat, R32G32B32A32SFloat)
-JSON_TO_ENUM(str, RHIFormat, R8G8B8A8UNorm)
-// Add more formats as needed
-END_ENUM_MAP(RHIFormat::Unknown)
-
 BEGIN_ENUM_MAP(RHIDynamicState)
 JSON_TO_ENUM(str, RHIDynamicState, Viewport)
 JSON_TO_ENUM(str, RHIDynamicState, Scissor)
@@ -125,14 +113,14 @@ END_ENUM_MAP(RHIDynamicState::Viewport)
 // =================================================================================================
 
 static RHIShaderStage StringToRHIShaderStage(const std::string& str) {
-    if (str == "vertex" || str == "Vertex") { return RHIShaderStage::Vertex; }
-    if (str == "fragment" || str == "Fragment") { return RHIShaderStage::Fragment; }
-    if (str == "geometry" || str == "Geometry") { return RHIShaderStage::Geometry; }
-    if (str == "tessControl" || str == "TessControl") { return RHIShaderStage::TessControl; }
-    if (str == "tessEvaluation" || str == "TessEvaluation") { return RHIShaderStage::TessEvaluation; }
-    if (str == "compute" || str == "Compute") { return RHIShaderStage::Compute; }
+    if (str == "vertex") { return RHIShaderStage::Vertex; }
+    if (str == "fragment") { return RHIShaderStage::Fragment; }
+    if (str == "geometry") { return RHIShaderStage::Geometry; }
+    if (str == "tesscontrol") { return RHIShaderStage::TessControl; }
+    if (str == "tesseval") { return RHIShaderStage::TessEvaluation; }
+    if (str == "compute") { return RHIShaderStage::Compute; }
 
-    Internal::LogWarn("Unrecognized shader stage string: {}. Defaulting to Vertex stage.", str);
+    Internal::LogWarn("Unrecognized shader stage: {}. Defaulting to Vertex.", str);
     return RHIShaderStage::Vertex;
 }
 
@@ -142,22 +130,44 @@ static Flags<RHIColorComponentFlagBits> ParseColorWriteMask(const nlohmann::json
         mask.Reset();
         for (const auto& item: j) {
             std::string s = item.get<std::string>();
-            if (s == "R") {
-                mask.AddFlag(RHIColorComponentFlagBits::R);
-            } else if (s == "G") {
-                mask.AddFlag(RHIColorComponentFlagBits::G);
-            } else if (s == "B") {
-                mask.AddFlag(RHIColorComponentFlagBits::B);
-            } else if (s == "A") {
-                mask.AddFlag(RHIColorComponentFlagBits::A);
-            }
+            if (s == "R") { mask.AddFlag(RHIColorComponentFlagBits::R); }
+            else if (s == "G") { mask.AddFlag(RHIColorComponentFlagBits::G); }
+            else if (s == "B") { mask.AddFlag(RHIColorComponentFlagBits::B); }
+            else if (s == "A") { mask.AddFlag(RHIColorComponentFlagBits::A); }
         }
     }
     return mask;
 }
 
 // =================================================================================================
-// Internal ParseInfo Structure (holds ownership of dynamically allocated data)
+// Format size helper for vertex input derivation
+// =================================================================================================
+
+static uint32 FormatStringToSize(const std::string& format) {
+    if (format == "float" || format == "int" || format == "uint") return 4;
+    if (format == "float2" || format == "int2" || format == "uint2") return 8;
+    if (format == "float3" || format == "int3" || format == "uint3") return 12;
+    if (format == "float4" || format == "int4" || format == "uint4") return 16;
+    if (format == "mat4") return 64;
+    return 0;
+}
+
+static RHIFormat FormatStringToRHIFormat(const std::string& format) {
+    if (format == "float") return RHIFormat::R32SFloat;
+    if (format == "float2") return RHIFormat::R32G32SFloat;
+    if (format == "float3") return RHIFormat::R32G32B32SFloat;
+    if (format == "float4") return RHIFormat::R32G32B32A32SFloat;
+    if (format == "int" || format == "uint") return RHIFormat::R32SInt;
+    if (format == "int2" || format == "uint2") return RHIFormat::R32G32SInt;
+    if (format == "int3" || format == "uint3") return RHIFormat::R32G32B32SInt;
+    if (format == "int4" || format == "uint4") return RHIFormat::R32G32B32A32SInt;
+
+    Internal::LogWarn("Unknown vertex format: {}. Defaulting to R32G32B32SFloat.", format);
+    return RHIFormat::R32G32B32SFloat;
+}
+
+// =================================================================================================
+// Internal ParseInfo Structure
 // =================================================================================================
 
 struct ParsedPipelineData {
@@ -183,28 +193,32 @@ struct ParsedPipelineData {
 };
 
 // =================================================================================================
-// JSON Parsing Implementation
+// Shader Loading via ShaderPackage
 // =================================================================================================
 
-static void ParseShaders(const nlohmann::json& j, ParsedPipelineData& data, ShaderLoader shaderLoader) {
-    if (!j.contains("shaders")) return;
+static void LoadShaders(const nlohmann::json& j, ParsedPipelineData& data, ShaderLoader shaderLoader) {
+    if (!j.contains("shader")) {
+        Internal::LogError("PipelineParser: Pipeline JSON missing 'shader' field");
+        return;
+    }
 
-    const auto& shaders = j["shaders"];
-    for (const auto& shader: shaders) {
-        std::string stageStr = shader.value("stage", "vertex");
-        std::string path = shader.value("path", "");
-        std::string entryPoint = shader.value("entry", "main");
+    std::string shaderName = j["shader"].get<std::string>();
 
-        if (path.empty()) {
-            Internal::LogWarn("PipelineParser: Shader path is empty for stage '{}'", stageStr);
-            continue;
-        }
+    // Load shader package to get stage info
+    auto pkg = ShaderPackage::Load(shaderName);
+    if (!pkg) {
+        Internal::LogError("PipelineParser: Failed to load shader package '{}'.", shaderName);
+        return;
+    }
 
-        RHIShaderStage stage = StringToRHIShaderStage(stageStr);
-        auto loadedShader = shaderLoader(stage, path, entryPoint);
+    // Load each stage via ShaderLoader
+    for (const auto& stageInfo : pkg->GetStages()) {
+        RHIShaderStage stage = StringToRHIShaderStage(stageInfo.Stage);
+        auto loadedShader = shaderLoader(stage, shaderName, stageInfo.Entry);
 
         if (!loadedShader) {
-            Internal::LogError("PipelineParser: Failed to load shader: {}", path);
+            Internal::LogError("PipelineParser: Failed to load shader '{}' stage '{}'",
+                               shaderName, stageInfo.Stage);
             continue;
         }
 
@@ -234,40 +248,37 @@ static void ParseShaders(const nlohmann::json& j, ParsedPipelineData& data, Shad
                 break;
         }
     }
+
+    // Derive vertex input from shader package reflection
+    const auto& vertexInputs = pkg->GetVertexInputs();
+    if (!vertexInputs.empty()) {
+        uint32 offset = 0;
+        for (const auto& vi : vertexInputs) {
+            RHIVertexInputAttributeDescription attr{};
+            attr.Location = vi.Location;
+            attr.Binding = 0;
+            attr.Format = FormatStringToRHIFormat(vi.Format);
+            attr.Offset = offset;
+            attr.SemanticName = vi.Semantic;
+            attr.SemanticIndex = 0;
+            offset += FormatStringToSize(vi.Format);
+            data.VertexAttributes.push_back(attr);
+        }
+
+        RHIVertexInputBindingDescription binding{};
+        binding.Binding = 0;
+        binding.Stride = offset;
+        binding.InputRate = RHIVertexInputRate::Vertex;
+        data.VertexBindings.push_back(binding);
+
+        data.CreateInfo.VertexInputState.VertexBindingDescriptions = data.VertexBindings;
+        data.CreateInfo.VertexInputState.VertexAttributeDescriptions = data.VertexAttributes;
+    }
 }
 
-static void ParseVertexInput(const nlohmann::json& j, ParsedPipelineData& data) {
-    if (!j.contains("vertexInput")) return;
-
-    const auto& vi = j["vertexInput"];
-
-    // Parse bindings
-    if (vi.contains("bindings")) {
-        for (const auto& binding: vi["bindings"]) {
-            RHIVertexInputBindingDescription desc{};
-            desc.Binding = binding.value("binding", 0u);
-            desc.Stride = binding.value("stride", 0u);
-            desc.InputRate = StringToRHIVertexInputRate(binding.value("inputRate", "Vertex"));
-            data.VertexBindings.push_back(desc);
-        }
-    }
-
-    // Parse attributes
-    if (vi.contains("attributes")) {
-        for (const auto& attr: vi["attributes"]) {
-            RHIVertexInputAttributeDescription desc{};
-            desc.Location = attr.value("location", 0u);
-            desc.Binding = attr.value("binding", 0u);
-            desc.Format = StringToRHIFormat(attr.value("format", "R32G32B32SFloat"));
-            desc.Offset = attr.value("offset", 0u);
-            data.VertexAttributes.push_back(desc);
-        }
-    }
-
-    // Set spans
-    data.CreateInfo.VertexInputState.VertexBindingDescriptions = data.VertexBindings;
-    data.CreateInfo.VertexInputState.VertexAttributeDescriptions = data.VertexAttributes;
-}
+// =================================================================================================
+// Pipeline State Parsing (unchanged logic, simplified)
+// =================================================================================================
 
 static void ParseInputAssembly(const nlohmann::json& j, ParsedPipelineData& data) {
     if (!j.contains("inputAssembly")) return;
@@ -309,7 +320,6 @@ static void ParseDepthStencil(const nlohmann::json& j, ParsedPipelineData& data)
     state.MinDepthBounds = ds.value("minDepthBounds", 0.0f);
     state.MaxDepthBounds = ds.value("maxDepthBounds", 1.0f);
 
-    // Parse front stencil ops
     if (ds.contains("front")) {
         const auto& front = ds["front"];
         state.Front.FailOp = StringToRHIStencilOp(front.value("failOp", "Keep"));
@@ -321,7 +331,6 @@ static void ParseDepthStencil(const nlohmann::json& j, ParsedPipelineData& data)
         state.Front.Reference = front.value("reference", 0u);
     }
 
-    // Parse back stencil ops
     if (ds.contains("back")) {
         const auto& back = ds["back"];
         state.Back.FailOp = StringToRHIStencilOp(back.value("failOp", "Keep"));
@@ -343,13 +352,11 @@ static void ParseColorBlend(const nlohmann::json& j, ParsedPipelineData& data) {
     state.LogicOpEnable = cb.value("logicOpEnable", false);
     state.LogicOp = StringToRHILogicOp(cb.value("logicOp", "Copy"));
 
-    // Parse blend constants
     if (cb.contains("blendConstants") && cb["blendConstants"].is_array()) {
         const auto& constants = cb["blendConstants"];
         for (size_t i = 0; i < 4 && i < constants.size(); ++i) { state.BlendConstants[i] = constants[i].get<float>(); }
     }
 
-    // Parse attachments
     if (cb.contains("attachments")) {
         for (const auto& attachment: cb["attachments"]) {
             RHIPipelineColorBlendAttachmentState attState{};
@@ -369,7 +376,6 @@ static void ParseColorBlend(const nlohmann::json& j, ParsedPipelineData& data) {
         }
     }
 
-    // If no attachments specified, add a default one
     if (data.ColorBlendAttachments.empty()) {
         data.ColorBlendAttachments.push_back(RHIPipelineColorBlendAttachmentState{});
     }
@@ -412,6 +418,10 @@ static void ParseViewport(const nlohmann::json& j, ParsedPipelineData& data) {
     state.ScissorCount = vp.value("scissorCount", 1u);
 }
 
+// =================================================================================================
+// Main Parse Function
+// =================================================================================================
+
 static ParsedPipelineData ParsePipelineJson(const std::filesystem::path& jsonPath, ShaderLoader shaderLoader,
                                             const RHIRenderPass* pRenderPass,
                                             const RHIPipelineLayout* pPipelineLayout) {
@@ -419,7 +429,6 @@ static ParsedPipelineData ParsePipelineJson(const std::filesystem::path& jsonPat
     ParsedPipelineData data{};
 
     try {
-        // Read JSON file content
         if (!std::filesystem::exists(jsonPath)) {
             Internal::LogError("PipelineParser: JSON file not found - {}", jsonPath.string());
             return data;
@@ -433,9 +442,10 @@ static ParsedPipelineData ParsePipelineJson(const std::filesystem::path& jsonPat
 
         nlohmann::json j = nlohmann::json::parse(file);
 
-        // Parse all sections
-        ParseShaders(j, data, std::move(shaderLoader));
-        ParseVertexInput(j, data);
+        // Load shaders from ShaderPackage + derive vertex input
+        LoadShaders(j, data, std::move(shaderLoader));
+
+        // Parse pipeline state sections
         ParseInputAssembly(j, data);
         ParseRasterization(j, data);
         ParseDepthStencil(j, data);
@@ -460,12 +470,12 @@ static ParsedPipelineData ParsePipelineJson(const std::filesystem::path& jsonPat
 // PipelineParser Public Interface Implementation
 // =================================================================================================
 
-Scope<RHIGraphicsPipeline> PipelineParser::CreateGraphicsPipeline(const std::filesystem::path& jsonContent,
+Scope<RHIGraphicsPipeline> PipelineParser::CreateGraphicsPipeline(const std::filesystem::path& jsonPath,
                                                                   ShaderLoader shaderLoader,
                                                                   const RHIRenderPass* pRenderPass,
                                                                   const RHIPipelineLayout* pPipelineLayout) {
 
-    ParsedPipelineData data = ParsePipelineJson(jsonContent, std::move(shaderLoader), pRenderPass, pPipelineLayout);
+    ParsedPipelineData data = ParsePipelineJson(jsonPath, std::move(shaderLoader), pRenderPass, pPipelineLayout);
 
     auto rhi = RHI::Get();
     if (!rhi) {

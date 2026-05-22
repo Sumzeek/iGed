@@ -29,6 +29,7 @@ export struct RHIShaderCreateInfo {
     RHIShaderStage Stage;
     std::string EntryPoint = "main";
     std::string SourceCode;
+    std::span<const uint8> Bytecode = {};
 };
 
 export class IGE_API RHIShader : public RHIResource {

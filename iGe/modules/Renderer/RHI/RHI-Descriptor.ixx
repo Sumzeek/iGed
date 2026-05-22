@@ -55,7 +55,8 @@ export struct RHIDescriptorSetLayoutBinding {
 
 export struct RHIDescriptorSetLayoutCreateInfo {
     std::span<const RHIDescriptorSetLayoutBinding> Bindings = {};
-    bool UpdateAfterBindPool = false; // Allow update after bind
+    bool UpdateAfterBindPool = false;
+
 };
 
 export class IGE_API RHIDescriptorSetLayout : public RHIResource {
@@ -84,6 +85,7 @@ export struct RHIPushConstantRange {
 export struct RHIPipelineLayoutCreateInfo {
     std::span<const RHIDescriptorSetLayout* const> SetLayouts = {};
     std::span<const RHIPushConstantRange> PushConstantRanges = {};
+
 };
 
 export class IGE_API RHIPipelineLayout : public RHIResource {
@@ -116,6 +118,7 @@ export struct RHIDescriptorPoolCreateInfo {
     std::span<const RHIDescriptorPoolSize> PoolSizes = {};
     bool AllowFreeDescriptorSet = false;
     bool UpdateAfterBind = false;
+
 };
 
 // Forward declaration

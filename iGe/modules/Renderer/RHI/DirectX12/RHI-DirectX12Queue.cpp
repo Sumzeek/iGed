@@ -138,7 +138,7 @@ void DirectX12Queue::Wait(DirectX12Semaphore* semaphore, uint64 value) {
     if (FAILED(hr)) { Internal::LogError("DirectX12Queue: Failed to wait on semaphore from GPU"); }
 }
 
-uint64 DirectX12Queue::ExecuteCommandLists(const std::vector<ID3D12CommandList*>& commandLists) {
+        uint64 DirectX12Queue::ExecuteCommandLists(std::span<ID3D12CommandList* const> commandLists) {
     if (commandLists.empty() || !m_CommandQueue) { return 0; }
 
     m_CommandQueue->ExecuteCommandLists(static_cast<UINT>(commandLists.size()), commandLists.data());

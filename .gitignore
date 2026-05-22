@@ -3,10 +3,13 @@
 /out/
 /vc140.pdb
 
-# Clion
+# CLion
 /.idea/
 /cmake-build-debug/
 /cmake-build-release/
 
-# Shader Compiled File
-/Sandbox/assets/shaders/generated/
+# Build directories
+cmake-build-*/
+
+# AI codeing directories
+/openspec/

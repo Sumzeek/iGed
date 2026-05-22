@@ -225,126 +225,13 @@ DirectX12GraphicsPipeline::DirectX12GraphicsPipeline(ID3D12Device* device, const
         m_RootSignature = dxLayout->GetRootSignature();
     }
 
-    // If no root signature provided, create one based on shader reflection
+    // If no root signature provided, create a minimal one
     if (!m_RootSignature) {
-        Internal::LogWarn("No pipeline layout provided, creating root signature from shader reflection");
-
-        std::vector<D3D12_ROOT_PARAMETER> rootParameters;
-        std::vector<D3D12_DESCRIPTOR_RANGE> descriptorRanges;
-
-        // Collect resources from all shaders
-        auto collectShaderResources = [&](const RHIShader* shader) {
-            if (!shader) return;
-            auto* dxShader = static_cast<const DirectX12Shader*>(shader);
-            const auto& resources = dxShader->GetResources();
-
-            for (const auto& res: resources) {
-                D3D12_DESCRIPTOR_RANGE range = {};
-                range.NumDescriptors = res.Count;
-                range.BaseShaderRegister = res.Register;
-                range.RegisterSpace = res.Space;
-                range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-                // Determine range type based on resource type (D3D_SHADER_INPUT_TYPE)
-                switch (res.Type) {
-                    case D3D_SIT_CBUFFER:
-                        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-                        break;
-                    case D3D_SIT_TEXTURE:
-                    case D3D_SIT_STRUCTURED:
-                    case D3D_SIT_BYTEADDRESS:
-                        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                        break;
-                    case D3D_SIT_UAV_RWTYPED:
-                    case D3D_SIT_UAV_RWSTRUCTURED:
-                    case D3D_SIT_UAV_RWBYTEADDRESS:
-                    case D3D_SIT_UAV_APPEND_STRUCTURED:
-                    case D3D_SIT_UAV_CONSUME_STRUCTURED:
-                    case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
-                        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-                        break;
-                    case D3D_SIT_SAMPLER:
-                        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-                        break;
-                    default:
-                        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                        break;
-                }
-
-                // Check if we already have this range (avoid duplicates)
-                bool exists = false;
-                for (const auto& existing: descriptorRanges) {
-                    if (existing.RangeType == range.RangeType &&
-                        existing.BaseShaderRegister == range.BaseShaderRegister &&
-                        existing.RegisterSpace == range.RegisterSpace) {
-                        exists = true;
-                        break;
-                    }
-                }
-                if (!exists) { descriptorRanges.push_back(range); }
-            }
-        };
-
-        collectShaderResources(info.pVertexShader);
-        collectShaderResources(info.pFragmentShader);
-        collectShaderResources(info.pGeometryShader);
-        collectShaderResources(info.pTessControlShader);
-        collectShaderResources(info.pTessEvaluationShader);
-
-        // Group ranges by type
-        std::vector<D3D12_DESCRIPTOR_RANGE> cbvRanges, srvRanges, uavRanges, samplerRanges;
-        for (const auto& range: descriptorRanges) {
-            switch (range.RangeType) {
-                case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
-                    cbvRanges.push_back(range);
-                    break;
-                case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
-                    srvRanges.push_back(range);
-                    break;
-                case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
-                    uavRanges.push_back(range);
-                    break;
-                case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
-                    samplerRanges.push_back(range);
-                    break;
-            }
-        }
-
-        // Store ranges in member to keep them alive
-        std::vector<std::vector<D3D12_DESCRIPTOR_RANGE>> rangeStorage;
-
-        // Combine CBV, SRV, UAV into a single descriptor table for CBV_SRV_UAV heap
-        // This matches the BindDescriptorSets logic which binds a single CBV_SRV_UAV table
-        std::vector<D3D12_DESCRIPTOR_RANGE> cbvSrvUavRanges;
-        cbvSrvUavRanges.insert(cbvSrvUavRanges.end(), cbvRanges.begin(), cbvRanges.end());
-        cbvSrvUavRanges.insert(cbvSrvUavRanges.end(), srvRanges.begin(), srvRanges.end());
-        cbvSrvUavRanges.insert(cbvSrvUavRanges.end(), uavRanges.begin(), uavRanges.end());
-
-        // Add CBV/SRV/UAV descriptor table as parameter 0
-        if (!cbvSrvUavRanges.empty()) {
-            rangeStorage.push_back(std::move(cbvSrvUavRanges));
-            D3D12_ROOT_PARAMETER param = {};
-            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            param.DescriptorTable.NumDescriptorRanges = static_cast<UINT>(rangeStorage.back().size());
-            param.DescriptorTable.pDescriptorRanges = rangeStorage.back().data();
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-            rootParameters.push_back(param);
-        }
-
-        // Add Sampler descriptor table as parameter 1 (if any)
-        if (!samplerRanges.empty()) {
-            rangeStorage.push_back(std::move(samplerRanges));
-            D3D12_ROOT_PARAMETER param = {};
-            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            param.DescriptorTable.NumDescriptorRanges = static_cast<UINT>(rangeStorage.back().size());
-            param.DescriptorTable.pDescriptorRanges = rangeStorage.back().data();
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-            rootParameters.push_back(param);
-        }
+        Internal::LogWarn("No pipeline layout provided, creating empty root signature");
 
         D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-        rootSigDesc.NumParameters = static_cast<UINT>(rootParameters.size());
-        rootSigDesc.pParameters = rootParameters.empty() ? nullptr : rootParameters.data();
+        rootSigDesc.NumParameters = 0;
+        rootSigDesc.pParameters = nullptr;
         rootSigDesc.NumStaticSamplers = 0;
         rootSigDesc.pStaticSamplers = nullptr;
         rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -390,59 +277,15 @@ DirectX12GraphicsPipeline::DirectX12GraphicsPipeline(ID3D12Device* device, const
     if (info.pTessControlShader) { setShaderBytecode(psoDesc.HS, info.pTessControlShader); }
     if (info.pTessEvaluationShader) { setShaderBytecode(psoDesc.DS, info.pTessEvaluationShader); }
 
-    // Input layout - use shader reflection data if available
+    // Input layout - built from vertex input state (derived from shader package reflection)
     std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
-    std::vector<std::string> semanticNameStorage; // Keep semantic name strings alive
+    std::vector<std::string> semanticNameStorage;
+    semanticNameStorage.reserve(info.VertexInputState.VertexAttributeDescriptions.size()); // Keep semantic name strings alive
 
-    // Try to get input layout from vertex shader reflection
-    const DirectX12Shader* dxVertexShader = nullptr;
-    if (info.pVertexShader) { dxVertexShader = static_cast<const DirectX12Shader*>(info.pVertexShader); }
-
-    if (dxVertexShader && !dxVertexShader->GetInputLayout().empty()) {
-        // Use shader reflection for input layout (preferred method)
-        const auto& shaderInputLayout = dxVertexShader->GetInputLayout();
-        semanticNameStorage.reserve(shaderInputLayout.size());
-
-        for (const auto& shaderElem: shaderInputLayout) {
-            // Store semantic name to keep it alive
-            semanticNameStorage.push_back(shaderElem.SemanticName);
-
-            D3D12_INPUT_ELEMENT_DESC elem = {};
-            elem.SemanticName = semanticNameStorage.back().c_str();
-            elem.SemanticIndex = shaderElem.SemanticIndex;
-            elem.Format = shaderElem.Format;
-            elem.InputSlot = shaderElem.InputSlot;
-            elem.AlignedByteOffset = shaderElem.AlignedByteOffset;
-            elem.InputSlotClass = shaderElem.InputSlotClass;
-            elem.InstanceDataStepRate = shaderElem.InstanceDataStepRate;
-
-            // Override with user-provided binding info if available
-            for (const auto& binding: info.VertexInputState.VertexBindingDescriptions) {
-                if (binding.Binding == shaderElem.InputSlot) {
-                    elem.InputSlotClass = ConvertInputRate(binding.InputRate);
-                    elem.InstanceDataStepRate = (binding.InputRate == RHIVertexInputRate::Instance) ? 1 : 0;
-                    break;
-                }
-            }
-
-            // Override offset from user-provided attribute info if available
-            for (const auto& attribute: info.VertexInputState.VertexAttributeDescriptions) {
-                // Match by location (semantic index for TEXCOORD-like semantics)
-                if (attribute.Location == inputElements.size()) {
-                    elem.AlignedByteOffset = attribute.Offset;
-                    elem.InputSlot = attribute.Binding;
-                    if (elem.Format == DXGI_FORMAT_UNKNOWN) { elem.Format = ConvertVertexFormat(attribute.Format); }
-                    break;
-                }
-            }
-
-            inputElements.push_back(elem);
-        }
-    } else {
-        // Fallback: build input layout from user-provided vertex input state
+    {
+        // Build input layout from user-provided vertex input state
         // Use common semantic name mapping based on location
         auto getSemanticForLocation = [](uint32 location) -> std::pair<std::string, uint32> {
-            // Common convention: location 0 = POSITION, 1 = NORMAL, 2 = TEXCOORD, etc.
             switch (location) {
                 case 0:
                     return {"POSITION", 0};
@@ -464,7 +307,17 @@ DirectX12GraphicsPipeline::DirectX12GraphicsPipeline(ID3D12Device* device, const
         };
 
         for (const auto& attribute: info.VertexInputState.VertexAttributeDescriptions) {
-            auto [semanticName, semanticIndex] = getSemanticForLocation(attribute.Location);
+            // Use semantic from reflection if available, otherwise fallback to location-based mapping
+            std::string semanticName;
+            uint32 semanticIndex = 0;
+            if (!attribute.SemanticName.empty()) {
+                semanticName = attribute.SemanticName;
+                semanticIndex = attribute.SemanticIndex;
+            } else {
+                auto [name, idx] = getSemanticForLocation(attribute.Location);
+                semanticName = name;
+                semanticIndex = idx;
+            }
             semanticNameStorage.push_back(semanticName);
             D3D12_INPUT_ELEMENT_DESC elem = {};
             elem.SemanticName = semanticNameStorage.back().c_str();

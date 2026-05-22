@@ -23,6 +23,12 @@ export struct RHIBufferCreateInfo {
     uint64 Size;
     Flags<RHIBufferUsageBit> Usage;
     RHIMemoryUsage MemoryUsage;
+
+    // RHIBufferCreateInfo() = default;
+    // RHIBufferCreateInfo(const RHIBufferCreateInfo&) = delete;
+    // RHIBufferCreateInfo& operator=(const RHIBufferCreateInfo&) = delete;
+    // RHIBufferCreateInfo(RHIBufferCreateInfo&&) = delete;
+    // RHIBufferCreateInfo& operator=(RHIBufferCreateInfo&&) = delete;
 };
 
 export class RHIBuffer : public RHIResource {
@@ -71,7 +77,7 @@ public:
 
 protected:
     RHIBuffer(const RHIBufferCreateInfo& info)
-        : RHIResource(RHIResourceType::Buffer), m_Size(info.Size), m_Usage(info.Usage),
+        : RHIResource{RHIResourceType::Buffer}, m_Size(info.Size), m_Usage(info.Usage),
           m_MemoryUsage(info.MemoryUsage) {}
 
     uint64 m_Size;

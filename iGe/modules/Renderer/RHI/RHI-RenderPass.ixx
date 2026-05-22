@@ -119,6 +119,7 @@ export struct RHISubpassDescription {
     std::span<const uint32> PreserveAttachments = {};
 
     bool HasDepthStencilAttachment() const { return DepthStencilAttachment != ~0u; }
+
 };
 
 export struct RHISubpassDependency {
@@ -136,6 +137,7 @@ export struct RHIRenderPassCreateInfo {
     std::span<const RHIAttachmentDescription> Attachments = {};
     std::span<const RHISubpassDescription> Subpasses = {};
     std::span<const RHISubpassDependency> Dependencies = {};
+
 };
 
 // =================================================================================================
@@ -170,6 +172,7 @@ export struct RHIRenderPassBeginInfo {
     // Render area
     RHIOffset2D RenderAreaOffset = {0, 0};
     RHIExtent2D RenderAreaExtent = {0, 0};
+
 };
 
 } // namespace iGe

@@ -241,23 +241,22 @@ void ExampleLayer::CreateRenderPass() {
 }
 
 void ExampleLayer::CreateGraphicsPipeline() {
-    // Define shader loader callback
-    iGe::ShaderLoader shaderLoader = [](iGe::RHIShaderStage stage, const std::filesystem::path& path,
+    // Define shader loader callback - loads pre-compiled bytecode via ShaderPackage
+    iGe::ShaderLoader shaderLoader = [](iGe::RHIShaderStage stage, const std::string& shaderName,
                                         const std::string& entryPoint) -> iGe::Scope<iGe::RHIShader> {
-        std::ifstream file(path, std::ios::ate | std::ios::binary);
-        if (!file.is_open()) { return nullptr; }
+        auto pkg = iGe::ShaderPackage::Load(shaderName);
+        if (!pkg) {
+            iGe::Internal::LogError("Failed to load shader package: {}", shaderName);
+            return nullptr;
+        }
 
-        size_t fileSize = static_cast<size_t>(file.tellg());
-        std::vector<char> buffer(fileSize);
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-        file.close();
-        std::string source(buffer.begin(), buffer.end());
+        auto bytecode = pkg->LoadBytecode(stage);
+        if (bytecode.empty()) { return nullptr; }
 
         iGe::RHIShaderCreateInfo info{};
         info.Stage = stage;
-        info.SourceCode = source;
         info.EntryPoint = entryPoint;
+        info.Bytecode = bytecode;
         return iGe::RHI::Get()->CreateShader(info);
     };
 

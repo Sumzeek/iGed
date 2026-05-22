@@ -51,7 +51,7 @@ public:
     void* GetNativeHandle() const override { return m_CommandQueue.Get(); }
 
     // Execute command lists and return a fence value for synchronization
-    uint64 ExecuteCommandLists(const std::vector<ID3D12CommandList*>& commandLists);
+                uint64 ExecuteCommandLists(std::span<ID3D12CommandList* const> commandLists);
 
 private:
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_CommandQueue;

@@ -58,18 +58,18 @@ public:
     // Surface and SwapChain
     // =============================================================================
 
-    virtual Scope<RHISurface> CreateSurface(const RHISurfaceCreateInfo& info) = 0;
-    virtual Scope<RHISwapChain> CreateSwapChain(const RHISwapChainCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHISurface> CreateSurface(const RHISurfaceCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHISwapChain> CreateSwapChain(const RHISwapChainCreateInfo& info) = 0;
 
     // =============================================================================
     // Command Infrastructure
     // =============================================================================
 
-    virtual Scope<RHICommandPool> CreateCommandPool(const RHICommandPoolCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHICommandPool> CreateCommandPool(const RHICommandPoolCreateInfo& info) = 0;
 
     // Allocate command list from a pool (convenience wrapper)
-    virtual Scope<RHICommandList> AllocateCommandList(RHICommandPool* pPool) = 0;
-    virtual std::vector<Scope<RHICommandList>> AllocateCommandLists(RHICommandPool* pPool, uint32 count) = 0;
+    virtual [[nodiscard]] Scope<RHICommandList> AllocateCommandList(RHICommandPool* pPool) = 0;
+    virtual [[nodiscard]] std::vector<Scope<RHICommandList>> AllocateCommandLists(RHICommandPool* pPool, uint32 count) = 0;
 
     // Free command lists explicitly (convenience wrapper)
     // Note: Prefer letting Scope handle cleanup automatically
@@ -80,32 +80,32 @@ public:
     // Buffer Operations
     // =============================================================================
 
-    virtual Scope<RHIBuffer> CreateBuffer(const RHIBufferCreateInfo& info) = 0;
-    virtual Scope<RHIVertexBuffer> CreateVertexBuffer(const RHIVertexBufferCreateInfo& info) = 0;
-    virtual Scope<RHIIndexBuffer> CreateIndexBuffer(const RHIIndexBufferCreateInfo& info) = 0;
-    virtual Scope<RHIUniformBuffer> CreateUniformBuffer(const RHIUniformBufferCreateInfo& info) = 0;
-    virtual Scope<RHIStorageBuffer> CreateStorageBuffer(const RHIStorageBufferCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIBuffer> CreateBuffer(const RHIBufferCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIVertexBuffer> CreateVertexBuffer(const RHIVertexBufferCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIIndexBuffer> CreateIndexBuffer(const RHIIndexBufferCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIUniformBuffer> CreateUniformBuffer(const RHIUniformBufferCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIStorageBuffer> CreateStorageBuffer(const RHIStorageBufferCreateInfo& info) = 0;
 
     // =============================================================================
     // Texture Operations
     // =============================================================================
 
-    virtual Scope<RHITexture> CreateTexture(const RHITextureCreateInfo& info) = 0;
-    virtual Scope<RHITextureView> CreateTextureView(const RHITexture* pTexture,
+    virtual [[nodiscard]] Scope<RHITexture> CreateTexture(const RHITextureCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHITextureView> CreateTextureView(const RHITexture* pTexture,
                                                     const RHITextureViewCreateInfo& info) = 0;
 
     // =============================================================================
     // Sampler Operations
     // =============================================================================
 
-    virtual Scope<RHISampler> CreateSampler(const RHISamplerCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHISampler> CreateSampler(const RHISamplerCreateInfo& info) = 0;
 
     // =============================================================================
     // Descriptor Operations
     // =============================================================================
 
-    virtual Scope<RHIDescriptorSetLayout> CreateDescriptorSetLayout(const RHIDescriptorSetLayoutCreateInfo& info) = 0;
-    virtual Scope<RHIDescriptorPool> CreateDescriptorPool(const RHIDescriptorPoolCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIDescriptorSetLayout> CreateDescriptorSetLayout(const RHIDescriptorSetLayoutCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIDescriptorPool> CreateDescriptorPool(const RHIDescriptorPoolCreateInfo& info) = 0;
 
     // Update descriptor sets with writes
     virtual void UpdateDescriptorSets(std::span<const RHIWriteDescriptorSet> writes) = 0;
@@ -117,34 +117,34 @@ public:
     // Pipeline Layout
     // =============================================================================
 
-    virtual Scope<RHIPipelineLayout> CreatePipelineLayout(const RHIPipelineLayoutCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIPipelineLayout> CreatePipelineLayout(const RHIPipelineLayoutCreateInfo& info) = 0;
 
     // =============================================================================
     // Render Pass and Framebuffer
     // =============================================================================
 
-    virtual Scope<RHIRenderPass> CreateRenderPass(const RHIRenderPassCreateInfo& info) = 0;
-    virtual Scope<RHIFramebuffer> CreateFramebuffer(const RHIFramebufferCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIRenderPass> CreateRenderPass(const RHIRenderPassCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIFramebuffer> CreateFramebuffer(const RHIFramebufferCreateInfo& info) = 0;
 
     // =============================================================================
     // Shader Operations
     // =============================================================================
 
-    virtual Scope<RHIShader> CreateShader(const RHIShaderCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIShader> CreateShader(const RHIShaderCreateInfo& info) = 0;
 
     // =============================================================================
     // Pipeline Operations
     // =============================================================================
 
-    virtual Scope<RHIGraphicsPipeline> CreateGraphicsPipeline(const RHIGraphicsPipelineCreateInfo& info) = 0;
-    virtual Scope<RHIComputePipeline> CreateComputePipeline(const RHIComputePipelineCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIGraphicsPipeline> CreateGraphicsPipeline(const RHIGraphicsPipelineCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHIComputePipeline> CreateComputePipeline(const RHIComputePipelineCreateInfo& info) = 0;
 
     // =============================================================================
     // Synchronization Primitives
     // =============================================================================
 
-    virtual Scope<RHIFence> CreateGPUFence(const RHIFenceCreateInfo& info) = 0;
-    virtual Scope<RHISemaphore> CreateGPUSemaphore() = 0;
+    virtual [[nodiscard]] Scope<RHIFence> CreateGPUFence(const RHIFenceCreateInfo& info) = 0;
+    virtual [[nodiscard]] Scope<RHISemaphore> CreateGPUSemaphore() = 0;
 
     // Wait for multiple fences
     virtual bool WaitForFences(std::span<RHIFence* const> fences, bool waitAll = true,
